@@ -1,5 +1,9 @@
 {
   "name": "Swedish public pension",
+  "names": {
+    "en": "Swedish public pension",
+    "sv": "Svensk allmän pension"
+  },
   "description": {
     "sv": "Svensk allmän pension med inkomstpension och premiepension.",
     "en": "Swedish public pension including income and premium pension."

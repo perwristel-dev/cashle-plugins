@@ -1,5 +1,9 @@
 {
   "name": "Swedish tax",
+  "names": {
+    "en": "Swedish tax",
+    "sv": "Svensk skatt"
+  },
   "description": {
     "sv": "Svensk inkomstskatt, preliminärskatt, bostadsförsäljning och utflyttningsregler.",
     "en": "Swedish income tax, withholding, home sales and emigration rules."

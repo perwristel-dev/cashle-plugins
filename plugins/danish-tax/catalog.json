@@ -1,5 +1,9 @@
 {
   "name": "Danish tax",
+  "names": {
+    "en": "Danish tax",
+    "sv": "Dansk skatt"
+  },
   "description": {
     "sv": "Dansk inkomstskatt, utländska aktier och privatbostadsförsäljning.",
     "en": "Danish income tax, foreign shares and private-home sales."

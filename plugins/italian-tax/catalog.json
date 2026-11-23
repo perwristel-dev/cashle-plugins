@@ -1,5 +1,9 @@
 {
   "name": "Italian tax",
+  "names": {
+    "en": "Italian tax",
+    "sv": "Italiensk skatt"
+  },
   "description": {
     "sv": "Italiensk beskattning av privatpersoners inkomster, investeringar och fastigheter.",
     "en": "Italian individual income, investment and property tax."

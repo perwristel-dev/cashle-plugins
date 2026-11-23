@@ -1,5 +1,9 @@
 {
   "name": "French PEA-PME",
+  "names": {
+    "en": "French PEA-PME",
+    "sv": "Franskt aktiesparkonto för mindre företag (PEA-PME)"
+  },
   "description": {
     "sv": "Franskt aktiesparande för investeringar i kvalificerade mindre företag.",
     "en": "French equity savings plan for eligible smaller companies."

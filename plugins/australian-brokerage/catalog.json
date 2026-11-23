@@ -1,5 +1,9 @@
 {
   "name": "Australian brokerage",
+  "names": {
+    "en": "Australian brokerage",
+    "sv": "Australisk aktiedepå"
+  },
   "description": {
     "sv": "Australisk aktiepost, uttag och utdelningar med skatteavräkning.",
     "en": "Australian share lot, withdrawals and franked dividends."

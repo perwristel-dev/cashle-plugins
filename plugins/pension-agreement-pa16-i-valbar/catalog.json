@@ -1,5 +1,9 @@
 {
   "name": "PA16 I Elective Pension",
+  "names": {
+    "en": "PA16 I Elective Pension",
+    "sv": "PA16 I Valbar del"
+  },
   "description": {
     "sv": "Premier till den valbara delen enligt PA16 avdelning I.",
     "en": "Contributions to the elective pension under PA16 Section I."

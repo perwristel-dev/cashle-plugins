@@ -1,5 +1,9 @@
 {
   "name": "Swedish defined-contribution pension",
+  "names": {
+    "en": "Swedish defined-contribution pension",
+    "sv": "Svensk premiebestämd tjänstepension"
+  },
   "description": {
     "sv": "Svensk tjänstepension som bygger på premier enligt valt avtal.",
     "en": "Swedish occupational pension based on contributions under the selected agreement."

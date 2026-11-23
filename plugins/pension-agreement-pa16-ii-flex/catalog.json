@@ -1,5 +1,9 @@
 {
   "name": "PA16 II Flex",
+  "names": {
+    "en": "PA16 II Flex",
+    "sv": "PA16 II Flexpension"
+  },
   "description": {
     "sv": "Premier för flexpension enligt PA16 avdelning II.",
     "en": "Flex pension contributions under PA16 Section II."

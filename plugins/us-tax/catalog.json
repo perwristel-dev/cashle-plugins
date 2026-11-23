@@ -1,5 +1,9 @@
 {
   "name": "US tax",
+  "names": {
+    "en": "US tax",
+    "sv": "Amerikansk skatt"
+  },
   "description": {
     "sv": "Amerikansk federal inkomstskatt, FICA för anställda och regler för privatbostadsförsäljning.",
     "en": "US federal income tax, employee FICA and private-home sale rules."

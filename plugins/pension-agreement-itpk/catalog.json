@@ -1,5 +1,9 @@
 {
   "name": "ITPK",
+  "names": {
+    "en": "ITPK",
+    "sv": "ITPK"
+  },
   "description": {
     "sv": "Villkor och premier för den kompletterande tjänstepensionen ITPK.",
     "en": "Eligibility and contributions for the supplementary ITPK pension."

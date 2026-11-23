@@ -1,5 +1,9 @@
 {
   "name": "Norwegian tax",
+  "names": {
+    "en": "Norwegian tax",
+    "sv": "Norsk skatt"
+  },
   "description": {
     "sv": "Norsk inkomstskatt och skatteinställningar för fastigheter.",
     "en": "Norwegian income tax and property tax settings."

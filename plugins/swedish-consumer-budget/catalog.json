@@ -1,5 +1,9 @@
 {
   "name": "Konsumentverket household budget",
+  "names": {
+    "en": "Konsumentverket household budget",
+    "sv": "Konsumentverkets hushållsbudget"
+  },
   "description": {
     "sv": "Konsumentverkets referensbelopp för en månadsbudget för hushållet.",
     "en": "Swedish Consumer Agency reference costs for a monthly household budget."

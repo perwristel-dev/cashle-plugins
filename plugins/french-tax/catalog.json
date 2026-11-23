@@ -1,5 +1,9 @@
 {
   "name": "French tax",
+  "names": {
+    "en": "French tax",
+    "sv": "Fransk skatt"
+  },
   "description": {
     "sv": "Fransk inkomstskatt och skatteregler för investeringar och fastigheter för bosatta.",
     "en": "French income tax and investment and property tax rules for residents."

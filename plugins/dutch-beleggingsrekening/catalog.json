@@ -1,5 +1,9 @@
 {
   "name": "Dutch beleggingsrekening",
+  "names": {
+    "en": "Dutch beleggingsrekening",
+    "sv": "Nederländskt investeringskonto (beleggingsrekening)"
+  },
   "description": {
     "sv": "Nederländsk värdepappersdepå som rapporterar innehav för Box 3.",
     "en": "Dutch investment account that reports holdings for Box 3."

@@ -1,5 +1,9 @@
 {
   "name": "Norwegian ASK",
+  "names": {
+    "en": "Norwegian ASK",
+    "sv": "Norskt aktiesparkonto (ASK)"
+  },
   "description": {
     "sv": "Norskt aktiesparkonto med skärmningsavdrag.",
     "en": "Norwegian equity savings account with a shielding allowance."
