@@ -1,0 +1,16 @@
+{
+  "name": "KTP 2",
+  "names": {
+    "en": "KTP 2 and KTPK",
+    "sv": "KTP 2 och KTPK"
+  },
+  "description": {
+    "sv": "Förmånsbestämd ålderspension enligt KTP 2 och KTPK-egenpension för respektive avtalsområde.",
+    "en": "KTP 2 defined-benefit old-age pension and KTPK premiums by agreement area."
+  },
+  "country": "SE",
+  "category": "income",
+  "releases": [
+    "8ad15e4c1e15bb28b55a8f0c69cce564b0cbd7608970de8f7a709a646e1f9bc1"
+  ]
+}
