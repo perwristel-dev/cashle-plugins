@@ -1,0 +1,20 @@
+{
+  "label": "Spanish state old-age pension",
+  "description": "Spanish contributory old-age pension paid in 14 instalments.",
+  "income": "State pension payment",
+  "name": "Name",
+  "owner": "Person",
+  "gross": "Gross per regular payment",
+  "quoteHelp": "Use the INSS estimate for the chosen start.",
+  "coverage": "Contribution months at retirement",
+  "months": "months",
+  "recent": "At least two years of contributions in the last 15 years",
+  "confirmed": "Earliest start confirmed by INSS",
+  "confirmedHelp": "Optional for confirmed individual eligibility.",
+  "start": "Preferred start",
+  "minimum": "Earliest lawful start",
+  "age": "Age",
+  "window": "State pension is paid for life, with extra payments in June and November.",
+  "right": "Gross entitlement per instalment",
+  "lifetime": "Lifetime pension"
+}

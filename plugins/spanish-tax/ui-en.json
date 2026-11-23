@@ -21,7 +21,6 @@
   "Faktiskt historiskt förvärvsdatum": "Actual historical acquisition date",
   "Faktiskt återinvesterat belopp (EUR)": "Actual reinvested amount (EUR)",
   "Hela året": "Full year",
-  "IRPF 2025, common-territory ensamstående vuxen under 65 utan barn-/funktionshinderstillägg. Ange faktisk regional progressiv skala och regionalt personminimum. Navarra/Baskien ingår inte. Lön är brutto, avdragsgilla arbetstagaravgifter anges separat. Årslön ska vara 0 eller över 18 276 EUR; särskild låginkomstreduktion under gränsen ingår inte. Sparbas 19/21/23/27/30 %, 25 % korskvittning och fyra års förlustöverföring.": "IRPF 2025 for a common-territory single adult under 65 without child or disability supplements. Enter the actual regional progressive scale and personal allowance. Navarre and the Basque Country are excluded. Salary is gross; deductible employee contributions are entered separately. Annual salary must be 0 or above EUR 18,276; the special low-income reduction below that threshold is excluded. Savings base rates are 19/21/23/27/30%, with 25% cross-offset and four-year loss carryforward.",
   "Inkomstår / regelutgåva": "Income year / rule edition",
   "JSON-lista med {\"upTo\":12450,\"rate\":0.095}. Sista raden måste endast ha {\"rate\":...}; trösklar i stigande ordning, skattesatser som decimaler. Ange verklig regional skala för 2025.": "JSON list such as {\"upTo\":12450,\"rate\":0.095}. The last row must contain only {\"rate\":...}; thresholds must increase and tax rates must be decimals. Enter the actual regional scale for 2025.",
   "Jag har verifierat ersättningsbostadens boende- och tidsvillkor": "I have verified residence and timing conditions for the replacement home",
@@ -31,7 +30,6 @@
   "Laglig ägarandel": "Legal ownership share",
   "Objekt med capitalLossYear1…4 och savingsIncomeLossYear1…4. Year1 kan användas under första prognosåret och förfaller därefter. Nya förluster förs vidare automatiskt.": "Object with capitalLossYear1–4 and savingsIncomeLossYear1–4. Use Year1 in the first forecast year before it expires. New losses carry forward automatically.",
   "Privat bostad": "Private residence",
-  "Profilen stöder vuxna under 65 vid regelåret 2025.": "The profile supports adults under 65 in the 2025 rules year.",
   "Publicerat personminimum för regelåret 2025. Beloppet är en regelkonstant, inte ett personligt nominellt framtidsbelopp.": "Published personal allowance for the 2025 rule year. This is a rule constant, not a personal future nominal amount.",
   "Regionens faktiska personminimum, vuxen under 65 (2025 års EUR)": "Region’s actual personal allowance, adult under 65 (2025 EUR)",
   "Regionens faktiska progressiva skala": "Region’s actual progressive scale",
@@ -47,5 +45,6 @@
   "Ägarens faktiska födelsedatum för 65-årsundantag": "Owner’s actual birth date for the age-65 exemption",
   "Ägarens födelseår": "Owner’s birth year",
   "label": "Spain",
-  "{label}: ange ett värde.": "{label}: enter a value."
+  "{label}: ange ett värde.": "{label}: enter a value.",
+  "IRPF 2025 för enskilda vuxna i det spanska ordinarie skattesystemet. Lön och pension ingår i samma skattebas. Ange verifierad regional skala och regionalt grundbelopp före ålderstillägg.": "2025 IRPF for individual adults in common-tax territory. Wages and pensions share the ordinary tax base. Enter a verified regional scale and the regional personal minimum before the age supplement."
 }

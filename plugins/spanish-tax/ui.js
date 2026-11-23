@@ -102,8 +102,8 @@ export default function (context) {
     currency: 'EUR',
     ruleYear: 2025,
     requiresTaxPlan: true,
-    supportedBases: ['salary', 'capitalIncome'],
-    description: 'IRPF 2025, common-territory ensamstående vuxen under 65 utan barn-/funktionshinderstillägg. Ange faktisk regional progressiv skala och regionalt personminimum. Navarra/Baskien ingår inte. Lön är brutto, avdragsgilla arbetstagaravgifter anges separat. Årslön ska vara 0 eller över 18 276 EUR; särskild låginkomstreduktion under gränsen ingår inte. Sparbas 19/21/23/27/30 %, 25 % korskvittning och fyra års förlustöverföring.',
+    supportedBases: ['salary', 'pension', 'capitalIncome'],
+    description: 'IRPF 2025 för enskilda vuxna i det spanska ordinarie skattesystemet. Lön och pension ingår i samma skattebas. Ange verifierad regional skala och regionalt grundbelopp före ålderstillägg.',
     source: 'https://sede.agenciatributaria.gob.es/Sede/ayuda/manuales-videos-folletos/manuales-practicos/irpf-2025.html',
     defaultOptions: {
       ruleYear: 2025,
@@ -117,7 +117,7 @@ export default function (context) {
     },
     fields,
     propertyTax,
-    validate(options, profile) {
+    validate(options) {
       const errors = [];
       if (options.initialState !== undefined && !validOpeningLosses(options.initialState))
         errors.push(translate('Ange ingående förlustsaldon med stödda årsbucketnycklar och icke-negativa nominella belopp.'));
@@ -134,8 +134,6 @@ export default function (context) {
       for (const field of ['regionalMinimum', 'employeeSocialContributions']) {
         if (!nonnegative(options[field])) errors.push(translate('Ange faktisk icke-negativ {field}.', { field }));
       }
-      if ((profile?.people ?? []).some(person => person.birthYear < 1961 || person.birthYear > 2007))
-        errors.push(translate('Profilen stöder vuxna under 65 vid regelåret 2025.'));
       return errors;
     },
     assessmentOptions(options) {

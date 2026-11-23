@@ -27,3 +27,12 @@ cashle-cli/build/install/cashle/bin/cashle plugins/spanish-tax/doc/direct-model.
 
 See the [Spanish rules and source references](../../docs/tax-italy-spain-france-research.md)
 and the [IRPF 2025 manual](https://sede.agenciatributaria.gob.es/Sede/ayuda/manuales-videos-folletos/manuales-practicos/irpf-2025.html).
+
+The 2025 IRPF forecast combines taxable pensions and wages in the general
+base. Employee charges apply to wages. State personal minima include the age
+increments above 65 and 75. The estimate also uses these national increments
+for the supplied regional base minimum, which can differ from the actual
+local rule. The low-salary credit is estimated against the wage share of the
+ordinary income liability. Actual regional or personal relief can differ.
+[AEAT personal minima](https://sede.agenciatributaria.gob.es/Sede/ayuda/manuales-videos-folletos/manuales-practicos/irpf-2025/c14-adecuacion-impuesto-circunstancias-personales/minimo-contribuyente.html) ·
+[AEAT wage credit](https://sede.agenciatributaria.gob.es/Sede/eu_es/ayuda/manuales-videos-folletos/manuales-practicos/irpf-2025/c18-cuota-liquida-resultante-autoliquidacion/deducciones-cuota-liquida-total/deduccion-obtencion-rendimientos-trabajo.html)

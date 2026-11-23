@@ -1,0 +1,20 @@
+{
+  "label": "Pensión pública de jubilación",
+  "description": "Pensión contributiva española en 14 pagas.",
+  "income": "Pago de la pensión pública",
+  "name": "Nombre",
+  "owner": "Persona",
+  "gross": "Bruto por paga ordinaria",
+  "quoteHelp": "Use la previsión del INSS para el inicio elegido.",
+  "coverage": "Meses cotizados al jubilarse",
+  "months": "meses",
+  "recent": "Al menos dos años cotizados en los últimos 15 años",
+  "confirmed": "Fecha mínima confirmada por el INSS",
+  "confirmedHelp": "Opcional si el INSS ha confirmado condiciones individuales.",
+  "start": "Inicio deseado",
+  "minimum": "Primera fecha permitida",
+  "age": "Edad",
+  "window": "Pensión vitalicia con pagas extras en junio y noviembre.",
+  "right": "Importe bruto por paga",
+  "lifetime": "Pensión vitalicia"
+}

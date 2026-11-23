@@ -1,0 +1,110 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
+import dev.cashle.sdk.model.ScheduleSpec
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.temporal.ChronoUnit
+import java.util.function.Supplier
+
+final class SpanishPensionDates {
+    static LocalDate date(Object value) {
+        if (!(value instanceof String) || !value) return null
+        try { LocalDate.parse(value) }
+        catch (java.time.DateTimeException ignored) { null }
+    }
+
+    static boolean whole(Object value, int min, int max) {
+        value instanceof Number && value.doubleValue() == value.intValue() && value >= min && value <= max
+    }
+
+    static LocalDate ordinary(LocalDate birth, int contributions) {
+        LocalDate age65 = birth.plusYears(65)
+        int longRecord = age65.year <= 2024 ? 456 : age65.year <= 2026 ? 459 : 462
+        if (contributions >= longRecord) return age65
+        LocalDate olderAge = birth.plusYears(66).plusMonths(6)
+        if (olderAge.year <= 2024) return olderAge
+        olderAge = birth.plusYears(66).plusMonths(8)
+        if (olderAge.year <= 2025) return olderAge
+        olderAge = birth.plusYears(66).plusMonths(10)
+        if (olderAge.year <= 2026) return olderAge
+        birth.plusYears(67)
+    }
+
+    static double instalments(LocalDate start, LocalDate payment) {
+        if (payment.isBefore(start)) return 0d
+        YearMonth current = YearMonth.from(payment)
+        YearMonth first = YearMonth.from(start)
+        double ordinary = current.equals(first) ? (current.lengthOfMonth() - start.dayOfMonth + 1) / (double) current.lengthOfMonth() : 1d
+        if (!(current.monthValue in [6, 11])) return ordinary
+        YearMonth periodStart = current.monthValue == 6 ? YearMonth.of(current.year - 1, 12) : YearMonth.of(current.year, 6)
+        YearMonth periodEnd = current.monthValue == 6 ? current : current.plusMonths(1)
+        YearMonth accrueFrom = first.isAfter(periodStart) ? first : periodStart
+        ordinary + Math.max(0L, ChronoUnit.MONTHS.between(accrueFrom, periodEnd)) / 6d
+    }
+}
+
+financeModule('cashlab.spanish-public-pension', 1) {
+    pluginId 'cashle.finance.pension.public.es'
+    messages 'es.messages'
+    dsl('spanishPublicPension') { id -> [name:id, owner:'self', grossMonthly:0d, contributionMonths:456,
+        recentCoverage:true, confirmedStart:'', payoutStart:[reference:'minimum', offset:0]] }
+
+    calculation {
+        if (!enabled) return
+        String personId = input.owner ?: 'self'
+        def person = profile.people.find { it.id == personId && it.id != 'joint' }
+        requireInput('owner') { SpanishPensionDates.whole(person?.birthYear, 1800, 2300) && SpanishPensionDates.whole(person?.birthMonth, 1, 12) }
+        requireInput('amount') { input.grossMonthly instanceof Number && Double.isFinite(input.grossMonthly.doubleValue()) && input.grossMonthly >= 0d }
+        LocalDate birth = LocalDate.of(person.birthYear.intValue(), person.birthMonth.intValue(), 1)
+        LocalDate confirmed = SpanishPensionDates.date(input.confirmedStart)
+        requireInput('confirmed') { !input.confirmedStart || confirmed != null }
+        requireInput('coverage') { confirmed != null || (SpanishPensionDates.whole(input.contributionMonths, 180, 900) && input.recentCoverage == true) }
+        LocalDate floor = confirmed ?: SpanishPensionDates.ordinary(birth, input.contributionMonths.intValue())
+        Map time = input.payoutStart instanceof Map ? input.payoutStart : [:]
+        def rawOffset = time.getOrDefault('offset', 0)
+        requireInput('start') { SpanishPensionDates.whole(rawOffset, -1200, 1200) }
+        int offset = rawOffset.intValue()
+        Supplier<LocalDate> requested = null
+        switch (time.reference) {
+            case 'minimum': requested = { floor.plusMonths(offset) }; break
+            case 'age':
+                requireInput('start') { SpanishPensionDates.whole(time.age, 0, 130) }
+                requested = { birth.plusYears(time.age.intValue()).plusMonths(offset) }; break
+            case 'date':
+                def day = time.getOrDefault('day', 1)
+                requireInput('start') { SpanishPensionDates.whole(time.year, 1800, 2400) &&
+                    SpanishPensionDates.whole(time.month, 1, 12) && SpanishPensionDates.whole(day, 1, 31) }
+                LocalDate entered = SpanishPensionDates.date(String.format('%04d-%02d-%02d', time.year.intValue(), time.month.intValue(), day.intValue()))
+                requireInput('start') { entered != null }
+                requested = { entered.plusMonths(offset) }; break
+            case 'retirement': requested = milestone('retirement:' + (time.personId ?: personId), offset); break
+            case 'milestone':
+                requireInput('start') { time.milestoneId instanceof String && !time.milestoneId.isBlank() }
+                requested = milestone(time.milestoneId, offset); break
+        }
+        requireInput('start') { requested != null }
+        double monthly = input.grossMonthly.doubleValue() * exchangeRate('EUR', profile.currency ?: 'EUR')
+        if (monthly == 0d) return
+        def period = monthlyFromPlanStart
+        LocalDate moneyDate = period.anchor()
+        def pension = owner(personId).account {
+            name input.name
+            classify AccountKind.INCOME, new AccountTag('cashle.household.economic-nature', 1, 'income.pension.public', [AccountKind.INCOME] as Set)
+            reportingRole ReportingRole.INCOME
+        }
+        taxableReceipt(personId, 'pension', 'monthly') {
+            on ScheduleSpec.every(Frequency.MONTH, floor.withDayOfMonth(1)).atMonthEnd().within(period.fromInclusive(), period.untilExclusive())
+            until deathOf(personId)
+            debit cash
+            credit pension
+            amount {
+                LocalDate date = requested.get()
+                if (date == null) return 0d
+                LocalDate first = date.isBefore(floor) ? floor : date
+                monthly * SpanishPensionDates.instalments(first, today) * inflationFactor(moneyDate, today)
+            }
+        }
+    }
+}
