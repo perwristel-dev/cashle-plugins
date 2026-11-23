@@ -1,0 +1,21 @@
+{
+  "id": "cashle.finance.pension.is-occupational",
+  "requires": ["cashle.finance"],
+  "ui": "ui.js",
+  "uiTranslations": [
+    { "locale": "en", "path": "ui-en.json" },
+    { "locale": "sv", "path": "ui-sv.json" },
+    { "locale": "is", "path": "ui-is.json" }
+  ],
+  "sources": [
+    {
+      "path": "icelandic-occupational-pension.cashle",
+      "providers": ["cashle.finance.pension.is-occupational"],
+      "resources": [
+        "icelandic/occupational/messages_en.properties",
+        "icelandic/occupational/messages_sv.properties",
+        "icelandic/occupational/messages_is.properties"
+      ]
+    }
+  ]
+}

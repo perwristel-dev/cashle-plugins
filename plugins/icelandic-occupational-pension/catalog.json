@@ -1,0 +1,16 @@
+{
+  "name": "Icelandic occupational pension",
+  "names": {
+    "en": "Icelandic occupational pension",
+    "sv": "Isländsk tjänstepension"
+  },
+  "description": {
+    "en": "Lifetime income from an Icelandic mandatory occupational pension fund, based on a fund quote.",
+    "sv": "Livsvarig tjänstepension från en obligatorisk isländsk pensionsfond, baserat på fondens prognos."
+  },
+  "country": "IS",
+  "category": "income",
+  "releases": [
+    "629729a2bad071aee74a41162149a97bc70b1fdaa130c9a5e0eb0ee38f3d23e8"
+  ]
+}
