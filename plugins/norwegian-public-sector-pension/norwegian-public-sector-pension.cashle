@@ -1,0 +1,104 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.sdk.model.ScheduleSpec
+import java.time.DateTimeException
+import java.time.LocalDate
+import java.time.YearMonth
+import java.util.function.Supplier
+
+final class PublicSectorPensionDates {
+    static boolean wholeNumber(Object value, int min, int max) {
+        value instanceof Number && Double.isFinite(value.doubleValue()) && value.doubleValue() == value.intValue() &&
+            value.intValue() >= min && value.intValue() <= max
+    }
+
+    static YearMonth birthMonth(Map person) {
+        if (!wholeNumber(person?.birthYear, 1800, 2300) || !wholeNumber(person?.birthMonth, 1, 12)) return null
+        YearMonth.of(person.birthYear.intValue(), person.birthMonth.intValue())
+    }
+
+    static LocalDate date(Map entered) {
+        def day = entered.containsKey('day') ? entered.day : 1
+        if (entered.reference != 'date' || !wholeNumber(entered.year, 1800, 2400) ||
+            !wholeNumber(entered.month, 1, 12) || !wholeNumber(day, 1, 31)) return null
+        try {
+            LocalDate.of(entered.year.intValue(), entered.month.intValue(), day.intValue())
+        } catch (DateTimeException ignored) {
+            null
+        }
+    }
+
+    static LocalDate claimMonth(LocalDate request, LocalDate earliest, LocalDate latest) {
+        if (request == null) return null
+        LocalDate month = request.dayOfMonth == 1 ? request : request.withDayOfMonth(1).plusMonths(1)
+        if (month.isBefore(earliest)) return earliest
+        month.isAfter(latest) ? latest : month
+    }
+}
+
+financeModule('cashlab.norwegian-public-sector-pension', 1) {
+    pluginId 'cashle.finance.pension.public-sector.no'
+    messages 'norwegian.publicsector.messages'
+    dsl('norwegianPublicSectorPension') { id -> [name: id, owner: 'self', grossMonthlyNok: 0d,
+        rules: 'ordinary', payoutStart: [reference: 'age', age: 67, offset: 0]] }
+
+    calculation {
+        def person = profile.people.find { it.id == input.owner && it.id != 'joint' }
+        requireInput('invalid.owner') { person != null }
+        requireInput('invalid.rules') { input.rules in ['ordinary', 'confirmed'] }
+        requireInput('invalid.amount') {
+            input.grossMonthlyNok instanceof Number && Double.isFinite(input.grossMonthlyNok.doubleValue()) && input.grossMonthlyNok >= 0d
+        }
+
+        String personId = person == null ? 'self' : input.owner
+        def incomeAccount = owner(personId).account {
+            name input.name instanceof String && !input.name.isBlank() ? input.name : text('name')
+            classify AccountKind.INCOME, new AccountTag('cashle.household.economic-nature', 1, 'income.pension.occupational', [AccountKind.INCOME] as Set)
+        }
+        if (!enabled) return
+
+        boolean confirmed = input.rules == 'confirmed'
+        def entered = input.payoutStart instanceof Map ? input.payoutStart : [:]
+        LocalDate chosenDate = PublicSectorPensionDates.date(entered)
+        def birth = PublicSectorPensionDates.birthMonth(person)
+        LocalDate firstMonth
+        LocalDate latestStart = null
+        Supplier<LocalDate> claimStart
+        if (confirmed) {
+            requireInput('invalid.confirmed') { chosenDate != null && chosenDate.dayOfMonth == 1 && entered.getOrDefault('offset', 0) == 0 }
+            firstMonth = chosenDate
+            claimStart = { chosenDate } as Supplier<LocalDate>
+        } else {
+            requireInput('invalid.cohort') { birth != null && birth.year >= 1963 }
+            boolean age = entered.reference == 'age' && PublicSectorPensionDates.wholeNumber(entered.age, 0, 130)
+            boolean dynamic = entered.reference == 'milestone' && entered.milestoneId instanceof String && !entered.milestoneId.isBlank()
+            requireInput('invalid.start') { entered.getOrDefault('offset', 0) == 0 && (age || dynamic || chosenDate != null) }
+            if (age) chosenDate = birth.plusYears(entered.age.longValue()).plusMonths(1).atDay(1)
+            LocalDate earliest = birth.plusYears(62).plusMonths(1).atDay(1)
+            LocalDate latest = birth.plusYears(75).plusMonths(1).atDay(1)
+            latestStart = latest
+            Supplier<LocalDate> requested = dynamic ? milestone(entered.milestoneId) : { chosenDate } as Supplier<LocalDate>
+            claimStart = { PublicSectorPensionDates.claimMonth(requested.get(), earliest, latest) } as Supplier<LocalDate>
+            firstMonth = dynamic ? earliest : claimStart.get()
+        }
+
+        double pensionAmount = input.grossMonthlyNok.doubleValue()
+        if (pensionAmount == 0d) return
+        double fx = exchangeRate('NOK', profile.currency)
+        def period = monthlyFromPlanStart
+        LocalDate moneyDate = period.anchor()
+        taxableReceipt(personId, 'pension', 'monthly') {
+            on ScheduleSpec.every(Frequency.MONTH, firstMonth.withDayOfMonth(20)).within(period.fromInclusive(), period.untilExclusive())
+            until deathOf(personId)
+            debit cash
+            credit incomeAccount
+            amount {
+                LocalDate start = claimStart.get()
+                if (start == null && latestStart != null && !today.isBefore(latestStart)) start = latestStart
+                if (start == null || today.isBefore(start)) return 0d
+                pensionAmount * fx * inflationFactor(moneyDate, today)
+            }
+        }
+    }
+}
