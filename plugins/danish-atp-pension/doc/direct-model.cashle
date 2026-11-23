@@ -1,0 +1,13 @@
+plugins {
+    id 'cashle.finance'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.dk.atp' from '../danish-atp-pension.cashle'
+}
+finance {
+    plan { from '2026-06-01'; until '2026-11-01'; currency 'DKK'; inflation 0d }
+    person('self') { name 'Pension recipient'; birthYear 1959; birthMonth 7 }
+    atpPension('ATP Livslang Pension') {
+        settings([annualPension:12000d, payoutStart:[reference:'age', age:66, offset:0]])
+    }
+}
+collect {}
