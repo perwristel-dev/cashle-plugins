@@ -1,6 +1,7 @@
 import dev.cashle.core.AccountKind
 import dev.cashle.core.AccountTag
 import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
 import dev.cashle.core.i18n.Messages
 import dev.cashle.sdk.composition.ModuleContext
 import dev.cashle.sdk.composition.ModuleInput
@@ -94,10 +95,13 @@ final class NorwegianPublicPension implements FinanceModule {
         income = entity.account().classify(AccountKind.INCOME,
             new AccountTag(NATURE, 1, 'income.pension.public', Set.of(AccountKind.INCOME)))
         income.setName(name)
+        income.addReportingRole(ReportingRole.INCOME)
         if (!fromNav) {
             pensionRights = entity.account().classify(AccountKind.ASSET,
                 new AccountTag(NATURE, 1, 'asset.pension', Set.of(AccountKind.ASSET)))
             pensionRights.setName(name)
+            pensionRights.addReportingRole(ReportingRole.SAVINGS)
+            pensionRights.addReportingRole(ReportingRole.PENSION)
             pensionRights.setIncludeInNetWorth(false)
             pensionRights.setInheritable(false)
             equity = entity.account().classify(AccountKind.EQUITY,
