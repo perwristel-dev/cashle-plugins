@@ -1,0 +1,21 @@
+{
+  "id": "cashle.pension.agreement.KTP2",
+  "sources": [
+    {
+      "path": "ktp2.cashle",
+      "providers": [
+        "cashle.pension.agreement.KTP2",
+        "cashle.pension.agreement.KTPK",
+        "cashle.pension.agreement.KTPK-AFO-HANDELS",
+        "cashle.pension.agreement.KTPK-FOLKSAM",
+        "cashle.pension.agreement.KTPK-LO-TCO-RATTSSKYDD"
+      ],
+      "imports": {
+        "cashle.pension.agreement.rules": ["SwedishAgreementRules.groovy"]
+      }
+    }
+  ],
+  "ui": "agreement-entry.js",
+  "requires": ["cashle.pension.agreement.rules"],
+  "replaces": []
+}
