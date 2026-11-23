@@ -15,8 +15,7 @@ export default function (context) {
     taxRate('municipalRate', 'Kommunalskatt', 0.4, 'Ange den faktiska lokala skattesatsen för regelåret.'),
     taxRate('churchRate', 'Kyrkoskatt', 0.1, 'Ange 0 om kyrkoskatt inte gäller.'),
     profileChoice('civilStatus', 'Civilstånd enligt skattereglerna', [['', 'Välj'], ['single', 'Ensamstående']]),
-    confirm('seniorSupplement', 'Inget seniortillägg'),
-    confirm('singleParentSupplement', 'Inget ensamföräldratillägg'),
+    confirm('singleParentSupplement', 'Inget extra avdrag för ensamförsörjare'),
   ];
 
   const nativeOptions = options => Object.fromEntries(Object.entries(options).filter(([, value]) => value !== null && value !== undefined && value !== ''));
@@ -53,8 +52,8 @@ export default function (context) {
     translations,
     sourceTax: { language: 'groovy-cashle-plugin', provider: 'cashle.tax.dk', source: 'danish-tax.cashle' },
     id: 'DK', supportedBases: ['salary', 'pension', 'capitalIncome', 'interestExpenses', 'shareIncome'], label: 'Danmark', currency: 'DKK', ruleYear: 2026,
-    description: 'Danska regler 2026 stöder endast ensamstående utan senior- eller ensamföräldrartillägg. Löneinkomst stöds för födda 1966 eller senare. Ange faktisk AM-skattepliktig lön i inkomstposten.',
-    defaultOptions: { ruleYear: 2026, residency: '', municipalRate: null, churchRate: 0, civilStatus: '', seniorSupplement: null, singleParentSupplement: null },
+    description: 'Danska regler 2026 för ensamstående. Senioravdraget beräknas automatiskt på AM-bidragspliktig lön under de fem kalenderåren före folkepensionsåldern.',
+    defaultOptions: { ruleYear: 2026, residency: '', municipalRate: null, churchRate: 0, civilStatus: '', singleParentSupplement: null },
     fields: profileFields,
     validate(options) {
       const errors = [];
@@ -65,7 +64,7 @@ export default function (context) {
           errors.push(taxText('{label}: ange ett värde mellan 0 och {max} %.', { label: taxText(label), max }));
         }
       }
-      if (options.civilStatus !== 'single' || options.seniorSupplement !== false || options.singleParentSupplement !== false) errors.push(taxText('Bekräfta ensamstående utan senior- och ensamföräldrartillägg.'));
+      if (options.civilStatus !== 'single' || options.singleParentSupplement !== false) errors.push(taxText('Bekräfta ensamstående utan det extra avdraget för ensamförsörjare.'));
       return errors;
     }, assessmentOptions: nativeOptions,
   };

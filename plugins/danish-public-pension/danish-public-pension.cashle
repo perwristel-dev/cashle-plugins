@@ -1,0 +1,129 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.sdk.model.ScheduleSpec
+import java.time.DateTimeException
+import java.time.LocalDate
+import java.time.YearMonth
+import java.util.function.Supplier
+
+final class FolkepensionRules {
+    static final LocalDate RATES_DATE = LocalDate.of(2026, 1, 1)
+
+    static boolean numberInRange(Object value, double min, double max) {
+        value instanceof Number && Double.isFinite(value.doubleValue()) && value.doubleValue() >= min && value.doubleValue() <= max
+    }
+
+    static boolean wholeNumberInRange(Object value, int min, int max) {
+        numberInRange(value, min, max) && value.doubleValue() == value.intValue()
+    }
+
+    static YearMonth birthMonth(Map person) {
+        if (!wholeNumberInRange(person?.birthYear, 1800, 2300) || !wholeNumberInRange(person?.birthMonth, 1, 12)) return null
+        YearMonth.of(person.birthYear.intValue(), person.birthMonth.intValue())
+    }
+
+    static LocalDate eligibility(YearMonth birth) {
+        int year = birth.year
+        int ageMonths = 70 * 12
+        if (year <= 1953) ageMonths = 65 * 12
+        else if (year == 1954) ageMonths = 65 * 12 + (birth.monthValue <= 6 ? 6 : 12)
+        else if (year == 1955 && birth.monthValue <= 6) ageMonths = 66 * 12 + 6
+        else if (year <= 1962) ageMonths = 67 * 12
+        else if (year <= 1966) ageMonths = 68 * 12
+        else if (year <= 1970) ageMonths = 69 * 12
+        birth.plusMonths(ageMonths + 1).atDay(1)
+    }
+
+    static LocalDate explicitDate(Map claim) {
+        def day = claim.containsKey('day') ? claim.day : 1
+        if (!wholeNumberInRange(claim.year, 1800, 2400) || !wholeNumberInRange(claim.month, 1, 12) || !wholeNumberInRange(day, 1, 31)) return null
+        try {
+            LocalDate.of(claim.year.intValue(), claim.month.intValue(), day.intValue())
+        } catch (DateTimeException ignored) {
+            null
+        }
+    }
+
+    static LocalDate effectiveStart(LocalDate request, LocalDate eligibility, boolean deferred) {
+        if (request == null) return null
+        LocalDate month = request.dayOfMonth == 1 ? request : request.withDayOfMonth(1).plusMonths(1)
+        if (month.isBefore(eligibility)) return eligibility
+        LocalDate maximum = eligibility.plusYears(10)
+        deferred && month.isAfter(maximum) ? maximum : month
+    }
+
+    static double monthlyAmount(String household, double income, double entitlementPercent) {
+        double base = 7544d
+        double maxSupplement = household == 'single' ? 8729d : 4467d
+        double threshold = household == 'single' ? 99200d : 198800d
+        double rate = household == 'single' ? 0.309d : household == 'partner-pensioner' ? 0.16d : 0.32d
+        double limit = household == 'single' ? 438200d : household == 'partner-pensioner' ? 533800d : 366400d
+        double reduction = Math.max(0d, income - threshold) * rate / 12d
+        double supplement = income > limit ? 0d : Math.max(0d, maxSupplement - reduction)
+        (base + supplement) * entitlementPercent / 100d
+    }
+}
+
+financeModule('cashlab.danish-public-pension', 1) {
+    pluginId 'cashle.finance.pension.dk.public'
+    messages 'danish.pension.messages'
+    dsl('folkepension') { id -> [name: id, owner: 'self', entitlementPercent: 100d,
+        household: 'single', assessableAnnualIncome: 0d, payoutStart: [reference: 'statutory'],
+        claimMode: 'ordinary', deferralPercent: 0d] }
+
+    calculation {
+        def person = profile.people.find { it.id == input.owner }
+        def birth = FolkepensionRules.birthMonth(person)
+        requireInput('invalid.person') { birth != null && input.owner != 'joint' }
+        requireInput('invalid.entitlement') { FolkepensionRules.wholeNumberInRange(input.entitlementPercent, 0, 100) }
+        requireInput('invalid.household') { input.household in ['single', 'partner-pensioner', 'partner-other'] }
+        requireInput('invalid.income') { FolkepensionRules.numberInRange(input.assessableAnnualIncome, 0d, Double.MAX_VALUE) }
+        requireInput('invalid.claimMode') { input.claimMode in ['ordinary', 'deferred'] }
+        boolean deferred = input.claimMode == 'deferred'
+        requireInput('invalid.deferral') { !deferred || FolkepensionRules.numberInRange(input.deferralPercent, 0d, Double.MAX_VALUE) }
+
+        def claim = input.payoutStart instanceof Map ? input.payoutStart : [:]
+        LocalDate enteredDate = claim.reference == 'date' ? FolkepensionRules.explicitDate(claim) : null
+        boolean validClaim = claim.getOrDefault('offset', 0) == 0 && (
+            claim.reference == 'statutory' || enteredDate != null ||
+            claim.reference == 'age' && FolkepensionRules.wholeNumberInRange(claim.age, 0, 130) ||
+            claim.reference == 'milestone' && claim.milestoneId instanceof String && !claim.milestoneId.isBlank())
+        requireInput('invalid.start') { validClaim }
+
+        String personId = birth == null ? 'self' : input.owner
+        def incomeAccount = owner(personId).account {
+            name input.name instanceof String && !input.name.isBlank() ? input.name : text('name')
+            classify AccountKind.INCOME, new AccountTag('cashle.household.economic-nature', 1, 'income.pension.public', [AccountKind.INCOME] as Set)
+        }
+        if (!enabled) return
+
+        LocalDate eligibility = FolkepensionRules.eligibility(birth)
+        LocalDate chosenDate = enteredDate ?: eligibility
+        if (claim.reference == 'age') chosenDate = birth.plusYears(claim.age.longValue()).atDay(1)
+        Supplier<LocalDate> requested = claim.reference == 'milestone'
+            ? milestone(claim.milestoneId) : { chosenDate } as Supplier<LocalDate>
+        Supplier<LocalDate> claimStart = { FolkepensionRules.effectiveStart(requested.get(), eligibility, deferred) } as Supplier<LocalDate>
+        def period = monthlyFromPlanStart
+        LocalDate firstMonth = claim.reference == 'milestone' ? eligibility : claimStart.get()
+        double monthly = FolkepensionRules.monthlyAmount(input.household, input.assessableAnnualIncome.doubleValue(), input.entitlementPercent.doubleValue())
+        if (monthly == 0d) return
+        double deferral = deferred ? input.deferralPercent.doubleValue() / 100d : 0d
+        requireInput('invalid.deferral') { Double.isFinite(monthly * (1d + deferral)) }
+        double fx = exchangeRate('DKK', profile.currency)
+        taxableReceipt(personId, 'pension', 'monthly') {
+            on ScheduleSpec.every(Frequency.MONTH, firstMonth).atMonthEnd().within(period.fromInclusive(), period.untilExclusive())
+            until deathOf(personId)
+            debit cash
+            credit incomeAccount
+            amount {
+                LocalDate start = claimStart.get()
+                LocalDate latestStart = eligibility.plusYears(10)
+                if (start == null && deferred && !today.isBefore(latestStart)) start = latestStart
+                if (start == null || today.isBefore(start)) return 0d
+                double supplementFactor = start.isAfter(eligibility) ? 1d + deferral : 1d
+                monthly * supplementFactor * fx * inflationFactor(FolkepensionRules.RATES_DATE, today)
+            }
+        }
+    }
+}

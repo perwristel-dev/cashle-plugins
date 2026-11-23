@@ -1,0 +1,20 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.cashflow'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.dk.public' from '../danish-public-pension.cashle'
+}
+
+finance {
+    plan {
+        from '2026-06-01'
+        until '2026-11-01'
+        currency 'DKK'
+        inflation 0d
+    }
+    person('self') { name 'Pensioner'; birthYear 1959; birthMonth 7 }
+    folkepension('State pension') {
+        settings payoutStart: [reference: 'date', year: 2026, month: 6]
+    }
+}
+collect { cashflow {} }

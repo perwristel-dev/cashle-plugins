@@ -22,12 +22,11 @@ int referenceYear = 2026
 def externalBases = ['salary', 'pension', 'capitalIncome', 'interestExpenses', 'shareIncome'].asImmutable()
 def acceptedBases = (externalBases + ['netCapitalIncome']).asImmutable()
 def monetary = ['salary', 'pension', 'netCapitalIncome', 'shareIncome', 'prepaidTax'].toSet().asImmutable()
-def numeric = (monetary + ['birthYear', 'municipalRate', 'churchRate']).asImmutable()
+def numeric = (monetary + ['birthYear', 'birthMonth', 'assessmentYear', 'municipalRate', 'churchRate']).asImmutable()
 def allowedOptions = (numeric + ['ruleYear', 'residency', 'civilStatus', 'seniorSupplement', 'singleParentSupplement']).asImmutable()
 def finite = { value -> value instanceof Number && Double.isFinite(value.doubleValue()) }
 def single = { options ->
     'single'.equals(options.get('civilStatus')) &&
-        Boolean.FALSE.equals(options.get('seniorSupplement')) &&
         Boolean.FALSE.equals(options.get('singleParentSupplement'))
 }
 
@@ -62,7 +61,9 @@ countryTaxPolicy('DK') {
         def inputs = new LinkedHashMap(options)
         require(number(inputs, 'ruleYear', referenceYear) == referenceYear, 'Unsupported ruleYear for DK')
         inputs.put('ruleYear', referenceYear)
-        inputs.put('birthYear', birthYear - year + referenceYear)
+        inputs.put('birthYear', birthYear)
+        inputs.put('birthMonth', birthMonth)
+        inputs.put('assessmentYear', year)
         inputs.putIfAbsent('residency', 'full-year')
         for (String basis : ['salary', 'pension', 'shareIncome']) {
             inputs.put(basis, number(inputs, basis, 0d) + amounts.getOrDefault(basis, 0d))
@@ -80,16 +81,21 @@ countryTaxPolicy('DK') {
         require(number(options, 'ruleYear', 0d) == referenceYear, 'Select explicit ruleYear:2026; other years are unsupported.')
         require('full-year'.equals(options.residency), 'Only full-year residency is supported.')
         double birthYear = number(options, 'birthYear', 0d)
-        require(birthYear == Math.floor(birthYear) && birthYear >= 1900d && birthYear <= 2007d,
-            'Provide a supported adult birthYear (1900–2007).')
+        double birthMonth = number(options, 'birthMonth', 1d)
+        double assessmentYear = number(options, 'assessmentYear', referenceYear)
+        double age = assessmentYear - birthYear
+        require(birthYear == Math.floor(birthYear) && birthYear >= 1d &&
+            assessmentYear == Math.floor(assessmentYear) && assessmentYear <= 9999d && age >= 19d && age <= 126d,
+            'Provide a supported adult birth year for the assessment year (age 19–126).')
+        require(birthMonth == Math.floor(birthMonth) && birthMonth >= 1d && birthMonth <= 12d,
+            'Provide a birth month between 1 and 12.')
         require('single'.equals(options.civilStatus), 'Only single-person assessments are supported; spousal tax transfers are unsupported.')
-        require(single(options), 'Confirm seniorSupplement:false and singleParentSupplement:false; additional deductions are unsupported.')
+        require(single(options), 'Confirm singleParentSupplement:false; the single-parent deduction is unsupported.')
 
         double salary = number(options, 'salary', 0d)
         double pension = number(options, 'pension', 0d)
         double capital = number(options, 'netCapitalIncome', 0d)
         double shares = number(options, 'shareIncome', 0d)
-        require(salary == 0d || referenceYear - birthYear <= 60d, 'Senior wage deduction profiles are unsupported.')
         double municipal = number(options, 'municipalRate', Double.NaN)
         double church = number(options, 'churchRate', 0d)
         require(Double.isFinite(municipal) && municipal >= 0d && municipal <= 0.4d && church <= 0.1d,
@@ -98,8 +104,11 @@ countryTaxPolicy('DK') {
         double labour = salary * 0.08d
         double personal = salary - labour + pension
         double employment = Math.min(63300d, salary * 0.1275d)
+        int yearsToPension = pensionAgeYear((int) birthYear, (int) birthMonth) - (int) assessmentYear
+        double seniorEmployment = assessmentYear >= referenceYear && yearsToPension >= 1 && yearsToPension <= 5
+            ? Math.min(37000d, salary * 0.085d) : 0d
         double job = Math.min(3100d, Math.max(0d, salary - 235200d) * 0.045d)
-        double taxable = Math.max(0d, personal + capital - employment - job)
+        double taxable = Math.max(0d, personal + capital - employment - seniorEmployment - job)
         double middlePersonal = Math.max(0d, personal - 641200d)
         double middleCapital = Math.max(0d, personal + Math.max(0d, capital - 55000d) - 641200d) - middlePersonal
         double lowerShares = Math.min(shares, 79400d) * 0.27d
@@ -193,4 +202,15 @@ countryTaxPolicy('DK') {
 
         calendar { input -> PropertyInputs.calendar(input) }
     }
+}
+
+// Deduction ends in the calendar year the statutory age is reached, including for December births.
+static int pensionAgeYear(int birthYear, int birthMonth) {
+    if (birthYear <= 1953) return birthYear + 65
+    if (birthYear == 1954) return birthYear + (birthMonth <= 6 ? 65 : 66)
+    if (birthYear == 1955 && birthMonth <= 6) return birthYear + 66
+    if (birthYear <= 1962) return birthYear + 67
+    if (birthYear <= 1966) return birthYear + 68
+    if (birthYear <= 1970) return birthYear + 69
+    birthYear + 70
 }

@@ -51,10 +51,10 @@
     "country": "DK",
     "currency": "DKK",
     "ruleYear": 2026,
-    "version": "2026.1",
+    "version": "2026.2",
     "validFrom": "2026-01-01",
     "validTo": "2026-12-31",
-    "reviewedOn": "2026-10-16",
+    "reviewedOn": "2026-11-23",
     "parameters": {
       "labourMarket": {
         "rate": 0.08,
@@ -108,6 +108,18 @@
           "ruleYear": 2026,
           "reviewedOn": "2026-10-16"
         }
+      },
+      "seniorEmployment": {
+        "rate": 0.085,
+        "maximum": 37000,
+        "eligibleCalendarYearsBeforePensionAge": 5,
+        "effectiveFrom": "2026-01-01",
+        "sources": [
+          "https://www.retsinformation.dk/eli/accn/A20260100030/pdf",
+          "https://skat.dk/borger/fradrag/arbejdsrelaterede-fradrag/beskaeftigelses-og-jobfradrag",
+          "https://www.borger.dk/pension-og-efterloen/Folkepension-oversigt/foer-du-gaar-paa-folkepension"
+        ],
+        "reviewedOn": "2026-11-23"
       },
       "job": {
         "rate": 0.045,
