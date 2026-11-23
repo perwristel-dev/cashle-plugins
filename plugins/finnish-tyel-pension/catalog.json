@@ -1,0 +1,16 @@
+{
+  "name": "TyEL",
+  "names": {
+    "sv": "TyEL – finsk arbetspension",
+    "en": "TyEL – Finnish employee pension"
+  },
+  "description": {
+    "sv": "Prognos för intjäning från anställning och livsvarigt uttag av finsk arbetspension.",
+    "en": "Forecast employee earnings-related pension accrual and lifelong pension withdrawals."
+  },
+  "country": "FI",
+  "category": "accounts",
+  "releases": [
+    "5b819b5ce8e7c39412d6bcb6934747720e277536d99ad854b2de089a7f559f0a"
+  ]
+}

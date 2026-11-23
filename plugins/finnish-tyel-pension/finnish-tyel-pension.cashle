@@ -1,0 +1,109 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
+import dev.cashle.sdk.model.ScheduleSpec
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.temporal.ChronoUnit
+import java.util.function.Supplier
+
+final class TyELRules {
+    // Confirmed 1947–1965 cohorts, with the latest coefficient as a planning assumption for younger cohorts.
+    static final List<Double> COEFFICIENTS = [1d, 0.99170d, 0.98689d, 0.98351d, 0.97914d,
+        0.97552d, 0.97200d, 0.96800d, 0.96344d, 0.96102d, 0.95722d, 0.95404d, 0.94984d,
+        0.94659d, 0.94419d, 0.94692d, 0.94759d, 0.94643d, 0.94453d].asImmutable()
+    // Monthly lower pension ages from ETK estimates for 1965, 1970, ..., 2010.
+    static final List<Integer> ESTIMATED_AGES = [780, 787, 793, 798, 804, 809, 815, 819, 824, 828].asImmutable()
+    static final double ACCRUAL_RATE = 0.015d
+    static final double MONTHLY_EARNINGS_FLOOR = 71.72d
+
+    static int ageMonths(int year) {
+        if (year <= 1954) return 63 * 12
+        if (year <= 1961) return 63 * 12 + 3 * (year - 1954)
+        if (year <= 1965) return 65 * 12
+        if (year >= 2010) return ESTIMATED_AGES.last()
+        int years = year - 1965
+        int index = years.intdiv(5)
+        int first = ESTIMATED_AGES[index]
+        return first + Math.round((ESTIMATED_AGES[index + 1] - first) * (years % 5) / 5d).intValue()
+    }
+
+    static double coefficient(int year) {
+        COEFFICIENTS[Math.max(0, Math.min(year - 1947, COEFFICIENTS.size() - 1))]
+    }
+
+    static LocalDate monthStart(LocalDate date) {
+        date.dayOfMonth == 1 ? date : date.withDayOfMonth(1).plusMonths(1)
+    }
+
+    static LocalDate later(LocalDate first, LocalDate second) { first.isAfter(second) ? first : second }
+    static LocalDate earlier(LocalDate first, LocalDate second) { first.isBefore(second) ? first : second }
+
+    static boolean amount(Object value) {
+        value instanceof Number && Double.isFinite(value.doubleValue()) && value >= 0d
+    }
+}
+
+financeModule('cashlab.finnish-tyel-pension', 1) {
+    pluginId 'cashle.finance.pension.occupational.fi.tyel'
+    messages 'tyel.Messages'
+    dsl('finnishTyELPension') { id ->
+        [name:id, owner:'self', monthlyRight:0d, annualSalary:0d, payoutStart:[reference:'minimum', offset:0]]
+    }
+
+    calculation {
+        if (!enabled) return
+        String ownerId = input.owner ?: 'self'
+        def person = profile.people.find { row -> row.id == ownerId }
+        requireInput('owner') { person?.birthYear instanceof Number && person?.birthMonth instanceof Number }
+        requireInput('amount') { TyELRules.amount(input.monthlyRight) && TyELRules.amount(input.annualSalary) }
+        YearMonth born = YearMonth.of(person.birthYear.intValue(), person.birthMonth.intValue())
+        int year = born.year
+        LocalDate earliest = born.plusMonths(TyELRules.ageMonths(year) + 1).atDay(1)
+        LocalDate accrualStart = born.plusYears(17).plusMonths(1).atDay(1)
+        int lastAge = year <= 1957 ? 68 : year <= 1961 ? 69 : 70
+        LocalDate accrualEnd = born.plusYears(lastAge).plusMonths(1).atDay(1)
+        LocalDate planDate = planStart.anchor()
+        Map time = (Map) (input.payoutStart ?: [reference:'minimum', offset:0])
+        int offset = ((Number) time.getOrDefault('offset', 0)).intValue()
+        Supplier<LocalDate> requested
+        if (time.reference == 'minimum') requested = { earliest.plusMonths(offset) }
+        else if (time.reference == 'age') requested = { born.plusYears(time.age.intValue()).plusMonths(offset + 1).atDay(1) }
+        else if (time.reference == 'date') requested = { LocalDate.of(time.year.intValue(), time.month.intValue(),
+            ((Number) time.getOrDefault('day', 1)).intValue()).plusMonths(offset) }
+        else if (time.reference == 'retirement') requested = milestone('retirement:' + (time.personId ?: ownerId), offset)
+        else if (time.reference == 'milestone') requested = milestone(time.milestoneId, offset)
+        else requested = { planDate.plusMonths(offset) }
+
+        double salaryMonthly = input.annualSalary.doubleValue() / 12d
+        double monthlyAccrual = salaryMonthly < TyELRules.MONTHLY_EARNINGS_FLOOR ? 0d :
+            salaryMonthly * TyELRules.ACCRUAL_RATE * TyELRules.coefficient(year) / 12d
+        double fx = exchangeRate('EUR', profile.currency ?: 'EUR')
+        double openingRight = input.monthlyRight.doubleValue()
+        def pension = owner(ownerId).account {
+            name input.name
+            classify AccountKind.INCOME, new AccountTag('cashle.household.economic-nature', 1,
+                'income.pension.occupational', [AccountKind.INCOME] as Set)
+            reportingRole ReportingRole.INCOME
+        }
+        taxableReceipt(ownerId, 'pension', 'monthly') {
+            on ScheduleSpec.every(Frequency.MONTH, TyELRules.monthStart(TyELRules.later(planDate, earliest)))
+            until deathOf(ownerId)
+            debit cash
+            credit pension
+            amount {
+                LocalDate claim = requested.get()
+                if (claim == null) return 0d
+                LocalDate start = TyELRules.later(earliest, TyELRules.monthStart(claim))
+                if (today.isBefore(start)) return 0d
+                LocalDate firstWork = TyELRules.later(TyELRules.monthStart(planDate), accrualStart)
+                LocalDate endWork = TyELRules.earlier(start, accrualEnd)
+                long workMonths = Math.max(0L, ChronoUnit.MONTHS.between(firstWork, endWork))
+                long deferred = ChronoUnit.MONTHS.between(earliest, start)
+                return (openingRight + workMonths * monthlyAccrual) * (1d + 0.004d * deferred) *
+                    fx * inflationFactor(planDate, today)
+            }
+        }
+    }
+}
