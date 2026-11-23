@@ -1,0 +1,33 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.pension.types'
+    id 'cashle.tax'
+    id 'cashle.tax.se' from 'tax.cashlec'
+    id 'cashle.balancesheet'
+    id 'cashle.finance.pension.dc' from 'dc.cashlec'
+    id 'cashle.pension.agreement.FTP1' from 'ftp1.cashlec'
+}
+
+finance {
+    plan {
+        from '2026-03-01'; until '2026-05-01'; currency 'SEK'; inflation 0d
+        settings([generalAssumptions:['swedish-pension':[baseAmountIncrease:0d, lifelongDivisionYears:20d]]])
+    }
+    person('self') { birthYear 1986; birthMonth 1 }
+    tax {
+        country 'SE'
+        preliminaryRate 0d
+        options([ruleYear:2025, residentMonths:12, municipality:'0180', municipalRate:0.306d,
+                 burialFeeRate:0.00293d, communityMember:false])
+    }
+    salary('Salary') {
+        owner 'self'; amount 50000d; frequency 'monthly'; taxTreatment 'taxable'; taxBasis 'salary'
+    }
+    dcPension('FTP1') {
+        settings([inputMode:'statement', scheme:'FTP1', salaryId:'Salary', capital:0d, growthRate:0d, duration:10d,
+                  historicalWageEvents:[[incomeId:'Salary', openingEventIncluded:false]]])
+    }
+}
+
+collect { balancesheet { format json; output 'stdout' } }

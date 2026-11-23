@@ -1,0 +1,16 @@
+{
+  "name": "FTP 1",
+  "names": {
+    "en": "FTP 1",
+    "sv": "FTP 1"
+  },
+  "description": {
+    "sv": "Premier för försäkringsbranschens premiebestämda tjänstepension FTP 1.",
+    "en": "Contributions for the insurance sector’s defined-contribution FTP 1 pension."
+  },
+  "country": "SE",
+  "category": "income",
+  "releases": [
+    "6ada3e55559da0fb6de5d1e5273e614ce00e4d33b38aafdbf180ede61821fc56"
+  ]
+}

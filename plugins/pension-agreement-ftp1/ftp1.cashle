@@ -1,0 +1,39 @@
+import dev.cashle.pension.agreement.PensionAgreement.ContributionInput
+import dev.cashle.pension.agreement.PensionAgreement.Kind
+
+import java.time.LocalDate
+
+import static SwedishAgreementRules.*
+
+def ftp1 = localized('FTP1', 55, 5, 1, 1, .5d, 'openingPendingPremium', false,
+        ' – traditionell del', ' – traditional portion')
+pensionAgreement('FTP1') {
+    pluginId 'cashle.pension.agreement.FTP1'
+    kind Kind.DEFINED_CONTRIBUTION
+    metadata ftp1('sv')
+    localizedMetadata ftp1
+    eligible { ContributionInput input -> ftp1Eligible(input) }
+    historicalContributionBreakpoints { ContributionInput input -> thresholds(input, 7.5d, 30d) }
+    contribution { ContributionInput input ->
+        if (!ftp1Eligible(input)) return 0d
+        int rateYear = input.date().minusMonths(3).year
+        if (rateYear >= 2028) return ftp1Premium(input, .065d, .32d)
+        if (rateYear == 2027) return ftp1Premium(input, .063d, .318d)
+        if (rateYear == 2026) return ftp1Premium(input, .061d, .316d)
+        if (rateYear == 2025) return ftp1Premium(input, .059d, .314d)
+        ftp1Premium(input, .055d, .313d)
+    }
+}
+
+static boolean ftp1Eligible(ContributionInput input) {
+    LocalDate change = LocalDate.of(2025, 4, 1)
+    boolean formerAgeLimit = input.date().isBefore(change) || input.birth().plusYears(65).isBefore(change)
+    age(input) >= 25d && age(input) < (formerAgeLimit ? 65d : 66d)
+}
+
+static double ftp1Premium(ContributionInput input, double lowerRate, double upperRate) {
+    double base = incomeBase(input)
+    double threshold = 7.5d * base
+    double salary = input.salary()
+    band(salary, 0d, threshold, lowerRate) + band(salary, threshold, 30d * base, upperRate)
+}
