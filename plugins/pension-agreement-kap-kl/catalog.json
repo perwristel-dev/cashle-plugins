@@ -1,0 +1,16 @@
+{
+  "name": "KAP-KL",
+  "names": {
+    "en": "KAP-KL occupational pension",
+    "sv": "KAP-KL tjänstepension"
+  },
+  "description": {
+    "en": "Premium-defined and benefit-defined old-age pensions for employees covered by Sweden's KAP-KL municipal and regional agreement.",
+    "sv": "Premie- och förmånsbestämd ålderspension för anställda som omfattas av KAP-KL inom kommun och region."
+  },
+  "country": "SE",
+  "category": "income",
+  "releases": [
+    "cd5ff1cae62f978dcd34910adb713b85f49541bef311ce22de9f2f253446c885"
+  ]
+}
