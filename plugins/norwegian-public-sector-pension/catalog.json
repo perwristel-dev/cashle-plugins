@@ -1,0 +1,16 @@
+{
+  "name": "Norwegian public-sector occupational pension",
+  "names": {
+    "en": "Norwegian public-sector occupational pension",
+    "sv": "Norsk offentlig tjänstepension"
+  },
+  "description": {
+    "en": "Lifelong occupational old-age income from SPK or KLP, based on a provider quote.",
+    "sv": "Livsvarig offentlig tjänstepension enligt uppgift från SPK eller KLP."
+  },
+  "country": "NO",
+  "category": "income",
+  "releases": [
+    "96e6e582d5bcc87f72c671deef8145cb36214b68c3ee5ef2a83c410cb49c5700"
+  ]
+}

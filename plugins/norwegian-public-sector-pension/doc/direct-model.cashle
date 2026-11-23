@@ -1,0 +1,15 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.cashflow'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.public-sector.no' from '../norwegian-public-sector-pension.cashle'
+}
+
+finance {
+    plan { from '2028-01-01'; until '2028-05-01'; currency 'NOK'; inflation 0d }
+    person('self') { name 'Pension recipient'; birthYear 1966; birthMonth 2 }
+    norwegianPublicSectorPension('SPK pension') {
+        settings grossMonthlyNok: 4200d, payoutStart: [reference: 'age', age: 60, offset: 0]
+    }
+}
+collect { cashflow {} }
