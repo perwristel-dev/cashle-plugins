@@ -1,5 +1,9 @@
 {
   "name": "PA16 I",
+  "names": {
+    "en": "PA16 I",
+    "sv": "PA16 I"
+  },
   "description": {
     "sv": "Villkor och pensionspremier enligt PA16 avdelning I.",
     "en": "Eligibility and pension contributions under PA16 Section I."

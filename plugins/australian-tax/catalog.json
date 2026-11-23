@@ -1,5 +1,9 @@
 {
   "name": "Australian tax",
+  "names": {
+    "en": "Australian tax",
+    "sv": "Australisk skatt"
+  },
   "description": {
     "sv": "Australisk inkomstskatt och fastighetsbeskattning för bosatta.",
     "en": "Australian income and property tax for residents."

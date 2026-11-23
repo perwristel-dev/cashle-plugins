@@ -1,5 +1,9 @@
 {
   "name": "ITP 1",
+  "names": {
+    "en": "ITP 1",
+    "sv": "ITP 1"
+  },
   "description": {
     "sv": "Villkor och premier för den svenska tjänstepensionen ITP 1.",
     "en": "Eligibility and contributions for the Swedish ITP 1 occupational pension."

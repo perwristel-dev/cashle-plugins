@@ -1,5 +1,9 @@
 {
   "name": "Swedish pension agreement rules",
+  "names": {
+    "en": "Swedish pension agreement rules",
+    "sv": "Regler för svenska pensionsavtal"
+  },
   "description": {
     "sv": "Gemensamma regler för lön, ålder och konton i svensk tjänstepension.",
     "en": "Shared salary, age and account rules for Swedish occupational pensions."

@@ -1,5 +1,9 @@
 {
   "name": "US brokerage",
+  "names": {
+    "en": "US brokerage",
+    "sv": "Amerikansk aktiedepå"
+  },
   "description": {
     "sv": "Amerikansk aktiepost med skatteregler för kort- och långsiktiga kapitalvinster.",
     "en": "US share lot with rules for short- and long-term capital gains."

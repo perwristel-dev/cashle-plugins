@@ -1,5 +1,9 @@
 {
   "name": "PA16 II Occupational Pension",
+  "names": {
+    "en": "PA16 II Occupational Pension",
+    "sv": "PA16 II Tjänstepension"
+  },
   "description": {
     "sv": "Tjänstepensionspremier enligt PA16 avdelning II.",
     "en": "Occupational pension contributions under PA16 Section II."

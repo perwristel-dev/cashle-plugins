@@ -1,5 +1,9 @@
 {
   "name": "Danish Aktiesparekonto (ASK)",
+  "names": {
+    "en": "Danish Aktiesparekonto (ASK)",
+    "sv": "Danskt aktiesparkonto (ASK)"
+  },
   "description": {
     "sv": "Danskt aktiesparkonto med årlig beskattning av värdeförändringen.",
     "en": "Danish investment savings account with annual mark-to-market tax."

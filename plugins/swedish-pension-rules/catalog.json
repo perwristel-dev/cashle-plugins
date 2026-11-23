@@ -1,5 +1,9 @@
 {
   "name": "Swedish pension rules",
+  "names": {
+    "en": "Swedish pension rules",
+    "sv": "Svenska pensionsregler"
+  },
   "description": {
     "sv": "Gemensam månadsindelning, bokföring och antaganden för svenska pensionsberäkningar.",
     "en": "Shared monthly timing, ledger and assumptions for Swedish pension calculations."

@@ -1,5 +1,9 @@
 {
   "name": "Swedish defined-benefit pension",
+  "names": {
+    "en": "Swedish defined-benefit pension",
+    "sv": "Svensk förmånsbestämd tjänstepension"
+  },
   "description": {
     "sv": "Svensk tjänstepension som beräknas enligt förmånsreglerna i valt avtal.",
     "en": "Swedish occupational pension calculated from the selected agreement’s benefit rules."

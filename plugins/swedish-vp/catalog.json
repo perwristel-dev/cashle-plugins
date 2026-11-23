@@ -1,5 +1,9 @@
 {
   "name": "Swedish securities account (VP)",
+  "names": {
+    "en": "Swedish securities account (VP)",
+    "sv": "Svensk värdepappersdepå (VP)"
+  },
   "description": {
     "sv": "Svenskt värdepapperskonto som följer anskaffningsvärde och skattepliktiga försäljningar.",
     "en": "Swedish securities account that tracks acquisition cost and taxable sales."

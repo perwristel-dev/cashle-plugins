@@ -22,9 +22,12 @@ export async function readPluginRelease(directory, { optional = false } = {}) {
   });
   if (raw === null) return null;
   const metadata = JSON.parse(raw);
-  const { name, description, releases, country, category, defaultLanguage, publicLanguageDownload } = metadata;
+  const { name, names, description, releases, country, category, defaultLanguage, publicLanguageDownload } = metadata;
   const nonempty = (value) => typeof value === 'string' && !!value.trim();
+  const validNames = names === undefined || (names && typeof names === 'object' && !Array.isArray(names) &&
+    Object.keys(names).length === 2 && [names.en, names.sv].every(value => nonempty(value) && value.trim() === value && value.length <= 120));
   if (!nonempty(name) || !nonempty(description?.sv) || !nonempty(description?.en)
+    || !validNames
     || !Array.isArray(releases) || releases.some((hash) => !/^[a-f0-9]{64}$/.test(hash))
     || (country !== undefined && (typeof country !== 'string' || !/^[A-Z]{2}$/.test(country)))
     || (category !== undefined && (typeof category !== 'string' || !/^[a-z][a-z-]{0,31}$/.test(category)))

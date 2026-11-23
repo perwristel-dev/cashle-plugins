@@ -1,5 +1,9 @@
 {
   "name": "Icelandic tax",
+  "names": {
+    "en": "Icelandic tax",
+    "sv": "Isländsk skatt"
+  },
   "description": {
     "sv": "Isländska skatteregler för inkomst och bostad.",
     "en": "Icelandic income and housing tax rules."

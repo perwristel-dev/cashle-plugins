@@ -1,5 +1,9 @@
 {
   "name": "German tax",
+  "names": {
+    "en": "German tax",
+    "sv": "Tysk skatt"
+  },
   "description": {
     "sv": "Tysk inkomstskatt och privatbostadsförsäljning.",
     "en": "German income tax and private-home sales."

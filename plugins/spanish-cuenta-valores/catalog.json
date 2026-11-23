@@ -1,5 +1,9 @@
 {
   "name": "Spanish cuenta de valores",
+  "names": {
+    "en": "Spanish cuenta de valores",
+    "sv": "Spanskt värdepapperskonto (cuenta de valores)"
+  },
   "description": {
     "sv": "Spansk värdepappersdepå för ett förvärvsparti av noterade aktier.",
     "en": "Spanish securities account for one purchase lot of listed shares."

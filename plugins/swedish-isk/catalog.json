@@ -1,5 +1,9 @@
 {
   "name": "Swedish investment savings account (ISK)",
+  "names": {
+    "en": "Swedish investment savings account (ISK)",
+    "sv": "Svenskt investeringssparkonto (ISK)"
+  },
   "description": {
     "sv": "Svenskt investeringssparkonto med årlig schablonintäkt.",
     "en": "Swedish investment savings account with annual standard income."

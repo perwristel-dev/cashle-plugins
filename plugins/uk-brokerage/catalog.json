@@ -1,5 +1,9 @@
 {
   "name": "UK brokerage",
+  "names": {
+    "en": "UK brokerage",
+    "sv": "Brittisk värdepappersdepå"
+  },
   "description": {
     "sv": "Brittisk värdepappersdepå med sammanlagt anskaffningsvärde enligt Section 104.",
     "en": "UK securities account with Section 104 cost pooling."

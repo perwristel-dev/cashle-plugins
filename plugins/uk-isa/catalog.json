@@ -1,5 +1,9 @@
 {
   "name": "UK Stocks and Shares ISA",
+  "names": {
+    "en": "UK Stocks and Shares ISA",
+    "sv": "Brittisk aktie- och fond-ISA"
+  },
   "description": {
     "sv": "Brittiskt aktiesparande för vuxna med ett årligt insättningsutrymme.",
     "en": "UK adult investment ISA with an annual contribution allowance."

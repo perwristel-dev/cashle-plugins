@@ -1,5 +1,9 @@
 {
   "name": "French PEA",
+  "names": {
+    "en": "French PEA",
+    "sv": "Franskt aktiesparkonto (PEA)"
+  },
   "description": {
     "sv": "Franskt aktiesparande med regler för tillåtna värdepapper och insättningsgränser.",
     "en": "French equity savings plan with eligible investments and contribution limits."

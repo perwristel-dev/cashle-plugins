@@ -1,5 +1,9 @@
 {
   "name": "Canadian TFSA",
+  "names": {
+    "en": "Canadian TFSA",
+    "sv": "Kanadensiskt skattefritt sparkonto (TFSA)"
+  },
   "description": {
     "sv": "Kanadensiskt skattefritt sparkonto med insättningsutrymme.",
     "en": "Canadian tax-free savings account with contribution room."

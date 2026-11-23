@@ -1,5 +1,9 @@
 {
   "name": "Dutch tax",
+  "names": {
+    "en": "Dutch tax",
+    "sv": "Nederländsk skatt"
+  },
   "description": {
     "sv": "Nederländsk inkomstskatt, socialförsäkring och beskattning enligt Box 3.",
     "en": "Dutch income tax, national insurance and Box 3 assessment."

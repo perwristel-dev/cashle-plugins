@@ -1,5 +1,9 @@
 {
   "name": "German share depot",
+  "names": {
+    "en": "German share depot",
+    "sv": "Tysk värdepappersdepå"
+  },
   "description": {
     "sv": "Tysk värdepappersdepå för investeringar i noterade aktier.",
     "en": "German securities depot for listed-share investments."

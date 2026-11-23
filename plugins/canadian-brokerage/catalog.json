@@ -1,5 +1,9 @@
 {
   "name": "Canadian brokerage",
+  "names": {
+    "en": "Canadian brokerage",
+    "sv": "Kanadensisk aktiedepå"
+  },
   "description": {
     "sv": "Kanadensisk värdepappersdepå med genomsnittligt anskaffningsvärde för identiska aktier.",
     "en": "Canadian brokerage account with average cost for identical shares."

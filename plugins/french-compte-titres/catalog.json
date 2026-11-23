@@ -1,5 +1,9 @@
 {
   "name": "French compte-titres",
+  "names": {
+    "en": "French compte-titres",
+    "sv": "Franskt värdepapperskonto (compte-titres)"
+  },
   "description": {
     "sv": "Fransk värdepappersdepå för en post med noterade aktier.",
     "en": "French securities account for one lot of listed shares."

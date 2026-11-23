@@ -1,5 +1,9 @@
 {
   "name": "Spanish tax",
+  "names": {
+    "en": "Spanish tax",
+    "sv": "Spansk skatt"
+  },
   "description": {
     "sv": "Spansk inkomstskatt inom det allmänna skatteområdet och skatteregler för fastigheter.",
     "en": "Spanish common-territory income tax and property tax settings."

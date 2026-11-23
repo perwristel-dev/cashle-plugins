@@ -1,5 +1,9 @@
 {
   "name": "Italian PIR",
+  "names": {
+    "en": "Italian PIR",
+    "sv": "Italienskt individuellt sparande (PIR)"
+  },
   "description": {
     "sv": "Italienskt sparande med årliga och totala insättningsgränser.",
     "en": "Italian savings plan with annual and lifetime contribution limits."

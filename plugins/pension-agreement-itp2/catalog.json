@@ -1,5 +1,9 @@
 {
   "name": "ITP 2",
+  "names": {
+    "en": "ITP 2",
+    "sv": "ITP 2"
+  },
   "description": {
     "sv": "Villkor och intjänande för den svenska tjänstepensionen ITP 2.",
     "en": "Eligibility and benefit accrual for the Swedish ITP 2 occupational pension."

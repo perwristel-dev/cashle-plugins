@@ -39,7 +39,7 @@ await mkdir(output, { recursive: true });
 for (const slug of values.release ? [values.release] : directories) {
   const directory = join(root, slug);
   const metadata = await readPluginRelease(directory);
-  const { country, category, description, name, releases } = metadata;
+  const { country, category, description, name, names, releases } = metadata;
   const config = JSON.parse(await readFile(join(directory, 'plugin.json'), 'utf8'));
   if (!/^cashle\.[A-Za-z0-9_.-]+$/.test(config.id) || seen.has(config.id)) throw new Error(`Invalid or duplicate plugin ID: ${slug}`);
   seen.add(config.id);
@@ -68,6 +68,7 @@ for (const slug of values.release ? [values.release] : directories) {
     .filter(hash => hash && hash !== plugin.sha256);
   plugins.push({
     id: plugin.id, name, description, version, path, sha256: plugin.sha256,
+    ...(names ? { names } : {}),
     ...(country ? { country } : {}), ...(category ? { category } : {}),
     ...(manifest.replaces?.some(id => id !== plugin.id) ? { replaces: manifest.replaces } : {}),
     ...(plugin.visibility ? { visibility: plugin.visibility } : {}),

@@ -1,5 +1,9 @@
 {
   "name": "Finnish tax",
+  "names": {
+    "en": "Finnish tax",
+    "sv": "Finländsk skatt"
+  },
   "description": {
     "sv": "Finländsk inkomstskatt, utländska aktier och privatbostadsförsäljning på fastlandet.",
     "en": "Mainland Finnish income tax, foreign shares and private-home sales."

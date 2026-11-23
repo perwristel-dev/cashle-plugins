@@ -1,5 +1,9 @@
 {
   "name": "Avtalspension SAF-LO",
+  "names": {
+    "en": "Avtalspension SAF-LO",
+    "sv": "Avtalspension SAF-LO"
+  },
   "description": {
     "sv": "Villkor och premier för Avtalspension SAF-LO.",
     "en": "Eligibility and contributions for the SAF-LO occupational pension."

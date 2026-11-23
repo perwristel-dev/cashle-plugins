@@ -1,5 +1,9 @@
 {
   "name": "UK tax",
+  "names": {
+    "en": "UK tax",
+    "sv": "Brittisk skatt"
+  },
   "description": {
     "sv": "Brittisk inkomstskatt och skatteinställningar för privatbostad.",
     "en": "UK income tax and private-property tax settings."

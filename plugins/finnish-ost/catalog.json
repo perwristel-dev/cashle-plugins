@@ -1,5 +1,9 @@
 {
   "name": "Finnish OST",
+  "names": {
+    "en": "Finnish OST",
+    "sv": "Finländskt aktiesparkonto (OST)"
+  },
   "description": {
     "sv": "Finskt aktiesparkonto med proportionell fördelning vid uttag.",
     "en": "Finnish equity savings account with proportional withdrawals."
