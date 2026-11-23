@@ -1,7 +1,17 @@
-export default function (context) {
+export default async function (context) {
+  const type = 'cashlab.swedish-dc-pension';
+  let module;
+  if (typeof context.importDependencyModule === 'function') {
+    const load = path => context.importDependencyModule('cashle.finance.pension.rules', path);
+    const { createPensionUi } = await load('ui/factory.js');
+    const { pensionPlugins } = await createPensionUi(context, load, { editor: true });
+    module = pensionPlugins.find(plugin => plugin.type === type);
+  } else {
+    module = context.replacementModule(type, 1);
+  }
   return {
     modules: [{
-      ...context.replacementModule('cashlab.swedish-dc-pension', 1),
+      ...module,
       usageModel: 'identity',
       sourceModule: { language: 'groovy-cashle-plugin', provider: 'cashle.finance.pension.dc', source: 'swedish-dc-pension.cashle' },
     }],
