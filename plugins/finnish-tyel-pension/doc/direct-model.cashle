@@ -1,0 +1,11 @@
+plugins {
+    id 'cashle.finance'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.occupational.fi.tyel' from '../finnish-tyel-pension.cashle'
+}
+finance {
+    plan { from '2026-01-01'; until '2027-04-01'; currency 'EUR'; inflation 0d }
+    person('self') { birthYear 1962; birthMonth 1 }
+    finnishTyELPension('TyEL pension') { settings([monthlyRight:1800d, annualSalary:60000d]) }
+}
+collect {}
