@@ -103,7 +103,7 @@ final class NorwegianOccupationalPension implements FinanceModule {
             LocalDate payoutDay = entered
             requestedStart = () -> payoutDay
         } else if (kind in ['retirement', 'milestone']) {
-            if (kind == 'retirement') reference.put('personId', owner)
+            if (kind == 'retirement' && !reference.get('personId')) reference.put('personId', owner)
             requestedStart = finance.timeDate(reference)
         } else throw invalid('start')
         lifeEnd = finance.lifeEnd(owner)

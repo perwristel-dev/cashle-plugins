@@ -5,7 +5,10 @@ const defaultStart = { reference: 'age', age: 67, personId: 'self', offset: 0 };
 
 const payoutReference = data => {
   const time = data.payoutStart ?? defaultStart;
-  return ['age', 'retirement'].includes(time.reference) ? { ...time, personId: data.owner } : time;
+  if (time.reference === 'age' || (time.reference === 'retirement' && !time.personId)) {
+    return { ...time, personId: data.owner };
+  }
+  return time;
 };
 const ageDate = (person, age) => `${person.birthYear + age}-${String(person.birthMonth).padStart(2, '0')}-01`;
 const monthIndex = iso => Number(iso.slice(0, 4)) * 12 + Number(iso.slice(5, 7));
