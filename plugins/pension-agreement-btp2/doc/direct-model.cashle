@@ -1,0 +1,39 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.pension.types'
+    id 'cashle.tax'
+    id 'cashle.tax.se' from 'tax.cashlec'
+    id 'cashle.balancesheet'
+    id 'cashle.finance.pension.dc' from 'dc.cashlec'
+    id 'cashle.finance.pension.db' from 'db.cashlec'
+    id 'cashle.pension.agreement.BTP2' from 'btp2.cashlec'
+    id 'cashle.pension.agreement.BTPK' from 'btp2.cashlec'
+}
+
+finance {
+    plan {
+        from '2026-02-01'; until '2026-05-01'; currency 'SEK'; inflation 0d
+        settings([generalAssumptions:['swedish-pension':[baseAmountIncrease:0d, lifelongDivisionYears:20d]]])
+    }
+    person('self') { birthYear 1967; birthMonth 1 }
+    tax {
+        country 'SE'
+        preliminaryRate 0d
+        options([ruleYear:2025, residentMonths:12, municipality:'0180', municipalRate:0.306d,
+                 burialFeeRate:0.00293d, communityMember:false])
+    }
+    salary('Salary') {
+        owner 'self'; amount 250000d; frequency 'monthly'; taxTreatment 'taxable'; taxBasis 'salary'
+    }
+    dcPension('BTPK') {
+        settings([inputMode:'statement', scheme:'BTPK', salaryId:'Salary', capital:0d, growthRate:0d, duration:10d,
+                  historicalWageEvents:[[incomeId:'Salary', openingEventIncluded:false]]])
+    }
+    dbPension('BTP2') {
+        settings([inputMode:'statement', scheme:'BTP2', salaryId:'Salary', annualBenefit:217987.5d, serviceYears:15d,
+                  payoutAge:65, payoutStart:[reference:'age', age:65, offset:0, personId:'self'], duration:0d])
+    }
+}
+
+collect { balancesheet { format json; output 'stdout' } }
