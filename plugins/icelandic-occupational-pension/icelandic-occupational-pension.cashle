@@ -1,0 +1,131 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
+import dev.cashle.sdk.model.ScheduleSpec
+import java.time.DateTimeException
+import java.time.LocalDate
+import java.time.YearMonth
+import java.util.function.Supplier
+
+final class IcelandicOccupationalPension {
+    static boolean integer(Object value, int min, int max) {
+        value instanceof Number && value.doubleValue() == Math.rint(value.doubleValue()) &&
+            value >= min && value <= max
+    }
+
+    static LocalDate enteredDate(Map entry) {
+        def day = entry.day == null ? 1 : entry.day
+        if (!integer(entry.year, 1900, 9999) || !integer(entry.month, 1, 12) ||
+            !integer(day, 1, 31)) return null
+        try {
+            return LocalDate.of(entry.year.intValue(), entry.month.intValue(), day.intValue())
+        } catch (DateTimeException ignored) {
+            return null
+        }
+    }
+
+    static LocalDate paymentAtAge(YearMonth birthday, boolean monthEnd) {
+        monthEnd ? birthday.atEndOfMonth() : birthday.plusMonths(1).atDay(1)
+    }
+
+    static LocalDate paymentOnOrAfter(LocalDate date, boolean monthEnd) {
+        def month = YearMonth.from(date)
+        if (monthEnd) return month.atEndOfMonth()
+        date.dayOfMonth == 1 ? date : month.plusMonths(1).atDay(1)
+    }
+
+    static LocalDate effectiveStart(LocalDate requested, LocalDate earliest, LocalDate latest, boolean monthEnd) {
+        if (requested == null) return latest
+        def payment = paymentOnOrAfter(requested, monthEnd)
+        if (payment.isBefore(earliest)) return earliest
+        if (payment.isAfter(latest)) return latest
+        payment
+    }
+}
+
+financeModule('cashlab.icelandic-occupational-pension', 1) {
+    pluginId 'cashle.finance.pension.is-occupational'
+    messages 'icelandic.occupational.messages'
+    dsl('icelandicOccupationalPension') { id ->
+        [name:id, owner:'self', monthlyPension:0d, earliestClaimAge:67, latestClaimAge:67,
+         payoutStart:[reference:'age', age:67], paymentTiming:'month-end']
+    }
+
+    calculation {
+        if (!enabled) return
+        def profileData = profile
+        def person = (profileData.people ?: []).find { it.id == input.owner }
+        requireInput('invalid.owner') { person != null && input.owner != 'joint' }
+        requireInput('invalid.birth') {
+            IcelandicOccupationalPension.integer(person.birthYear, 1900, 9800) &&
+                IcelandicOccupationalPension.integer(person.birthMonth, 1, 12)
+        }
+        requireInput('invalid.name') { input.name instanceof String && !input.name.blank }
+        requireInput('invalid.amount') {
+            input.monthlyPension instanceof Number && Double.isFinite(input.monthlyPension.doubleValue()) &&
+                input.monthlyPension > 0d
+        }
+        requireInput('invalid.range') {
+            IcelandicOccupationalPension.integer(input.earliestClaimAge, 60, 120) &&
+                IcelandicOccupationalPension.integer(input.latestClaimAge, input.earliestClaimAge.intValue(), 120)
+        }
+        requireInput('invalid.timing') { ['month-start', 'month-end'].contains(input.paymentTiming) }
+
+        boolean monthEnd = input.paymentTiming == 'month-end'
+        def birth = YearMonth.of(person.birthYear.intValue(), person.birthMonth.intValue())
+        def earliest = IcelandicOccupationalPension.paymentAtAge(birth.plusYears(input.earliestClaimAge.longValue()), monthEnd)
+        def latest = IcelandicOccupationalPension.paymentAtAge(birth.plusYears(input.latestClaimAge.longValue()), monthEnd)
+        def start = input.payoutStart
+        requireInput('invalid.start') { start instanceof Map }
+        def offset = start.offset == null ? 0 : start.offset
+        requireInput('invalid.start') { IcelandicOccupationalPension.integer(offset, -1200, 1200) }
+
+        Supplier<LocalDate> requested
+        if (start.reference == 'age') {
+            requireInput('invalid.start') { IcelandicOccupationalPension.integer(start.age, 0, 120) }
+            def birthday = birth.plusYears(start.age.longValue()).plusMonths(offset.longValue())
+            requested = { IcelandicOccupationalPension.paymentAtAge(birthday, monthEnd) }
+        } else if (start.reference == 'date') {
+            def entered = IcelandicOccupationalPension.enteredDate(start)
+            requireInput('invalid.start') { entered != null }
+            requested = { entered.plusMonths(offset.longValue()) }
+        } else {
+            requireInput('invalid.start') {
+                start.reference == 'milestone' && start.milestoneId instanceof String && !start.milestoneId.blank
+            }
+            requested = milestone(start.milestoneId, offset.intValue())
+        }
+
+        def planDay = planStart.anchor()
+        def calendarStart = IcelandicOccupationalPension.paymentOnOrAfter(planDay, monthEnd)
+        def firstPossible = start.reference == 'milestone' ? earliest :
+            IcelandicOccupationalPension.effectiveStart(requested.get(), earliest, latest, monthEnd)
+        if (firstPossible.isAfter(calendarStart)) calendarStart = firstPossible
+        def calendar = ScheduleSpec.every(Frequency.MONTH, calendarStart)
+        if (monthEnd) calendar = calendar.atMonthEnd()
+
+        def death = deathOf(input.owner)
+        Supplier<LocalDate> end = {
+            def date = death.get()
+            date == null ? null : YearMonth.from(date).plusMonths(1).atDay(1)
+        }
+        def income = owner(input.owner).account {
+            name input.name
+            classify AccountKind.INCOME, new AccountTag('cashle.household.economic-nature', 1,
+                'income.pension.occupational', [AccountKind.INCOME] as Set)
+            reportingRole ReportingRole.INCOME
+        }
+        double monthlyInPlanCurrency = input.monthlyPension.doubleValue() * exchangeRate('ISK', profileData.currency ?: 'ISK')
+        taxableReceipt(input.owner, 'pension', 'monthly') {
+            on calendar
+            until end
+            debit cash
+            credit income
+            amount {
+                def first = IcelandicOccupationalPension.effectiveStart(requested.get(), earliest, latest, monthEnd)
+                today.isBefore(first) ? 0d : monthlyInPlanCurrency * inflationFactor(planDay, today)
+            }
+        }
+    }
+}
