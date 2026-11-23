@@ -1,0 +1,22 @@
+{
+  "id": "cashle.pension.agreement.BTP1",
+  "sources": [
+    {
+      "path": "btp1.cashle",
+      "providers": [
+        "cashle.pension.agreement.BTP1",
+        "cashle.pension.agreement.BTP1-TRYGG",
+        "cashle.pension.agreement.BTP1-VALBAR"
+      ],
+      "imports": {
+        "cashle.pension.agreement.rules": [
+          "SwedishAgreementRules.groovy"
+        ]
+      }
+    }
+  ],
+  "ui": "agreement-entry.js",
+  "requires": [
+    "cashle.pension.agreement.rules"
+  ]
+}

@@ -1,0 +1,46 @@
+import dev.cashle.pension.agreement.PensionAgreement.ContributionInput
+import dev.cashle.pension.agreement.PensionAgreement.Kind
+
+import static SwedishAgreementRules.*
+
+def total = localized('BTP1', 55, 5, 1, 1, 1d, 'openingPendingPremium', false, ' – pension', ' – pension')
+pensionAgreement('BTP1') {
+    pluginId 'cashle.pension.agreement.BTP1'
+    kind Kind.DEFINED_CONTRIBUTION
+    metadata total('sv')
+    localizedMetadata total
+    historicalContributionBreakpoints { ContributionInput input -> thresholds(input, 7.5d, 30d) }
+    contribution { ContributionInput input -> protectedPremium(input) + selectablePremium(input) }
+}
+
+def protectedPart = localized('BTP1-TRYGG', 55, 5, 1, 1, 1d, 'openingPendingPremium', false, ' – trygg del', ' – protected portion')
+pensionAgreement('BTP1-TRYGG') {
+    pluginId 'cashle.pension.agreement.BTP1-TRYGG'
+    kind Kind.DEFINED_CONTRIBUTION
+    metadata protectedPart('sv')
+    localizedMetadata protectedPart
+    historicalContributionBreakpoints { ContributionInput input -> thresholds(input, 7.5d) }
+    contribution { ContributionInput input -> protectedPremium(input) }
+}
+
+def selectablePart = localized('BTP1-VALBAR', 55, 5, 1, 1, 1d, 'openingPendingPremium', false, ' – valbar del', ' – selectable portion')
+pensionAgreement('BTP1-VALBAR') {
+    pluginId 'cashle.pension.agreement.BTP1-VALBAR'
+    kind Kind.DEFINED_CONTRIBUTION
+    metadata selectablePart('sv')
+    localizedMetadata selectablePart
+    historicalContributionBreakpoints { ContributionInput input -> thresholds(input, 7.5d, 30d) }
+    contribution { ContributionInput input -> selectablePremium(input) }
+}
+
+static double protectedPremium(ContributionInput input) {
+    band(input.salary(), 0d, 7.5d * incomeBase(input), .025d)
+}
+
+static double selectablePremium(ContributionInput input) {
+    double base = incomeBase(input)
+    double threshold = 7.5d * base
+    boolean strengthened = input.birth().year >= 1967 && input.date().year >= 2023
+    band(input.salary(), 0d, threshold, strengthened ? .04d : .02d) +
+            band(input.salary(), threshold, 30d * base, strengthened ? .32d : .30d)
+}
