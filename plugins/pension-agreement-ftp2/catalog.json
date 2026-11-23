@@ -1,0 +1,16 @@
+{
+  "name": "FTP 2",
+  "names": {
+    "en": "FTP 2",
+    "sv": "FTP 2"
+  },
+  "description": {
+    "sv": "Förmånsbestämd pension och FTPK för försäkringsbranschen.",
+    "en": "Defined-benefit pension and the FTPK supplement for the insurance sector."
+  },
+  "country": "SE",
+  "category": "income",
+  "releases": [
+    "9d5ce3094e640122bff1354d254b95aee5df58b2cf90eb3a3214ed15c823e552"
+  ]
+}
