@@ -1,0 +1,20 @@
+{
+  "id": "cashle.finance.pension.dk.public",
+  "requires": ["cashle.finance"],
+  "ui": "ui.js",
+  "uiTranslations": [
+    { "locale": "en", "path": "ui-en.json" },
+    { "locale": "sv", "path": "ui-sv.json" },
+    { "locale": "da", "path": "ui-da.json" }
+  ],
+  "sources": [
+    {
+      "path": "danish-public-pension.cashle",
+      "resources": [
+        "danish/pension/messages_en.properties",
+        "danish/pension/messages_sv.properties",
+        "danish/pension/messages_da.properties"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "name": "Danish state pension",
+  "names": {
+    "en": "Danish state pension",
+    "sv": "Dansk folkpension"
+  },
+  "description": {
+    "en": "Danish Folkepension entitlement and lifelong income, with the basic amount and pension supplement.",
+    "sv": "Dansk folkpension med grundbelopp, pensionstillägg och livsvarig utbetalning."
+  },
+  "country": "DK",
+  "category": "income",
+  "releases": [
+    "ba3f9670efdd7c735eac0a7030eda87b44d31cf3cb0284dfccc65533cc997700"
+  ]
+}
