@@ -1,0 +1,11 @@
+plugins {
+    id 'cashle.finance'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.public.nl' from '../dutch-aow-pension.cashle'
+}
+finance {
+    plan { from '2026-07-01'; until '2027-07-01'; currency 'EUR'; inflation 0d }
+    person('self') { birthYear 1959; birthMonth 7 }
+    dutchAowPension('AOW') { settings([insurancePercent:80d, living:'alone', officialStart:'2026-07-16']) }
+}
+collect {}

@@ -1,0 +1,85 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
+import dev.cashle.sdk.model.ScheduleSpec
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.temporal.ChronoUnit
+
+final class DutchAowDates {
+    private static final List<Integer> COHORT_STARTS = [195606, 195703, 196101, 196610, 197007, 197304,
+        197601, 197810, 198207, 198504, 198901, 199110, 199507, 199904].asImmutable()
+    private static final List<Integer> AGES_MONTHS = [802, 804, 807, 810, 813, 816, 819, 822, 825,
+        828, 831, 834, 837, 840].asImmutable()
+
+    static YearMonth entitlement(YearMonth birth) {
+        int key = birth.year * 100 + birth.monthValue
+        int cohort = COHORT_STARTS.findLastIndexOf { it <= key }
+        birth.plusMonths(cohort < 0 ? 780 : AGES_MONTHS[cohort])
+    }
+
+    static LocalDate confirmed(Object value) {
+        if (!(value instanceof String) || !value) return null
+        try { LocalDate.parse(value) }
+        catch (java.time.DateTimeException ignored) { null }
+    }
+
+    static double eligibleMonthFraction(LocalDate start, YearMonth month) {
+        if (start.isAfter(month.atEndOfMonth())) return 0d
+        if (start.isBefore(month.atDay(1))) return 1d
+        (month.lengthOfMonth() - start.dayOfMonth + 1) / (double) month.lengthOfMonth()
+    }
+
+    static double holidayMonths(LocalDate start, int payYear) {
+        YearMonth periodStart = YearMonth.of(payYear - 1, 5)
+        YearMonth periodEnd = periodStart.plusMonths(12)
+        YearMonth first = YearMonth.from(start)
+        if (first.isBefore(periodStart)) return 12d
+        if (!first.isBefore(periodEnd)) return 0d
+        ChronoUnit.MONTHS.between(first.plusMonths(1), periodEnd) + eligibleMonthFraction(start, first)
+    }
+}
+
+financeModule('cashlab.dutch-aow-pension', 1) {
+    pluginId 'cashle.finance.pension.public.nl'
+    messages 'aow.messages'
+    dsl('dutchAowPension') { id -> [name:id, owner:'self', insurancePercent:100d, living:'alone', officialStart:''] }
+
+    calculation {
+        if (!enabled) return
+        String personId = input.owner ?: 'self'
+        def person = profile.people.find { it.id == personId && it.id != 'joint' }
+        requireInput('owner') { person != null && person.birthYear instanceof Number && person.birthMonth instanceof Number }
+        requireInput('coverage') { input.insurancePercent instanceof Number && input.insurancePercent >= 0d && input.insurancePercent <= 100d }
+        requireInput('living') { input.living in ['alone', 'together'] }
+        LocalDate official = DutchAowDates.confirmed(input.officialStart)
+        requireInput('date') { !input.officialStart || official != null }
+        YearMonth birth = YearMonth.of(person.birthYear.intValue(), person.birthMonth.intValue())
+        LocalDate claim = official ?: DutchAowDates.entitlement(birth).atDay(1)
+        YearMonth firstMonth = YearMonth.from(claim)
+        double share = input.insurancePercent.doubleValue() / 100d
+        if (share == 0d) return
+        double fx = exchangeRate('EUR', profile.currency ?: 'EUR')
+        double monthly = (input.living == 'alone' ? 1662.16d : 1139.39d) * share * fx
+        double holiday = (input.living == 'alone' ? 104.78d : 74.85d) * share * fx
+        def period = monthlyFromPlanStart
+        LocalDate moneyDate = period.anchor()
+        def pension = owner(personId).account {
+            name input.name
+            classify AccountKind.INCOME, new AccountTag('cashle.household.economic-nature', 1, 'income.pension.public', [AccountKind.INCOME] as Set)
+            reportingRole ReportingRole.INCOME
+        }
+        taxableReceipt(personId, 'pension', 'monthly') {
+            on ScheduleSpec.every(Frequency.MONTH, firstMonth.atDay(1)).atMonthEnd().within(period.fromInclusive(), period.untilExclusive())
+            until deathOf(personId)
+            debit cash
+            credit pension
+            amount {
+                double gross = monthly * DutchAowDates.eligibleMonthFraction(claim, YearMonth.from(today))
+                if (today.monthValue == 5) gross += holiday * DutchAowDates.holidayMonths(claim, today.year)
+                gross * inflationFactor(moneyDate, today)
+            }
+        }
+    }
+}

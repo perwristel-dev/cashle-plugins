@@ -1,0 +1,16 @@
+{
+  "name": "AOW state pension",
+  "names": {
+    "en": "AOW state pension",
+    "sv": "Nederländsk allmän pension (AOW)"
+  },
+  "description": {
+    "en": "Dutch statutory AOW old-age pension with a lifetime payout.",
+    "sv": "Nederländsk lagstadgad ålderspension med livsvarig utbetalning."
+  },
+  "country": "NL",
+  "category": "income",
+  "releases": [
+    "cfa52fd41379f6f35595fdc7fefe5d8b497804cd5f4cd69e5611f044cb5c8ec1"
+  ]
+}

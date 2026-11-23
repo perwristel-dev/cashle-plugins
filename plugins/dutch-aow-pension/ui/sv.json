@@ -1,0 +1,18 @@
+{
+  "label": "Nederländsk allmän pension (AOW)",
+  "description": "Nederländsk lagstadgad ålderspension med livsvarig utbetalning.",
+  "income": "Utbetalning av AOW",
+  "name": "Namn",
+  "owner": "Person",
+  "coverage": "Försäkrad andel",
+  "coverageHelp": "Använd andelen som SVB uppskattar vid AOW-åldern.",
+  "living": "Boendesituation",
+  "alone": "Bor ensam",
+  "together": "Gift eller sambo",
+  "start": "Exakt startdatum från SVB",
+  "startHelp": "Lämna tomt för att använda lagstadgad månad för födelsekullen.",
+  "fixed": "AOW börjar vid lagstadgad ålder.",
+  "right": "Intjänad AOW",
+  "statutory": "Lagstadgad start",
+  "lifetime": "Livsvarig månadsutbetalning"
+}

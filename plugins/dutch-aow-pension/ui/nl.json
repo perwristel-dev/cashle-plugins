@@ -1,0 +1,18 @@
+{
+  "label": "AOW-pensioen",
+  "description": "Nederlands wettelijk ouderdomspensioen met levenslange uitkering.",
+  "income": "Uitbetaling AOW",
+  "name": "Naam",
+  "owner": "Persoon",
+  "coverage": "Verzekerd pensioenpercentage",
+  "coverageHelp": "Gebruik het percentage dat de SVB op uw AOW-leeftijd verwacht.",
+  "living": "Woonsituatie",
+  "alone": "Alleenwonend",
+  "together": "Getrouwd of samenwonend",
+  "start": "Exacte ingangsdatum van de SVB",
+  "startHelp": "Laat leeg om de wettelijke maand voor uw geboortecohort te gebruiken.",
+  "fixed": "De AOW gaat in op de wettelijke leeftijd.",
+  "right": "Opgebouwde AOW",
+  "statutory": "Wettelijke ingangsdatum",
+  "lifetime": "Levenslange maandelijkse uitkering"
+}
