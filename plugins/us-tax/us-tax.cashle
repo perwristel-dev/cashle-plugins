@@ -23,7 +23,7 @@ import static dev.cashle.tax.support.PropertyInputs.weekday
 
 // Federal individual income tax and employee FICA for rule year 2026.
 int referenceYear = 2026
-def externalBases = ['salary', 'capitalIncome', 'qualifiedDividends', 'shortTermCapitalGains',
+def externalBases = ['salary', 'pension', 'socialSecurityBenefits', 'capitalIncome', 'qualifiedDividends', 'shortTermCapitalGains',
     'shortTermCapitalLosses', 'longTermCapitalGains', 'longTermCapitalLosses'].asImmutable()
 def localBasis = { String basis -> 'local' + basis.capitalize() }
 def federalCarry = { String field ->
@@ -40,10 +40,12 @@ def stateSchema = [
     localShortTermCapitalLossCarry: new TaxStateField('US local estimate short-term capital loss carry', true),
     localLongTermCapitalLossCarry: new TaxStateField('US local estimate long-term capital loss carry', true),
 ].asImmutable()
-def moneyFields = (allBases + ['spouseSalary'] + stateSchema.keySet()).toSet().asImmutable()
+def moneyFields = (allBases + ['spouseSalary', 'taxExemptInterest'] + stateSchema.keySet()).toSet().asImmutable()
 def allowedOptions = (moneyFields + ['state', 'stateTaxMethod', 'estimatedStateTaxRate', 'filingStatus', 'spouseSenior',
     'seniorDeductionEligible', 'januaryFirstBirthday', 'ruleYear', 'birthYear', 'residency',
-    'noticeDatesByYear', 'noticeAmountsByYear', 'settlementCalendar']).asImmutable()
+    'socialSecuritySpouseResidence', 'estimatedStateRetirementTreatment', 'noticeDatesByYear',
+    'noticeAmountsByYear', 'settlementCalendar']).asImmutable()
+def retirementTreatments = ['neither', 'pension', 'socialSecurity', 'both'].asImmutable()
 def sourceFlags = ['federalTaxable', 'localTaxable'].toSet().asImmutable()
 def isFinite = { value -> value instanceof Number && Double.isFinite(value.doubleValue()) }
 def nonnegativeAmount = { inputs, String key ->
@@ -137,9 +139,28 @@ def remainingLoss = { double shortTerm, double longTerm, double deductionUsed ->
     [Math.max(0d, -shortTerm - Math.min(deductionUsed, Math.max(0d, -shortTerm))),
      Math.max(0d, -longTerm - Math.max(0d, deductionUsed - Math.max(0d, -shortTerm)))]
 }
+// IRS Publication 915 Worksheet 1, for supported income types without special exclusions.
+def taxableSocialSecurity = { inputs, double benefits, double otherAgi, boolean separate, boolean joint ->
+    if (benefits == 0d) return 0d
+    def spouseResidence = inputs.get('socialSecuritySpouseResidence')
+    require(!separate || spouseResidence in ['apart', 'together'],
+        'For married filing separately with Social Security benefits, specify whether the spouses lived apart all year.')
+    double combined = otherAgi + benefits / 2d + nonnegativeAmount(inputs, 'taxExemptInterest')
+    if (separate && spouseResidence == 'together') return Math.min(benefits, Math.max(0d, combined)) * 0.85d
+    double first = joint ? 32000d : 25000d
+    double second = joint ? 44000d : 34000d
+    double halfTier = Math.min(benefits / 2d, Math.max(0d, Math.min(combined, second) - first) * 0.5d)
+    Math.min(benefits * 0.85d, halfTier + Math.max(0d, combined - second) * 0.85d)
+}
 // Separate netting for the user's local AGI estimate.
-def localIncome = { inputs, double spouse, double deduction, boolean separate, boolean joint, int seniorCount ->
+def localIncome = { inputs, double spouse, double deduction, boolean separate, boolean joint, int seniorCount, boolean estimated ->
     double ordinary = localAmount(inputs, 'salary') + spouse + localAmount(inputs, 'capitalIncome')
+    double pension = localAmount(inputs, 'pension')
+    double benefits = localAmount(inputs, 'socialSecurityBenefits')
+    def treatment = inputs.get('estimatedStateRetirementTreatment')
+    require(!estimated || pension + benefits == 0d || retirementTreatments.contains(treatment),
+        'With an estimated state/local rate and retirement income, choose which retirement income to include in the estimate.')
+    if (!estimated || treatment in ['pension', 'both']) ordinary += pension
     double qualified = localAmount(inputs, 'qualifiedDividends')
     double st = localAmount(inputs, 'shortTermCapitalGains') - localAmount(inputs, 'shortTermCapitalLosses') -
         nonnegativeAmount(inputs, inputs.containsKey('localShortTermCapitalLossCarry') ? 'localShortTermCapitalLossCarry' : 'shortTermCapitalLossCarry')
@@ -147,7 +168,11 @@ def localIncome = { inputs, double spouse, double deduction, boolean separate, b
         nonnegativeAmount(inputs, inputs.containsKey('localLongTermCapitalLossCarry') ? 'localLongTermCapitalLossCarry' : 'longTermCapitalLossCarry')
     def (shortTerm, longTerm) = netGains(st, lt)
     double lossDeduction = Math.min(separate ? 1500d : 3000d, Math.max(0d, -shortTerm - longTerm))
-    double agi = ordinary + qualified + Math.max(0d, shortTerm) + Math.max(0d, longTerm) - lossDeduction
+    double otherAgi = ordinary + qualified + Math.max(0d, shortTerm) + Math.max(0d, longTerm) - lossDeduction
+    double taxableBenefits = treatment in ['socialSecurity', 'both'] && estimated ?
+        taxableSocialSecurity(inputs, benefits, otherAgi, separate, joint) : 0d
+    double agi = otherAgi + taxableBenefits
+    ordinary += taxableBenefits
     double carryUsed = Math.min(lossDeduction, Math.max(0d, ordinary + qualified - deduction -
         seniorAmount(inputs, agi, separate, joint) * seniorCount))
     def (shortRemaining, longRemaining) = remainingLoss(shortTerm, longTerm, carryUsed)
@@ -162,6 +187,7 @@ def assessFederalAndLocal = { inputs ->
     require(birthYear == Math.rint(birthYear) && birthYear >= 1d && birthYear <= 2007d,
         'This profile requires birthYear 1–2007 (supported adult age band).')
     for (String basis : allBases) nonnegativeAmount(inputs, basis)
+    nonnegativeAmount(inputs, 'taxExemptInterest')
     boolean estimated = usesEstimate(inputs)
     String status = Objects.toString(inputs.get('filingStatus'), '')
     require(status in ['single', 'marriedJoint', 'marriedSeparate', 'headOfHousehold'], 'Choose an explicit supported filingStatus.')
@@ -174,7 +200,8 @@ def assessFederalAndLocal = { inputs ->
     double salary = nonnegativeAmount(inputs, 'salary')
     double spouse = nonnegativeAmount(inputs, 'spouseSalary')
     require(joint || spouse == 0d, 'spouseSalary requires marriedJoint.')
-    double ordinary = salary + spouse + nonnegativeAmount(inputs, 'capitalIncome')
+    double ordinary = salary + spouse + nonnegativeAmount(inputs, 'capitalIncome') + nonnegativeAmount(inputs, 'pension')
+    double benefits = nonnegativeAmount(inputs, 'socialSecurityBenefits')
     double qualified = nonnegativeAmount(inputs, 'qualifiedDividends')
     int age = referenceYear - (int) birthYear
     boolean senior = age >= 65 || (age == 64 && januaryFirstBirthday)
@@ -188,10 +215,12 @@ def assessFederalAndLocal = { inputs ->
         nonnegativeAmount(inputs, 'longTermCapitalLossCarry')
     def (shortTerm, longTerm) = netGains(st, lt)
     double lossDeduction = Math.min(separate ? 1500d : 3000d, Math.max(0d, -shortTerm - longTerm))
-    double agi = ordinary + qualified + Math.max(0d, shortTerm) + Math.max(0d, longTerm) - lossDeduction
+    double otherAgi = ordinary + qualified + Math.max(0d, shortTerm) + Math.max(0d, longTerm) - lossDeduction
+    double taxableBenefits = taxableSocialSecurity(inputs, benefits, otherAgi, separate, joint)
+    double agi = otherAgi + taxableBenefits
     double seniorDeduction = seniorAmount(inputs, agi, separate, joint) * seniorCount
     // Schedule D preserves losses unabsorbed after standard and enhanced senior deductions.
-    double carryUsed = Math.min(lossDeduction, Math.max(0d, ordinary + qualified - deduction - seniorDeduction))
+    double carryUsed = Math.min(lossDeduction, Math.max(0d, ordinary + qualified + taxableBenefits - deduction - seniorDeduction))
     def (stRemaining, ltRemaining) = remainingLoss(shortTerm, longTerm, carryUsed)
     double taxable = Math.max(0d, agi - deduction - seniorDeduction)
     double preference = Math.min(taxable, qualified + Math.max(0d, longTerm))
@@ -224,13 +253,14 @@ def assessFederalAndLocal = { inputs ->
     double ss = (Math.min(payrollSalary, 184500d) + Math.min(spouse, 184500d)) * 0.062d
     double medicare = (payrollSalary + spouse) * 0.0145d
     double extraMedicare = Math.max(0d, payrollSalary + spouse - niitThreshold) * 0.009d
-    def local = localIncome(inputs, spouse, deduction, separate, joint, seniorCount)
+    def local = localIncome(inputs, spouse, deduction, separate, joint, seniorCount, estimated)
     double stateTax = estimated ? Math.max(0d, (double) local.agi) * number(inputs, 'estimatedStateTaxRate', 0d) : 0d
     new TaxAssessment(ordinaryTax + preferredTax + amt + niit + stateTax, ss + medicare + extraMedicare,
         components('ordinaryIncomeTax', ordinaryTax, 'preferentialIncomeTax', preferredTax, 'alternativeMinimumTax', amt,
             'niit', niit, 'stateIncomeTax', stateTax, 'estimatedStateAndLocalIncomeTax', stateTax, 'standardDeduction', deduction,
             'additionalAgeStandardDeduction', additionalStandard, 'enhancedSeniorDeduction', seniorDeduction,
-            'adjustedGrossIncome', agi, 'taxableIncome', taxable, 'socialSecurity', ss, 'medicare', medicare,
+            'adjustedGrossIncome', agi, 'taxableIncome', taxable, 'socialSecurityBenefits', benefits,
+            'taxableSocialSecurityBenefits', taxableBenefits, 'socialSecurity', ss, 'medicare', medicare,
             'additionalMedicare', extraMedicare, 'capitalLossDeduction', lossDeduction, 'shortTermCapitalLossRemaining', stRemaining,
             'longTermCapitalLossRemaining', ltRemaining, 'localAdjustedGrossIncome', local.agi,
             'localShortTermCapitalLossRemaining', local.shortRemaining, 'localLongTermCapitalLossRemaining', local.longRemaining))

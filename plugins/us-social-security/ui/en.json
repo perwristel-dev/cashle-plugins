@@ -1,0 +1,22 @@
+{
+  "label": "US Social Security retirement",
+  "name": "Name",
+  "owner": "Person",
+  "basis": "SSA amount",
+  "fullRetirement": "Estimate at full retirement age",
+  "quote": "Estimate for the selected start or awarded benefit",
+  "monthlyBenefit": "Gross monthly benefit",
+  "amountHelp": "Use the gross amount in today's dollars. Enter the amount for full retirement age to project changes from claiming early or late.",
+  "birthDay": "Day of birth",
+  "birthHelp": "Enter your day of birth for SSA's age rules. The default assumes a birthday after the second day of the month.",
+  "payout": "Social Security payments",
+  "payoutStart": "Requested claim start",
+  "payoutHelp": "Your first eligible benefit month is at or just after age 62. Payments start the month after entitlement.",
+  "lifetime": "Lifetime monthly payments",
+  "quoteSummary": "Gross monthly benefit from SSA",
+  "fullSummary": "Monthly estimate at full retirement age",
+  "invalidPerson": "Select one person with a valid birth year and month.",
+  "invalidBirthDay": "Enter a valid day of birth for the selected person.",
+  "invalidCohort": "Use an SSA quote for a person born before 1943.",
+  "invalidStart": "Choose a start by age, date, retirement or milestone."
+}

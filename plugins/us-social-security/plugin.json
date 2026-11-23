@@ -1,0 +1,14 @@
+{
+  "id": "cashle.finance.pension.public.us",
+  "requires": ["cashle.finance", "cashle.dsl.groovy"],
+  "sources": [{
+    "path": "us-social-security.cashle",
+    "providers": ["cashle.finance.pension.public.us"],
+    "resources": ["us/socialsecurity/Messages_en.properties", "us/socialsecurity/Messages_sv.properties"]
+  }],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {"locale": "en", "path": "ui/en.json"},
+    {"locale": "sv", "path": "ui/sv.json"}
+  ]
+}

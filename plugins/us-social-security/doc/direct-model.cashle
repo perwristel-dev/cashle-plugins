@@ -1,0 +1,30 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.public.us' from '../us-social-security.cashle'
+    id 'cashle.tax.us' from '../../us-tax/us-tax.cashle'
+}
+
+finance {
+    language 'en'
+    plan { from '2026-01-01'; until '2027-01-01'; currency 'USD'; inflation 0d }
+    person('self') { birthYear 1964; birthMonth 1 }
+    tax {
+        country 'US'
+        preliminaryRate 0d
+        options([ruleYear: 2026, residency: 'full-year', state: 'TX', filingStatus: 'single', pension: 12000d,
+            openingShortTermCapitalLoss: 0d, openingLongTermCapitalLoss: 0d])
+    }
+    salary('work') {
+        owner 'self'
+        amount 20000d
+        frequency 'annual'
+        taxTreatment 'taxable'
+    }
+    usSocialSecurity('Social Security') {
+        settings([monthlyBenefit: 2400d, birthDay: 3, payoutStart: [reference: 'age', age: 60, offset: 0]])
+    }
+}
+collect {}

@@ -1,0 +1,22 @@
+{
+  "label": "Amerikansk allmän ålderspension",
+  "name": "Namn",
+  "owner": "Person",
+  "basis": "Underlag från SSA",
+  "fullRetirement": "Prognos vid full pensionsålder",
+  "quote": "Prognos för vald start eller beviljat belopp",
+  "monthlyBenefit": "Månadsbelopp före skatt",
+  "amountHelp": "Ange bruttobeloppet i dagens dollar. Använd beloppet vid full pensionsålder för att beräkna effekten av tidigare eller senare uttag.",
+  "birthDay": "Födelsedag i månaden",
+  "birthHelp": "Ange födelsedagen för SSA:s åldersregler. Förvalet antar födelsedag efter den andra dagen i månaden.",
+  "payout": "Utbetalning från Social Security",
+  "payoutStart": "Önskad uttagsstart",
+  "payoutHelp": "Första möjliga förmånsmånad är vid eller strax efter 62 år. Utbetalningen börjar månaden efter förmånsmånaden.",
+  "lifetime": "Livsvarig månadsutbetalning",
+  "quoteSummary": "Månadsbelopp från SSA före skatt",
+  "fullSummary": "Månadsprognos vid full pensionsålder",
+  "invalidPerson": "Välj en person med giltigt födelseår och födelsemånad.",
+  "invalidBirthDay": "Ange en giltig födelsedag i personens födelsemånad.",
+  "invalidCohort": "Ange ett belopp från SSA för den som är född före 1943.",
+  "invalidStart": "Välj start efter ålder, datum, pensionering eller milstolpe."
+}
