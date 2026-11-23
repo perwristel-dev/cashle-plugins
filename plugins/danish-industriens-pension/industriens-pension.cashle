@@ -127,14 +127,10 @@ financeModule('cashlab.danish-industriens-pension', 1) {
             LocalDate candidate = requested.get()
             if (candidate == null) return null
             LocalDate start = IndustriensPensionRules.monthOnOrAfter(candidate < earliest ? earliest : candidate)
-            if (lifelong == 0d && !IndustriensPensionRules.allowedRateWindow(start, earliest, years)) return null
+            if (rate > 0d && !IndustriensPensionRules.allowedRateWindow(start, earliest, years)) return null
             start
         } as Supplier<LocalDate>
-        Supplier<LocalDate> rateEnd = {
-            LocalDate start = payout.get()
-            if (start == null) return null
-            IndustriensPensionRules.allowedRateWindow(start, earliest, years) ? start.plusYears(years) : start
-        } as Supplier<LocalDate>
+        Supplier<LocalDate> rateEnd = { payout.get()?.plusYears(years) } as Supplier<LocalDate>
         Supplier<LocalDate> death = deathOf(personId)
 
         if (wage > 0d) {

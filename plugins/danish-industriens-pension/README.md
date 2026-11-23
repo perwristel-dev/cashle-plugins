@@ -48,8 +48,8 @@ payments when eligible, rounding dates to the same or next month's first
 day, and assumes contributions stop at payout. A ratepension lasts at least
 10 years and must end within 30 years of the earliest eligible date. The
 default is 15 years. A dynamically resolved start outside this window
-produces no ratepension. Lifetime payments continue through the forecast
-until death. Cashle books both as taxable pension income.
+keeps the savings balance in place and leaves payouts unscheduled. Lifetime
+payments continue through the forecast until death. Cashle books both as taxable pension income.
 [Industriens Pension start rules](https://www.industrienspension.dk/ForMedlemmer/Seniorer/UdbetaltPension)
 [Rate and lifetime pension conditions](https://www.industrienspension.dk/ForMedlemmer/Opsparing/Opsparingstyper)
 
