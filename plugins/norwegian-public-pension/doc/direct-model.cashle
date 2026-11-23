@@ -1,0 +1,13 @@
+plugins {
+    id 'cashle.finance'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.public.no' from '../norwegian-public-pension.cashlec'
+}
+finance {
+    plan { from '2030-01-01'; until '2030-05-01'; currency 'NOK'; inflation 0d }
+    person('self') { birthYear 1963; birthMonth 1 }
+    norwegianPublicPension('NAV pension') {
+        settings([openingBalance: 6000000d, payoutStart: [reference: 'age', age: 67, offset: 0]])
+    }
+}
+collect { }

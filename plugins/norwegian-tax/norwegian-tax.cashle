@@ -24,7 +24,7 @@ import static dev.cashle.tax.support.PropertyInputs.weekday
 // Norwegian 2026 ordinary individual tax. See README.md for rule provenance.
 String taxCurrency = 'NOK'
 int referenceYear = 2026
-def externalBases = ['salary', 'capitalIncome', 'interestExpenses'].asImmutable()
+def externalBases = ['salary', 'pension', 'capitalIncome', 'interestExpenses'].asImmutable()
 def acceptedBases = (externalBases + ['shareIncome', 'investmentCapitalLoss']).asImmutable()
 def amounts = (acceptedBases + ['prepaidTax']).toSet().asImmutable()
 def allowedOptions = (amounts + ['birthYear', 'ruleYear', 'residency', 'region', 'youngWorkerTrialSelected']).asImmutable()
@@ -56,12 +56,6 @@ countryTaxPolicy('NO') {
         }
         if (!'full-year'.equals(options.get('residency'))) errors.add('profile.residency')
         if (!validRegion(options.get('region'))) errors.add('profile.region')
-        if (context.people().any { person ->
-            Object raw = person.get('birthYear')
-            if (!(raw instanceof Number)) return false
-            double yearOfBirth = ((Number) raw).doubleValue()
-            Double.isFinite(yearOfBirth) && Math.rint(yearOfBirth) == yearOfBirth && yearOfBirth < 1960
-        }) errors.add('profile.birthYear')
         if (!Boolean.FALSE.equals(options.get('youngWorkerTrialSelected'))) {
             errors.add('profile.youngWorkerTrial')
         }
@@ -117,7 +111,6 @@ countryTaxPolicy('NO') {
         double birthYear = number(options, 'birthYear', 0d)
         require(birthYear == Math.floor(birthYear) && birthYear >= 1900 && birthYear <= 2007,
                 'Provide a supported adult birthYear (1900–2007).')
-        require(birthYear >= 1960, 'Pension-age and reduced-insurance profiles are unsupported.')
         boolean pilot = bool(options, 'youngWorkerTrialSelected', birthYear >= 1991 && birthYear <= 2006)
         require(!pilot, 'Confirm official pilot selection status; selected young-worker pilot participants are unsupported.')
         Object region = options.get('region')
@@ -125,10 +118,12 @@ countryTaxPolicy('NO') {
         boolean interventionZone = 'intervention-zone'.equals(region)
 
         double salary = number(options, 'salary', 0d)
+        double pension = number(options, 'pension', 0d)
+        double personalIncome = salary + pension
         double capital = number(options, 'capitalIncome', 0d)
         double interest = number(options, 'interestExpenses', 0d)
-        double standard = Math.min(salary * 0.46d, 95700d)
-        double beforeAllowance = salary + capital + number(options, 'shareIncome', 0d) -
+        double standard = Math.min(salary * 0.46d + Math.min(pension * 0.40d, 75400d), 95700d)
+        double beforeAllowance = personalIncome + capital + number(options, 'shareIncome', 0d) -
                 standard - interest - number(options, 'investmentCapitalLoss', 0d)
         boolean investmentLoss = options.containsKey('shareIncome') || options.containsKey('investmentCapitalLoss')
         require(beforeAllowance >= 0d || investmentLoss,
@@ -139,9 +134,11 @@ countryTaxPolicy('NO') {
             double lower = band[0]
             double upper = band[1]
             double rate = band[2]
-            bracket += Math.max(0d, Math.min(salary, upper) - lower) * rate
+            bracket += Math.max(0d, Math.min(personalIncome, upper) - lower) * rate
         }
-        double insurance = Math.min(salary * 0.076d, Math.max(0d, salary - 99650d) * 0.25d)
+        double salaryInsuranceRate = referenceYear - birthYear > 69d ? 0.051d : 0.076d
+        double insurance = Math.min(salary * salaryInsuranceRate + pension * 0.051d,
+                Math.max(0d, personalIncome - 99650d) * 0.25d)
         def parts = components('ordinary', ordinary * (interventionZone ? 0.185d : 0.22d),
                 'bracket', bracket, 'nationalInsurance', insurance)
         double liability = sum(parts)

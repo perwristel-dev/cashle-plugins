@@ -45,16 +45,15 @@ export default function (context) {
     translate: taxText,
     translations,
     sourceTax: { language: 'groovy-cashle-plugin', provider: 'cashle.tax.no', source: 'norwegian-tax.cashle' },
-    id: 'NO', supportedBases: ['salary', 'capitalIncome', 'interestExpenses'], label: 'Norge', currency: 'NOK', ruleYear: 2026,
-    description: 'Norska regler 2026 för vanliga anställda födda 1960 eller senare. Pension och förmögenhetsskatt stöds inte. Bekräfta faktisk urvalsstatus för arbetsfradragsförsöket, särskilt för personer födda 1991–2006.',
+    id: 'NO', supportedBases: ['salary', 'pension', 'capitalIncome', 'interestExpenses'], label: 'Norge', currency: 'NOK', ruleYear: 2026,
+    description: 'Norska regler 2026 för lön och pension. Särskilt skatteavdrag för pension och förmögenhetsskatt ingår inte. Bekräfta faktisk urvalsstatus för arbetsfradragsförsöket, särskilt för personer födda 1991–2006.',
     defaultOptions: { ruleYear: 2026, residency: '', region: '', youngWorkerTrialSelected: null },
     fields: profileFields,
-    validate(options, profile) {
+    validate(options) {
       const errors = [];
       if (options.ruleYear !== 2026) errors.push(taxText('Välj den stödda regelutgåvan {year}.', { year: 2026 }));
       if (options.residency !== 'full-year') errors.push(taxText('Bekräfta skatterättslig hemvist hela året.'));
       if (!['ordinary', 'intervention-zone'].includes(options.region)) errors.push(taxText('Välj norsk skatteregion.'));
-      if ((profile?.people ?? []).some(person => Number.isInteger(person.birthYear) && person.birthYear < 1960)) errors.push(taxText('Norska regler stöder födelseår från 1960.'));
       if (options.youngWorkerTrialSelected !== false) errors.push(taxText('Bekräfta att personen inte är uttagen till arbetsfradragsförsöket (pilot).'));
       return errors;
     }, assessmentOptions: nativeOptions,
