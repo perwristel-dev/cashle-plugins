@@ -171,7 +171,9 @@ final class AustralianSuperGuarantee implements FinanceModule {
     private double minimumPayment(double opening, LocalDate start, LocalDate financialYear) {
         if (start.monthValue == 6) return 0d
         LocalDate nextYear = financialYear.plusYears(1)
-        long age = ChronoUnit.YEARS.between(birth.atEndOfMonth(), start)
+        // A July birthday can already have occurred at financial year open.
+        // Use the older possible age so a month-only birth date cannot lower the minimum.
+        long age = ChronoUnit.YEARS.between(birth.atDay(1), start)
         double rate = age < 65 ? 0.04d : age < 75 ? 0.05d : age < 80 ? 0.06d : age < 85 ? 0.07d :
             age < 90 ? 0.09d : age < 95 ? 0.11d : 0.14d
         double proRata = ChronoUnit.DAYS.between(start, nextYear) / (double) ChronoUnit.DAYS.between(financialYear, nextYear)
