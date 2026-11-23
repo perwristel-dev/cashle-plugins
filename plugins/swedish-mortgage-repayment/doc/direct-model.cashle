@@ -1,0 +1,19 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.assets'
+    id 'cashle.finance.debt'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.loan-repayment.se' from '../swedish-mortgage-repayment.cashle'
+}
+finance {
+    plan { from '2027-01-01'; until '2028-01-01'; currency 'SEK'; inflation 0d }
+    person('self') { name 'Testperson'; birthYear 1985; birthMonth 1 }
+    income 'Lön', 50000d
+    debt('loan-a') { balance 1800000d; interest 3d }
+    debt('loan-b') { balance 500000d; interest 3d }
+    house('home') { value 3000000d; settings([linkedLoanIds: ['loan-a', 'loan-b']]) }
+    swedishMortgageRepayment('Amortering') {
+        settings([homeId: 'home', autoDecrease: true])
+    }
+}
+collect {}

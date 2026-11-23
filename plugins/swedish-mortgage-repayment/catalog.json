@@ -1,0 +1,16 @@
+{
+  "name": "Svenskt amorteringskrav",
+  "names": {
+    "en": "Swedish mortgage repayment requirement",
+    "sv": "Svenskt amorteringskrav"
+  },
+  "description": {
+    "en": "Forecast principal payments based on the secured loans and the dwelling's applicable valuation.",
+    "sv": "Beräknar amorteringen utifrån lånen med bostaden som säkerhet och bostadens gällande värdering."
+  },
+  "category": "flows",
+  "country": "SE",
+  "releases": [
+    "c13b3889cbdd1b707b6f3ab2d7520bd8c2202322f423f259b824b3618dc3b168"
+  ]
+}

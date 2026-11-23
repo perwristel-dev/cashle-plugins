@@ -1,0 +1,211 @@
+import dev.cashle.core.i18n.Messages
+import dev.cashle.sdk.composition.ModuleContext
+import dev.cashle.sdk.composition.ModuleInput
+import dev.cashle.sdk.finance.CollateralAsset
+import dev.cashle.sdk.finance.FinanceContext
+import dev.cashle.sdk.finance.FinanceModule
+import dev.cashle.sdk.finance.FundingPort
+import dev.cashle.sdk.finance.FundingSchedule
+import dev.cashle.sdk.finance.RepayableDebt
+import dev.cashle.sdk.model.Variable
+import groovy.transform.CompileStatic
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
+import java.util.function.DoubleSupplier
+
+financeModule('cashlab.repayment-se', 1) {
+    pluginId 'cashle.finance.loan-repayment.se'
+    dsl('swedishMortgageRepayment') { String name ->
+        [name: name, homeId: '', source: '__cash__', autoDecrease: false]
+    }
+    factory { ModuleInput input -> new SwedishMortgageRepayment(input) }
+}
+
+@CompileStatic
+class SwedishMortgageRepayment implements FinanceModule {
+    private static final LocalDate RULE_START = LocalDate.of(2026, 4, 1)
+    private static final String ROLE = 'cashle.finance.loan-repayment.se.dwelling.v1'
+    private final ModuleInput entry
+    private FinanceContext context
+    private Messages messages
+    private CollateralAsset home
+    private List<RepayableDebt> debts
+    private LocalDate enteredDate
+    private double enteredValue, enteredDebt
+    private boolean autoDecrease
+    private Variable outstanding, peak, basisValue, nextValuationDay
+    private Variable pendingDebt, balanceBeforePosting
+    private Variable paymentDay, paymentPrincipal, annualAmount
+
+    SwedishMortgageRepayment(ModuleInput entry) { this.entry = entry }
+    @Override void declare(ModuleContext ignored) {}
+
+    @Override void wireFinance(FinanceContext finance) {
+        context = finance
+        messages = context.messages(SwedishMortgageRepayment, 'dev.cashle.repayment.se.messages')
+        Map<String, Object> data = entry.data()
+        String homeId = Objects.toString(data.get('homeId'), '')
+        home = context.findCollateralAsset(homeId).orElse(null)
+        if (home == null || home.kind() != CollateralAsset.Kind.DWELLING || home.creditIds().isEmpty())
+            throw invalid('dwelling')
+        if (!context.claimExclusive(home.account(), ROLE)) throw invalid('duplicate')
+        debts = new ArrayList<RepayableDebt>()
+        for (String id : home.creditIds()) {
+            RepayableDebt debt = context.findRepayableDebt(id).orElse(null)
+            if (debt == null) throw invalid('credit')
+            debts.add(debt)
+        }
+        enteredValue = optionalAmount(data, 'basisValue', false)
+        enteredDebt = optionalAmount(data, 'basisDebt', true)
+        if (Double.isFinite(enteredValue) || Double.isFinite(enteredDebt)) {
+            try {
+                enteredDate = LocalDate.parse(Objects.toString(data.get('basisDate'), ''))
+            } catch (java.time.DateTimeException failure) {
+                throw invalid('date')
+            }
+            if (enteredDate.isAfter(context.from())) throw invalid('date')
+        }
+        autoDecrease = Boolean.TRUE.equals(data.get('autoDecrease'))
+        def model = context.model()
+        outstanding = model.variable(0d)
+        peak = model.variable(Double.isFinite(enteredDebt) ? enteredDebt : 0d)
+        pendingDebt = model.variable(-1d)
+        balanceBeforePosting = model.variable(0d)
+        basisValue = model.variable(0d)
+        nextValuationDay = model.variable(0d)
+        paymentDay = model.variable(-1.0e12d)
+        paymentPrincipal = model.variable(0d)
+        annualAmount = model.variable(0d)
+        // Only this property's principal accounts are observed. Amounts and
+        // valuation state are model variables, so replay also restores the peak.
+        for (int index = 0; index < debts.size(); index++) observeDebt(finance, index)
+    }
+
+    private void observeDebt(FinanceContext finance, int index) {
+        var account = debts.get(index).principal()
+        finance.model().beforeBalanceChange(account) { double delta ->
+            capturePostedPeak()
+            double balance = account.getPostedBalance()
+            double change = Math.max(0d, -balance - delta) - Math.max(0d, -balance)
+            outstanding.setValue(Math.max(0d, outstanding.getValue() + change))
+            pendingDebt.setValue(index)
+            balanceBeforePosting.setValue(balance)
+        }
+    }
+
+    private void capturePostedPeak() {
+        int index = (int) pendingDebt.getValue()
+        if (index < 0 || debts.get(index).principal().getPostedBalance() == balanceBeforePosting.getValue()) return
+        // Both sides must be posted before measuring the group peak. Transfers
+        // between two linked loans leave the group's credit amount unchanged.
+        double posted = outstanding.getValue()
+        if (posted > peak.getValue()) peak.setValue(posted)
+        pendingDebt.setValue(-1d)
+    }
+
+    @Override void funding(FundingPort port) {
+        String source = Objects.toString(entry.data().get('source'), FundingPort.CASH)
+        LocalDate start = context.from().isAfter(RULE_START) ? context.from() : RULE_START
+        FundingSchedule calendar = FundingSchedule.monthlyEnd(() -> start)
+        int index = 0
+        for (RepayableDebt debt : debts) registerDebt(port, debt, source, calendar, index++)
+    }
+
+    private void registerDebt(FundingPort port, RepayableDebt debt, String source, FundingSchedule calendar, int index) {
+        DoubleSupplier arrears = port.requiredLiabilityWithArrears(entry.id() + ':' + index, source,
+            debt.principal(), (double unpaid) -> payment(debt, unpaid), calendar,
+            () -> home.owned().getAsBoolean() && debt.available().getAsBoolean(),
+            () -> 1d, null, true, () -> false, () -> principal(debt))
+        if (FundingPort.CASH.equals(source)) {
+            port.liabilityCommitment(debt.principal(), () -> commitment(debt, arrears.getAsDouble()), arrears)
+        }
+    }
+
+    private double payment(RepayableDebt debt, double unpaid) {
+        LocalDate day = context.model().clock().getDate()
+        if (paymentDay.getValue() != day.toEpochDay()) {
+            capturePostedPeak()
+            double total = outstanding.getValue()
+            double minimum = reprice(day, total)
+            annualAmount.setValue(autoDecrease ? minimum : Math.max(minimum, annualAmount.getValue()))
+            paymentPrincipal.setValue(total)
+            paymentDay.setValue(day.toEpochDay())
+        }
+        double amount = principal(debt)
+        double proportional = paymentPrincipal.getValue() > 0d
+            ? annualAmount.getValue() / 12d * amount / paymentPrincipal.getValue() : 0d
+        return Math.min(Math.max(0d, amount - unpaid), proportional)
+    }
+
+    private double reprice(LocalDate day, double total) {
+        if (total <= 0d) return 0d
+        double value = basisValue.getValue()
+        if (value <= 0d) {
+            LocalDate acquired = home.acquiredOn().get()
+            LocalDate anchor = enteredDate != null ? enteredDate : acquired != null ? acquired : context.from()
+            if (anchor.isAfter(day) || (enteredDate != null && acquired != null && anchor.isBefore(acquired)))
+                throw invalid('date')
+            value = Double.isFinite(enteredValue) ? enteredValue : home.marketValueAt().applyAsDouble(anchor)
+            if (!Double.isFinite(value) || value <= 0d) {
+                value = home.marketValueAt().applyAsDouble(anchor.isBefore(context.from()) ? context.from() : day)
+            }
+            if (!Double.isFinite(value) || value <= 0d) throw invalid('value')
+            basisValue.setValue(value)
+            nextValuationDay.setValue(anchor.plusYears(5).toEpochDay())
+        }
+
+        double minimum = annual(total, peak.getValue(), value)
+        // Sample at payment events only, starting on the first permitted date.
+        if (day.toEpochDay() >= nextValuationDay.getValue()) {
+            double proposed = home.marketValueAt().applyAsDouble(day)
+            if (Double.isFinite(proposed) && proposed > 0d) {
+                double next = annual(total, total, proposed)
+                double oldRoom = Math.max(0d, 0.8d * value - total)
+                double newRoom = Math.max(0d, 0.8d * proposed - total)
+                if (next < minimum || newRoom > oldRoom) {
+                    nextValuationDay.setValue(day.plusYears(5).toEpochDay())
+                    basisValue.setValue(proposed)
+                    peak.setValue(total)
+                    minimum = next
+                }
+            }
+        }
+        minimum
+    }
+
+    private double commitment(RepayableDebt debt, double unpaid) {
+        if (!home.owned().getAsBoolean() || !debt.available().getAsBoolean()) return 0d
+        double total = outstanding.getValue()
+        if (total <= 0d || annualAmount.getValue() <= 0d) return 0d
+        LocalDate day = context.model().clock().getDate()
+        LocalDate firstMonth = day.withDayOfMonth(1)
+        if (day.dayOfMonth == day.lengthOfMonth()) firstMonth = firstMonth.plusMonths(1)
+        LocalDate last = context.nextReceiptDate().get().minusDays(1)
+        long periods = ChronoUnit.MONTHS.between(firstMonth, last.withDayOfMonth(1))
+        if (last.dayOfMonth == last.lengthOfMonth()) periods++
+        if (periods <= 0L) return 0d
+        double remaining = principal(debt)
+        return Math.min(Math.max(0d, remaining - unpaid), annualAmount.getValue() / 12d * periods * remaining / total)
+    }
+
+    private static double annual(double total, double highest, double value) {
+        if (total > value * 0.70d + 0.000001d) return highest * 0.02d
+        if (total > value * 0.50d + 0.000001d) return highest * 0.01d
+        return 0d
+    }
+
+    private static double principal(RepayableDebt debt) {
+        Math.max(0d, -debt.principal().getPostedBalance())
+    }
+
+    private double optionalAmount(Map<String, Object> data, String field, boolean zeroAllowed) {
+        Object supplied = data.get(field)
+        if (supplied == null) return Double.NaN
+        if (!(supplied instanceof Number)) throw invalid('input')
+        double amount = ((Number) supplied).doubleValue()
+        if (!Double.isFinite(amount) || amount < 0d || (!zeroAllowed && amount == 0d)) throw invalid('input')
+        return amount
+    }
+
+    private IllegalArgumentException invalid(String key) { new IllegalArgumentException(messages.text(key)) }
+}

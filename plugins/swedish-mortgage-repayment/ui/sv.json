@@ -1,0 +1,17 @@
+{
+  "Svenskt amorteringskrav": "Svenskt amorteringskrav",
+  "Namn": "Namn",
+  "Bostad": "Bostad",
+  "Välj bostad": "Välj bostad",
+  "Sänk amorteringen automatiskt när det går": "Sänk amorteringen automatiskt när det går",
+  "Ange amorteringsgrundande värde": "Ange amorteringsgrundande värde",
+  "Amorteringsgrundande värde": "Amorteringsgrundande värde",
+  "Ange amorteringsgrundande skuld": "Ange amorteringsgrundande skuld",
+  "Amorteringsgrundande skuld": "Amorteringsgrundande skuld",
+  "Underlagets värderingsdatum (ÅÅÅÅ-MM-DD)": "Underlagets värderingsdatum (ÅÅÅÅ-MM-DD)",
+  "När underlaget saknas börjar prognosen med bostadens värde och de kopplade lånen.": "När underlaget saknas börjar prognosen med bostadens värde och de kopplade lånen.",
+  "Lägg först till en bostad med kopplade lån.": "Lägg först till en bostad med kopplade lån.",
+  "Välj en bostad med kopplade lån.": "Välj en bostad med kopplade lån.",
+  "Ange värderingsdatumet senast vid planstart.": "Ange värderingsdatumet senast vid planstart.",
+  "Bostaden har redan en plan för svenskt amorteringskrav.": "Bostaden har redan en plan för svenskt amorteringskrav."
+}

@@ -1,0 +1,17 @@
+{
+  "Svenskt amorteringskrav": "Swedish mortgage repayment requirement",
+  "Namn": "Name",
+  "Bostad": "Dwelling",
+  "Välj bostad": "Choose dwelling",
+  "Sänk amorteringen automatiskt när det går": "Reduce repayments automatically when permitted",
+  "Ange amorteringsgrundande värde": "Enter the valuation used for repayments",
+  "Amorteringsgrundande värde": "Valuation used for repayments",
+  "Ange amorteringsgrundande skuld": "Enter the credit amount used for repayments",
+  "Amorteringsgrundande skuld": "Credit amount used for repayments",
+  "Underlagets värderingsdatum (ÅÅÅÅ-MM-DD)": "Assessment date (YYYY-MM-DD)",
+  "När underlaget saknas börjar prognosen med bostadens värde och de kopplade lånen.": "When no assessment is entered, the forecast starts with the dwelling’s value and its linked loans.",
+  "Lägg först till en bostad med kopplade lån.": "Add a dwelling with linked loans first.",
+  "Välj en bostad med kopplade lån.": "Choose a dwelling with linked loans.",
+  "Ange värderingsdatumet senast vid planstart.": "Enter a valuation date on or before the start of the plan.",
+  "Bostaden har redan en plan för svenskt amorteringskrav.": "The dwelling already has a Swedish mortgage repayment plan."
+}

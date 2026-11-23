@@ -10,3 +10,5 @@ Pages source to **GitHub Actions**. The workflow keeps published versions for
 unchanged archives and assigns a new version to changed archives.
 
 In Cashle, configure the published directory URL as `CASHLE_PLUGIN_CATALOG_URL`. Other catalogs can use the same directory layout and be added by URL from the Plugins page.
+
+[SDK-underlag för ett svenskt amorteringskravsplugin](docs/swedish-amortization-requirement.md)
