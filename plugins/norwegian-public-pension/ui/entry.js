@@ -26,13 +26,16 @@ export default context => {
     { key: 'navEarliest', kind: 'time', label: 'Tidigaste uttag enligt NAV',
       default: { reference: 'date', year: 2026, month: 1, offset: 0 }, choices: ['date'],
       when: data => data.hasNavEarliest, forecastEditable: true },
-    { kind: 'note', label: 'Utbetalningen är livsvarig. Önskad start flyttas vid behov till en månad som tillåts enligt reglerna.' },
+    { kind: 'message', label: 'Utbetalningen är livsvarig. Önskad start flyttas vid behov till en månad som tillåts enligt reglerna.' },
   ];
   const engineInput = data => ({ input: {
     name: data.name, owner: data.owner, basis: data.basis,
     openingBalance: data.openingBalance, pensionableAnnual: data.pensionableAnnual,
     insuranceYears: data.insuranceYears, guaranteeRate: data.guaranteeRate, navMonthly: data.navMonthly,
-    fraction: Number(data.fraction), payoutStart: { ...data.payoutStart, personId: data.owner },
+    fraction: Number(data.fraction),
+    payoutStart: data.payoutStart.reference === 'age'
+      ? { ...data.payoutStart, personId: data.owner }
+      : data.payoutStart,
     ...(data.hasNavEarliest ? { navEarliest: dateString(data.navEarliest) } : {}),
   } });
   const money = (amount, model) => new Intl.NumberFormat(model?.locale ?? 'en', {
