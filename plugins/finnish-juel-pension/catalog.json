@@ -1,0 +1,16 @@
+{
+  "name": "JuEL – Finnish public-sector employee pension",
+  "names": {
+    "en": "JuEL – Finnish public-sector employee pension",
+    "sv": "JuEL – offentlig arbetspension i Finland"
+  },
+  "description": {
+    "en": "Finnish statutory public-sector earnings-related pension with forecast accrual, protected Keva retirement ages and lifetime payments.",
+    "sv": "Finländsk offentlig arbetspension med beräknad intjäning, skyddade pensionsåldrar hos Keva och livsvarigt uttag."
+  },
+  "country": "FI",
+  "category": "income",
+  "releases": [
+    "b5f4d5bc1978526b2599f1457f797854310a6962699a58e1cc13262fe7e75558"
+  ]
+}

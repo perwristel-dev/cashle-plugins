@@ -1,0 +1,13 @@
+plugins {
+    id 'cashle.finance'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.occupational.fi.juel' from '../finnish-juel-pension.cashle'
+}
+finance {
+    plan { from '2026-01-01'; until '2026-08-01'; currency 'EUR'; inflation 0d }
+    person('self') { name 'Municipal employee'; birthYear 1961; birthMonth 7 }
+    finnishJuELPension('Public-sector pension') {
+        settings([monthlyRight:1500d, annualSalary:48000d, payoutStart:[reference:'age', age:63, offset:0]])
+    }
+}
+collect {}
