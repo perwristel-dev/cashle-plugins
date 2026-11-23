@@ -18,16 +18,16 @@ import static dev.cashle.tax.support.PropertyInputs.requiredBool
 import static dev.cashle.tax.support.PropertyInputs.scope
 
 int referenceYear = 2026
-def earnedIncome = ['salary', 'pension', 'benefits'].asImmutable()
 def publicBases = ['salary', 'pension', 'capitalIncome', 'benefits'].asImmutable()
 def annualBases = (publicBases + ['taxableCapitalIncome', 'investmentCapitalLoss']).asImmutable()
 def monetary = ['salary', 'pension', 'benefits', 'taxableCapitalIncome', 'productionExpenses',
     'prepaidTax', 'investmentCapitalLoss'].toSet().asImmutable()
-def numeric = (monetary + ['birthYear', 'municipalRate', 'churchRate', 'children']).asImmutable()
+def numeric = (monetary + ['birthYear', 'pensionInsuranceEndAge', 'municipalRate', 'churchRate', 'children']).asImmutable()
 def allowed = (numeric + ['ruleYear', 'residency', 'territory', 'singleParent']).asImmutable()
 def cents = { double amount -> Math.floor((amount + Math.abs(amount) * Math.ulp(1d)) * 100d + 0.5d) / 100d }
 def finite = { value -> value instanceof Number && Double.isFinite(value.doubleValue()) }
 def inRange = { value, double max -> finite(value) && value.doubleValue() >= 0d && value.doubleValue() <= max }
+def pensionInsuranceEndAge = { double birthYear -> birthYear <= 1957d ? 68d : birthYear <= 1961d ? 69d : 70d }
 
 def bands = [
     [0d, 0d, 0.1264d],
@@ -47,7 +47,7 @@ countryTaxPolicy('FI') {
     messages 'dev.cashle.tax.finland.FinnishTaxSource'
 
     validateSourceBases { bases ->
-        bases.count { earnedIncome.contains(it) } > 1 ? 'source.mixedIncomeClasses' : null
+        bases.contains('benefits') && (bases.contains('salary') || bases.contains('pension')) ? 'source.mixedIncomeClasses' : null
     }
 
     validateOptions { options ->
@@ -79,6 +79,7 @@ countryTaxPolicy('FI') {
         require(number(inputs, 'ruleYear', referenceYear) == referenceYear, 'Unsupported ruleYear for FI')
         inputs.put('ruleYear', referenceYear)
         inputs.put('birthYear', birthYear - year + referenceYear)
+        inputs.put('pensionInsuranceEndAge', pensionInsuranceEndAge(birthYear))
         inputs.putIfAbsent('residency', 'full-year')
         for (String key : annualBases) {
             if (key != 'investmentCapitalLoss' || amounts.containsKey(key)) {
@@ -99,6 +100,9 @@ countryTaxPolicy('FI') {
         double birthYear = number(options, 'birthYear', 0d)
         require(birthYear == Math.floor(birthYear) && birthYear >= 1900 && birthYear <= 2007,
             'Provide a supported adult birthYear (1900–2007).')
+        double ageInYear = referenceYear - birthYear
+        double insuranceEndAge = number(options, 'pensionInsuranceEndAge', pensionInsuranceEndAge(birthYear))
+        require(insuranceEndAge in [68d, 69d, 70d], 'Unsupported pension insurance age limit.')
         require('mainland'.equals(options.territory), 'Only mainland Finland is supported; Åland requires separate rules.')
         double salary = number(options, 'salary', 0d)
         double pension = number(options, 'pension', 0d)
@@ -106,9 +110,8 @@ countryTaxPolicy('FI') {
         double taxableCapitalIncome = number(options, 'taxableCapitalIncome', 0d)
         double investmentCapitalLoss = number(options, 'investmentCapitalLoss', 0d)
         double capital = Math.max(0d, taxableCapitalIncome - investmentCapitalLoss)
-        require((salary > 0d ? 1 : 0) + (pension > 0d ? 1 : 0) + (benefits > 0d ? 1 : 0) <= 1,
-            'Mixed earned-income classes are unsupported; use one income class per assessment.')
-        require(salary == 0d || birthYear >= 1962, 'Standard wage social contributions support birth years 1962–2007 only.')
+        require(benefits == 0d || (salary == 0d && pension == 0d),
+            'Benefits combined with wages or pension are unsupported.')
         double municipal = number(options, 'municipalRate', Double.NaN)
         double church = number(options, 'churchRate', 0d)
         double children = number(options, 'children', 0d)
@@ -117,11 +120,13 @@ countryTaxPolicy('FI') {
         require(children == Math.floor(children) && children <= 30, 'Provide a supported children count.')
         boolean singleParent = bool(options, 'singleParent', false)
         double productionExpenses = number(options, 'productionExpenses', 0d)
-        require(productionExpenses <= salary, 'Production expenses above salary require unsupported loss rules.')
+        require(salary == 0d || productionExpenses <= salary, 'Production expenses above salary require unsupported loss rules.')
         double production = cents(Math.min(salary, Math.max(750d, productionExpenses)))
-        double employee = cents(salary * 0.073d)
-        double unemployment = cents(salary * 0.0089d)
-        double daily = salary >= 17255d ? cents(salary * 0.0088d) : 0d
+        // The annual projection treats transition-year wages as earned before the age cutoff.
+        double employee = ageInYear <= insuranceEndAge ? cents(salary * 0.073d) : 0d
+        double unemployment = ageInYear <= 65d ? cents(salary * 0.0089d) : 0d
+        double dailyBase = ageInYear <= 68d ? salary : 0d
+        double daily = dailyBase >= 17255d ? cents(dailyBase * 0.0088d) : 0d
         double net = cents(salary + pension + benefits - production)
         double pensionDeduction = cents(Math.min(pension, Math.max(0d, 11080d -
             0.51d * Math.max(0d, Math.min(net, 22500d) - 11080d) - 0.196d * Math.max(0d, net - 22500d))))
@@ -136,12 +141,13 @@ countryTaxPolicy('FI') {
             'state', cents(band[1] + (taxable - band[0]) * band[2]),
             'municipal', cents(taxable * municipal),
             'church', cents(taxable * church),
-            'medical', cents(taxable * (salary > 0d ? 0.011d : 0.0149d)),
+            'medical', cents(0.011d * taxable + 0.0039d * Math.max(0d, taxable - dailyBase)),
             'daily', daily,
             'broadcasting', cents(Math.min(160d, Math.max(0d, net + taxableCapitalIncome - 15150d) * 0.025d)),
             'pensionSurtax', cents(Math.max(0d, pension - pensionDeduction - 60000d) * 0.0585d),
             'capital', cents(Math.min(capital, 30000d) * 0.30d + Math.max(0d, capital - 30000d) * 0.34d))
-        double credit = cents(Math.max(0d, Math.min(salary * 0.18d, 3430d + children * 105d * (singleParent ? 2d : 1d))
+        double creditLimit = ageInYear > 65d ? 4630d : 3430d
+        double credit = cents(Math.max(0d, Math.min(salary * 0.18d, creditLimit + children * 105d * (singleParent ? 2d : 1d))
             - 0.02d * Math.max(0d, Math.min(net, 50550d) - 35000d)))
         double stateCredit = Math.min(parts.state, credit)
         parts.put('state', cents(parts.state - stateCredit))

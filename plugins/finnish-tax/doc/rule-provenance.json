@@ -110,6 +110,7 @@
       "employment": {
         "rate": 0.18,
         "maximum": 3430,
+        "maximumWhenAge65BeforeTaxYear": 4630,
         "childIncrease": 105,
         "phaseOut": 0.02,
         "from": 35000,
@@ -133,18 +134,21 @@
       },
       "health": {
         "wageRate": 0.011,
-        "otherRate": 0.0149,
+        "incrementRate": 0.0039,
         "dailyRate": 0.0088,
         "dailyThreshold": 17255,
+        "dailyEndAge": 68,
         "source": {
-          "url": "https://www.vero.fi/en/individuals/tax-cards-and-tax-returns/tax_card/tax-rate-and-income-ceiling/tax-bases/",
+          "url": "https://www.vero.fi/syventavat-vero-ohjeet/ohje-hakusivu/338472/vakuutetun-sairausvakuutusmaksu2/",
           "ruleYear": 2026,
-          "reviewedOn": "2026-10-16"
+          "reviewedOn": "2026-11-24"
         }
       },
       "employeeInsurance": {
         "pensionRate": 0.073,
         "unemploymentRate": 0.0089,
+        "unemploymentEndAge": 65,
+        "pensionEndAges": {"through1957": 68, "1958Through1961": 69, "from1962": 70},
         "source": {
           "url": "https://www.vero.fi/en/businesses-and-corporations/taxes-and-charges/being-an-employer/social-insurance-contributions/",
           "ruleYear": 2026,
