@@ -16,6 +16,5 @@
     }
   ],
   "ui": "agreement-entry.js",
-  "requires": ["cashle.pension.agreement.rules"],
-  "replaces": []
+  "requires": ["cashle.pension.agreement.rules"]
 }
