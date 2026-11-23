@@ -1,0 +1,14 @@
+{
+  "id": "cashle.finance.pension.occupational.us.401k",
+  "requires": ["cashle.finance", "cashle.dsl.groovy"],
+  "sources": [{
+    "path": "us-401k.cashle",
+    "providers": ["cashle.finance.pension.occupational.us.401k"],
+    "resources": ["us/qualifiedretirement/Messages_en.properties", "us/qualifiedretirement/Messages_sv.properties"]
+  }],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {"locale": "en", "path": "ui/en.json"},
+    {"locale": "sv", "path": "ui/sv.json"}
+  ]
+}

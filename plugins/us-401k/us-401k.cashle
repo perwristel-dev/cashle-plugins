@@ -1,0 +1,265 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
+import dev.cashle.core.i18n.Messages
+import dev.cashle.sdk.composition.ModuleContext
+import dev.cashle.sdk.composition.ModuleInput
+import dev.cashle.sdk.finance.FinanceContext
+import dev.cashle.sdk.finance.FinanceModule
+import dev.cashle.sdk.finance.FundingPort
+import dev.cashle.sdk.finance.MetricsPort
+import dev.cashle.sdk.finance.TaxPort
+import dev.cashle.sdk.model.AccountHandle
+import dev.cashle.sdk.model.FlowHandle
+import dev.cashle.sdk.model.ScheduleSpec
+import dev.cashle.sdk.model.Variable
+import groovy.transform.CompileStatic
+import java.time.DateTimeException
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.temporal.ChronoUnit
+import java.util.function.Supplier
+
+financeModule('cashlab.us-401k', 1) {
+    pluginId 'cashle.finance.pension.occupational.us.401k'
+    dsl('us401k') { String id ->
+        [name: id, owner: 'self', openingBalance: 0d, annualReturn: 0d, monthlyContribution: 0d,
+         distribution: 'rmd-only', installmentYears: 15, annuityMonthly: 0d, workingDeferral: false,
+         payoutStart: [reference: 'age', age: 67, offset: 0]]
+    }
+    factory { ModuleInput input -> new Traditional401k(input) }
+}
+
+@CompileStatic
+final class Traditional401k implements FinanceModule {
+    // Treasury Regulation 1.401(a)(9)-9(c), ages 72 to 120 and over.
+    private static final List<Double> UNIFORM_LIFETIME = [
+        27.4d, 26.5d, 25.5d, 24.6d, 23.7d, 22.9d, 22.0d, 21.1d, 20.2d, 19.4d,
+        18.5d, 17.7d, 16.8d, 16.0d, 15.2d, 14.4d, 13.7d, 12.9d, 12.2d, 11.5d,
+        10.8d, 10.1d, 9.5d, 8.9d, 8.4d, 7.8d, 7.3d, 6.8d, 6.4d, 6.0d,
+        5.6d, 5.2d, 4.9d, 4.6d, 4.3d, 4.1d, 3.9d, 3.7d, 3.5d, 3.4d,
+        3.3d, 3.1d, 3.0d, 2.9d, 2.8d, 2.7d, 2.5d, 2.3d, 2.0d
+    ].asImmutable()
+    private final ModuleInput entry
+    private FinanceContext context
+    private Messages messages
+    private String owner, distribution
+    private LocalDate firstEligible, contributionUntil
+    private YearMonth birth
+    private Supplier<LocalDate> requested, death
+    private AccountHandle capital, equity, income
+    private FlowHandle payment
+    private Variable balance, priorDecember, paidThisYear, annuitized, transfer
+    private int firstRmdYear, installmentMonths
+    private double exchange, monthlyContribution, monthlyGrowth, annuityMonthly
+    private Double openingYearRmd
+    private boolean taxable
+
+    Traditional401k(ModuleInput entry) { this.entry = entry }
+
+    @Override void declare(ModuleContext ignored) {}
+
+    @Override void declareFinance(FinanceContext finance) {
+        context = finance
+        messages = finance.messages(Traditional401k, 'us.qualifiedretirement.Messages')
+        taxable = !finance.taxSettings().isEmpty()
+        Map<String, Object> data = entry.data()
+        Object ownerValue = data.get('owner')
+        if (!(ownerValue instanceof String) || ownerValue == 'joint') throw invalid('person')
+        owner = (String) ownerValue
+        Map<?, ?> person = ((List<?>) finance.profile().get('people')).find { Object value ->
+            owner == ((Map<?, ?>) value).get('id')
+        } as Map<?, ?>
+        if (person == null || !whole(person.get('birthYear'), 1900, 9800) ||
+                !whole(person.get('birthMonth'), 1, 12)) throw invalid('person')
+        birth = YearMonth.of(((Number) person.get('birthYear')).intValue(), ((Number) person.get('birthMonth')).intValue())
+
+        def entity = finance.owner(owner)
+        String name = Objects.toString(data.get('name'), entry.id())
+        String taxonomy = 'cashle.household.economic-nature'
+        capital = entity.account().classify(AccountKind.ASSET,
+            new AccountTag(taxonomy, 1, 'asset.pension', Set.of(AccountKind.ASSET)))
+        capital.setName(name + ' – ' + messages.text('capital'))
+        capital.addReportingRole(ReportingRole.SAVINGS)
+        capital.addReportingRole(ReportingRole.PENSION)
+        equity = entity.account()
+        equity.setKind(AccountKind.EQUITY)
+        income = entity.account().classify(AccountKind.INCOME,
+            new AccountTag(taxonomy, 1, 'income.pension.occupational', Set.of(AccountKind.INCOME)))
+        income.setName(name + ' – ' + messages.text('payments'))
+        income.addReportingRole(ReportingRole.INCOME)
+    }
+
+    @Override void wireFinance(FinanceContext finance) {
+        Map<String, Object> data = entry.data()
+        double annualReturn = number(data.get('annualReturn'), 'return', -100d, 100d)
+        if (annualReturn == -100d) throw invalid('return')
+        monthlyGrowth = Math.pow(1d + annualReturn / 100d, 1d / 12d)
+        exchange = finance.exchangeRate('USD', Objects.toString(finance.profile().get('currency'), 'USD'))
+        double openingBalance = number(data.get('openingBalance'), 'amount', 0d, Double.MAX_VALUE)
+        monthlyContribution = number(data.get('monthlyContribution'), 'amount', 0d, Double.MAX_VALUE)
+        contributionUntil = parseDate(data.get('contributionUntil'), 'contributionUntil')
+        if (monthlyContribution > 0d && contributionUntil == null) throw invalid('contributionUntil')
+        openingYearRmd = data.get('openingYearRmd') == null ? null :
+            number(data.get('openingYearRmd'), 'openingYearRmd', 0d, Double.MAX_VALUE)
+
+        LocalDate confirmed = parseDate(data.get('eligibleDate'), 'eligibleDate')
+        firstEligible = later(birth.plusMonths(59L * 12L + 6L).atDay(1), confirmed)
+        Object workingDeferral = data.getOrDefault('workingDeferral', false)
+        if (!(workingDeferral instanceof Boolean) || (workingDeferral == true && confirmed == null))
+            throw invalid('deferral')
+        firstRmdYear = initialRmdYear(birth)
+        if (workingDeferral == true) firstRmdYear = Math.max(firstRmdYear, confirmed.getYear())
+        if (confirmed != null && confirmed.getYear() > firstRmdYear) throw invalid('deferral')
+        if (openingBalance > 0d && openingYearRmd == null && finance.from().getYear() >= firstRmdYear &&
+                finance.from().getDayOfYear() != 1) throw invalid('openingYearRmd')
+
+        Object mode = data.get('distribution')
+        if (!(mode in ['rmd-only', 'lump-sum', 'installments', 'annuity'])) throw invalid('distribution')
+        distribution = (String) mode
+        if (distribution == 'installments') {
+            Object years = data.get('installmentYears')
+            if (!whole(years, 1, 40)) throw invalid('installments')
+            installmentMonths = ((Number) years).intValue() * 12
+        }
+        if (distribution == 'annuity') {
+            annuityMonthly = number(data.get('annuityMonthly'), 'annuity', 0d, Double.MAX_VALUE)
+            if (annuityMonthly == 0d) throw invalid('annuity')
+        }
+        requested = distribution == 'rmd-only' ? () -> null : requestedDate(data.get('payoutStart'))
+        death = finance.lifeEnd(owner)
+
+        def model = finance.model()
+        balance = model.variable(openingBalance)
+        priorDecember = model.variable(openingBalance)
+        paidThisYear = model.variable(0d)
+        annuitized = model.variable(0d)
+        transfer = model.variable(0d)
+        model.valueAccount(capital, equity, () -> balance.getValue() * exchange)
+        ScheduleSpec months = ScheduleSpec.every(Frequency.MONTH,
+            YearMonth.from(finance.from()).atDay(1)).atMonthEnd()
+        def update = model.action(months, () -> project(model.clock().getDate()))
+        ScheduleSpec payouts = distribution == 'rmd-only' ?
+            ScheduleSpec.every(Frequency.YEAR, LocalDate.of(firstRmdYear, 12, 31)) :
+            ScheduleSpec.every(Frequency.MONTH, firstEligible.withDayOfMonth(1)).atMonthEnd()
+        payment = model.flow(payouts, finance.cash(), income, () -> transfer.getValue() * exchange, update)
+    }
+
+    private void project(LocalDate today) {
+        transfer.setValue(0d)
+        LocalDate died = death.get()
+        if (died != null && !today.isBefore(died)) return
+        if (annuitized.getValue() > 0d) {
+            transfer.setValue(annuityMonthly)
+            return
+        }
+        LocalDate entered = requested.get()
+        LocalDate start = entered == null ? null : later(entered, firstEligible)
+        LocalDate monthStart = today.withDayOfMonth(1)
+        LocalDate coveredFrom = later(context.from(), monthStart)
+        double fraction = (ChronoUnit.DAYS.between(coveredFrom, today) + 1L) / (double) today.lengthOfMonth()
+        double value = balance.getValue() * Math.pow(monthlyGrowth, fraction)
+        if (monthlyContribution > 0d) {
+            LocalDate end = start != null && start.isBefore(contributionUntil) ? start : contributionUntil
+            LocalDate until = today.plusDays(1)
+            long contributionDays = ChronoUnit.DAYS.between(coveredFrom, end.isBefore(until) ? end : until)
+            value += monthlyContribution * Math.max(0L, contributionDays) / (double) today.lengthOfMonth() *
+                context.inflationFactor(context.from(), today)
+        }
+
+        if (today.getMonthValue() == 1) paidThisYear.setValue(0d)
+        double remainingRmd = Math.max(0d, requiredAmount(today.getYear()) - paidThisYear.getValue())
+        double withdrawal = today.getMonthValue() == 12 ? remainingRmd : 0d
+        boolean started = start != null && !today.isBefore(start)
+        if (started && distribution == 'lump-sum') {
+            withdrawal = value
+        } else if (started && distribution == 'installments') {
+            long remaining = installmentMonths - ChronoUnit.MONTHS.between(YearMonth.from(start), YearMonth.from(today))
+            withdrawal = Math.max(withdrawal, remaining > 1L ? value / remaining : value)
+        } else if (started && distribution == 'annuity') {
+            double finalRmd = Math.min(value, remainingRmd)
+            transfer.setValue(finalRmd + annuityMonthly)
+            balance.setValue(0d)
+            annuitized.setValue(1d)
+            return
+        }
+
+        withdrawal = Math.min(value, withdrawal)
+        balance.setValue(value - withdrawal)
+        transfer.setValue(withdrawal)
+        paidThisYear.setValue(paidThisYear.getValue() + withdrawal)
+        if (today.getMonthValue() == 12) priorDecember.setValue(balance.getValue())
+    }
+
+    private double requiredAmount(int year) {
+        if (year < firstRmdYear) return 0d
+        if (year == context.from().getYear() && openingYearRmd != null) return openingYearRmd.doubleValue()
+        int index = Math.max(0, Math.min(year - birth.getYear() - 72, UNIFORM_LIFETIME.size() - 1))
+        priorDecember.getValue() / UNIFORM_LIFETIME.get(index)
+    }
+
+    private static int initialRmdYear(YearMonth birth) {
+        int year = birth.getYear()
+        if (birth.isBefore(YearMonth.of(1949, 7))) return birth.plusMonths(70L * 12L + 6L).getYear()
+        if (year <= 1950) return year + 72
+        if (year <= 1959) return year + 73
+        year + 75
+    }
+
+    private Supplier<LocalDate> requestedDate(Object start) {
+        if (!(start instanceof Map)) throw invalid('start')
+        Map<String, Object> time = new LinkedHashMap<>((Map<String, Object>) start)
+        Object offset = time.getOrDefault('offset', 0)
+        if (!whole(offset, -1200, 1200)) throw invalid('start')
+        if (time.get('reference') == 'age') {
+            Object age = time.get('age')
+            if (!whole(age, 0, 120)) throw invalid('start')
+            LocalDate date = birth.plusYears(((Number) age).intValue()).plusMonths(((Number) offset).intValue()).atDay(1)
+            return () -> date
+        }
+        if (!(time.get('reference') in ['date', 'retirement', 'milestone'])) throw invalid('start')
+        if (time.get('reference') == 'retirement') time.put('personId', owner)
+        context.timeDate(time)
+    }
+
+    private LocalDate parseDate(Object value, String key) {
+        if (value == null || value == '') return null
+        if (!(value instanceof String)) throw invalid(key)
+        try { return LocalDate.parse((String) value) }
+        catch (DateTimeException ignored) { throw invalid(key) }
+    }
+
+    private double number(Object value, String key, double min, double max) {
+        if (!(value instanceof Number)) throw invalid(key)
+        double result = ((Number) value).doubleValue()
+        if (!Double.isFinite(result) || result < min || result > max) throw invalid(key)
+        result
+    }
+
+    private static boolean whole(Object value, int min, int max) {
+        value instanceof Number && ((Number) value).doubleValue() == ((Number) value).intValue() &&
+            ((Number) value).intValue() >= min && ((Number) value).intValue() <= max
+    }
+
+    private static LocalDate later(LocalDate first, LocalDate second) {
+        second != null && second.isAfter(first) ? second : first
+    }
+
+    @Override void funding(FundingPort port) {
+        port.receiptUntil(payment, taxable ? FundingPort.ReceiptTax.TAXABLE : FundingPort.ReceiptTax.TAX_FREE,
+            false, death)
+    }
+
+    @Override void metrics(MetricsPort port) {
+        port.balance(capital, () -> balance.getValue() * exchange)
+        port.income(income, false)
+    }
+
+    @Override void tax(TaxPort port) {
+        String frequency = entry.data().get('distribution') == 'rmd-only' ? 'annual' : 'monthly'
+        if (taxable) port.income(owner, income, 'pension', frequency, 'US', () -> context.from(), () -> true, Map.of())
+    }
+
+    private IllegalArgumentException invalid(String key) { new IllegalArgumentException(messages.text(key)) }
+}

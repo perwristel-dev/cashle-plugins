@@ -1,0 +1,20 @@
+plugins {
+    id 'cashle.finance'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.occupational.us.401k' from '../us-401k.cashle'
+}
+
+finance {
+    language 'en'
+    plan { from '2026-01-01'; until '2026-12-01'; currency 'USD'; inflation 0d }
+    person('self') { birthYear 1966; birthMonth 12 }
+    us401k('Plan with annuity') {
+        settings([openingBalance: 120000d, monthlyContribution: 1000d, contributionUntil: '2026-05-01',
+            distribution: 'annuity', annuityMonthly: 1200d, payoutStart: [reference: 'age', age: 55, offset: 0]])
+    }
+    us401k('Plan with lump sum') {
+        settings([openingBalance: 60000d, distribution: 'lump-sum',
+            payoutStart: [reference: 'date', year: 2026, month: 8, day: 17, offset: 0]])
+    }
+}
+collect {}
