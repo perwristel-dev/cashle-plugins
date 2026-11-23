@@ -1,0 +1,40 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.InvestmentCarry
+
+double shareIncomeUplift = 1.72d
+
+accountTaxPolicy('ask') {
+    pluginId 'cashle.finance.no-ask.policy'
+    country 'NO'
+    ruleYear 2026
+    messages 'dev.cashle.accounts.no_ask.NorwegianAskTaxPolicy'
+    existingYearFacts true
+    annualBases 'shareIncome'
+
+    preliminaryTaxRate { double configuredRate -> configuredRate }
+    quoteWithdrawalForNet { snapshot, double desiredNet, double rate ->
+        quoteNet(snapshot, desiredNet, rate, true)
+    }
+    withdraw { request ->
+        withdrawal(request, true, true, false)
+    }
+
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        double shareIncome = 0d
+        def carries = new LinkedHashMap()
+        for (def account : accounts) {
+            require(account.realizedLoss() == 0d || account.closed(),
+                'ASK losses are recognized only on explicit account closure.')
+            require(Double.isFinite(account.shieldingRate()),
+                'Norwegian ASK requires an explicit projected shieldingRate; the 2026 official rate is set in January 2027.')
+            double shieldingBase = account.minimumPrincipal() + account.unusedShielding()
+            double allowance = account.unusedShielding() + shieldingBase * account.shieldingRate()
+            double taxableGain = Math.max(0d, account.realizedGain() - allowance)
+            shareIncome += money.inRuleMoney(taxableGain - account.realizedLoss()) * shareIncomeUplift
+            double unusedShielding = account.closed() ? 0d : Math.max(0d, allowance - account.realizedGain())
+            carries.put(account.id(), new InvestmentCarry(unusedShielding, 0d))
+        }
+        new InvestmentAnnualAssessment([shareIncome: nominal(shareIncome, money)], 0d, carries)
+    }
+}

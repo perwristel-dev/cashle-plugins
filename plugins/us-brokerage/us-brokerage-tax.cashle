@@ -1,0 +1,77 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.InvestmentCarry
+import dev.cashle.tax.InvestmentRules.CostBasisMethod
+import dev.cashle.tax.TaxPolicyField
+import dev.cashle.tax.TaxStateField
+
+accountTaxPolicy('brokerage') {
+    pluginId 'cashle.finance.us-brokerage.tax'
+    messages 'dev.cashle.accounts.us_brokerage.UsBrokerageTaxPolicy'
+    country 'US'
+    ruleYear 2026
+
+    annualBases 'capitalIncome', 'qualifiedDividends', 'shortTermCapitalGains', 'shortTermCapitalLosses',
+        'longTermCapitalGains', 'longTermCapitalLosses'
+    retainedAccount true
+    costBasisMethod CostBasisMethod.HOMOGENEOUS_LOT
+    permitsImmediateReinvestment false
+    dividendsTaxableOnReceipt true
+    internalSalesRealizeTax true
+
+    def emptyGainHistory = Map.of('realizedShortTermGain', 0d, 'realizedShortTermLoss', 0d,
+        'realizedLongTermGain', 0d, 'realizedLongTermLoss', 0d)
+    policyFields([
+        dividendTreatment: new TaxPolicyField('Verified dividend character', 'select', ['ordinary', 'qualified']),
+        noWashSaleConfirmed: new TaxPolicyField('No wash-sale purchases in the 61-day window', 'boolean')
+    ])
+    stateFields(emptyGainHistory.collectEntries { key, value -> [(key): new TaxStateField(key, true)] })
+
+    withdraw { sale ->
+        require(sale.date() != null && sale.acquiredDate() != null && !sale.date().isBefore(sale.acquiredDate()),
+            'US stock disposal requires actual sale/acquisition dates for one homogeneous lot.')
+        def result = withdrawal(sale, false, false, false)
+        require(result.realizedLoss() == 0d || bool(sale.policyOptions(), 'noWashSaleConfirmed', false),
+            'US loss recognition requires verified absence of wash-sale acquisitions by the taxpayer/spouse in the 61-day window.')
+        result
+    }
+
+    stateAfterWithdrawal { sale ->
+        def result = withdraw(sale)
+        def state = new LinkedHashMap(sale.state())
+        def prefix = sale.date().isAfter(sale.acquiredDate().plusYears(1)) ? 'realizedLongTerm' : 'realizedShortTerm'
+        state.merge(prefix + 'Gain', result.realizedGain()) { previous, gain -> previous + gain }
+        state.merge(prefix + 'Loss', result.realizedLoss()) { previous, loss -> previous + loss }
+        Map.copyOf(state)
+    }
+
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        def bases = new LinkedHashMap()
+        def carries = new LinkedHashMap()
+        accounts.each { account ->
+            require(account.acquiredDate() != null, "US brokerage requires the homogeneous lot's actual acquiredDate.")
+            require(Math.abs(account.dividends() - account.distributedDividends()) <= 0.00001d,
+                'US brokerage dividends must be distributed: reinvestment creates unsupported additional acquisition lots.')
+            def treatment = Objects.toString(account.policyOptions().get('dividendTreatment'), '')
+            require(treatment in ['ordinary', 'qualified'],
+                'Choose verified US dividendTreatment ordinary or qualified; holding-period eligibility is not inferred.')
+            require(account.realizedLoss() == 0d || bool(account.policyOptions(), 'noWashSaleConfirmed', false),
+                'US capital-loss history requires noWashSaleConfirmed.')
+
+            def state = account.state()
+            def shortGain = state.getOrDefault('realizedShortTermGain', 0d)
+            def shortLoss = state.getOrDefault('realizedShortTermLoss', 0d)
+            def longGain = state.getOrDefault('realizedLongTermGain', 0d)
+            def longLoss = state.getOrDefault('realizedLongTermLoss', 0d)
+            require(Math.abs(shortGain + longGain - account.realizedGain()) <= 0.01d &&
+                Math.abs(shortLoss + longLoss - account.realizedLoss()) <= 0.01d,
+                'US realized gain/loss history needs its explicit short/long-term state classifications.')
+            def dividendBasis = treatment == 'qualified' ? 'qualifiedDividends' : 'capitalIncome'
+            def accountBases = [shortTermCapitalGains: shortGain, shortTermCapitalLosses: shortLoss,
+                longTermCapitalGains: longGain, longTermCapitalLosses: longLoss, (dividendBasis): account.dividends()]
+            accountBases.each { name, amount -> bases.merge(name, amount) { previous, value -> previous + value } }
+            carries.put(account.id(), new InvestmentCarry(0d, 0d, emptyGainHistory))
+        }
+        new InvestmentAnnualAssessment(bases, 0d, carries)
+    }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "AKAP-KR",
+  "description": {
+    "sv": "Svenskt tjänstepensionsavtal för kommun- och regionanställda.",
+    "en": "Swedish occupational pension agreement for municipal and regional employment."
+  },
+  "country": "SE",
+  "category": "income",
+  "releases": [
+    "5191f50860095639dff77b49a7f6b0c582bd10c11624565e5455e1c3ba708818",
+    "89e80bfb078fd8da4745467476d06ee55d81e062889da70f599c3f6ee3dfabcc"
+  ]
+}

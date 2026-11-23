@@ -1,0 +1,115 @@
+{
+  "upstream": "DECCF",
+  "commit": "a5413773d9389d1ae4e4bca5a1076b474025ee70",
+  "portDate": "2026-10-30",
+  "propertyPolicies": {
+    "SE": {
+      "reviewedOn": "2026-10-30",
+      "arithmeticSource": "DECCF domainpacks/swedish-property-sale-tax/calculation.js",
+      "commit": "a5413773d9389d1ae4e4bca5a1076b474025ee70",
+      "primarySources": [
+        "https://www.skatteverket.se/privat/fastigheterochbostad/forsaljningavbostad/raknautvinstforlustochskatt",
+        "https://www.skatteverket.se/privat/fastigheterochbostad/forsaljningavbostad/uppskov/forutsattningarforuppskov.4.233f91f71260075abe8800030623.html",
+        "https://www.skatteverket.se/privat/fastigheterochbostad/forsaljningavbostad/uppskov/slutligtuppskov.4.5c281c7015abecc2e2018bd.html",
+        "https://www.skatteverket.se/privat/fastigheterochbostad/forsaljningavbostad/uppskov/preliminartuppskov.4.5c281c7015abecc2e201786.html"
+      ]
+    },
+    "NO": {
+      "reviewedOn": "2026-10-30",
+      "primarySources": [
+        "https://www.skatteetaten.no/en/person/taxes/get-the-taxes-right/property-and-belongings/houses-property-and-plots-of-land/sale2/",
+        "https://www.skatteetaten.no/rettskilder/type/handboker/skatte-abc/gjeldende/e-1-eierbegrepet/E-1.013/E-1.014/",
+        "https://www.skatteetaten.no/person/skatt/skatteoppgjor/restskatt/"
+      ]
+    },
+    "DK": {
+      "reviewedOn": "2026-10-30",
+      "primarySources": [
+        "https://skat.dk/borger/bolig-og-ejendomme/salg-af-bolig/salg-af-ejerbolig",
+        "https://info.skat.dk/data.aspx?oid=1948642",
+        "https://skat.dk/borger/aarsopgoerelse/betal-restskat/betal-restskat"
+      ]
+    },
+    "FI": {
+      "reviewedOn": "2026-10-30",
+      "primarySources": [
+        "https://www.vero.fi/en/individuals/property/selling-your-home/selling-your-home/",
+        "https://vero.fi/en/individuals/property/selling-your-home/taxable-sale-of-a-residential-property/",
+        "https://www.vero.fi/en/individuals/payments/back-taxes/payment-instructions/"
+      ]
+    },
+    "IS": {
+      "reviewedOn": "2026-10-30",
+      "primarySources": [
+        "https://www.skatturinn.is/einstaklingar/fjarmagnstekjur/soluhagnadur/",
+        "https://www.althingi.is/lagas/nuna/2003090.html",
+        "https://www.skatturinn.is/einstaklingar/framtal-og-alagning/alagningarsedill-og-forsendur/2026"
+      ]
+    }
+  },
+  "country": {
+    "country": "IS",
+    "currency": "ISK",
+    "ruleYear": 2026,
+    "version": "2026.1",
+    "validFrom": "2026-01-01",
+    "validTo": "2026-12-31",
+    "reviewedOn": "2026-10-16",
+    "parameters": {
+      "income": {
+        "firstMonthly": 498122,
+        "secondMonthly": 1398450,
+        "firstRate": 0.1655,
+        "secondRate": 0.2305,
+        "thirdRate": 0.3135,
+        "withholdingMunicipalRate": 0.1494,
+        "source": {
+          "url": "https://www.skatturinn.is/einstaklingar/stadgreidsla/stadgreidsla/2026",
+          "ruleYear": 2026,
+          "reviewedOn": "2026-10-16"
+        }
+      },
+      "personal": {
+        "annual": 869898,
+        "monthly": 72492,
+        "source": {
+          "url": "https://www.skatturinn.is/einstaklingar/helstutolur/2026",
+          "ruleYear": 2026,
+          "reviewedOn": "2026-10-16"
+        }
+      },
+      "pension": {
+        "mandatoryLimit": 0.04,
+        "additionalLimit": 0.04,
+        "source": {
+          "url": "https://www.skatturinn.is/media/2026/rsk_0601_1_2026.is.pdf",
+          "ruleYear": 2026,
+          "reviewedOn": "2026-10-16"
+        }
+      },
+      "capital": {
+        "rate": 0.22,
+        "qualifiedExemption": 300000,
+        "source": {
+          "url": "https://www.skatturinn.is/einstaklingar/helstutolur/2026",
+          "ruleYear": 2026,
+          "reviewedOn": "2026-10-16"
+        }
+      },
+      "creditScope": {
+        "source": {
+          "url": "https://www.althingi.is/lagas/158a/2003090.html",
+          "ruleYear": 2026,
+          "reviewedOn": "2026-10-16"
+        }
+      },
+      "localRates": {
+        "source": {
+          "url": "https://www.skatturinn.is/einstaklingar/stadgreidsla/stadgreidsla/2026",
+          "ruleYear": 2026,
+          "reviewedOn": "2026-10-16"
+        }
+      }
+    }
+  }
+}

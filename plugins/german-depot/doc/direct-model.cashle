@@ -1,0 +1,38 @@
+// Closing the depot realizes EUR 5,000 of share income on 2026-06-01.
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.de-depot' from '../german-depot.cashle'
+    id 'cashle.finance.de-depot.policy' from '../german-depot.cashle'
+    id 'cashle.tax.de' from '../../german-tax/german-tax.cashle'
+}
+
+finance {
+    language 'en'
+    plan { from '2026-01-01'; until '2027-10-01'; currency 'EUR'; inflation 0d }
+    person('self') { name 'Synthetic German investor'; birthYear 1980; birthMonth 1 }
+    tax {
+        country 'DE'
+        preliminaryRate 0d
+        options([
+            ruleYear: 2026, residency: 'full-year', profile: 'single-childless-statutory',
+            churchRate: 0d, healthAdditionalRate: 0.029d, saxony: false,
+            employmentExpenses: 0d, churchTaxPaid: 0d,
+            initialState: [shareLossCarry: 0d, otherCapitalLossCarry: 0d, privatePropertyLossCarry: 0d],
+            settlementCalendar: [month: 9, day: 30, yearOffset: 1, confirmed: true]
+        ])
+    }
+    salary('salary') { name 'Salary'; amount 60000d; frequency 'once'; taxTreatment 'taxable'; taxBasis 'salary' }
+    deDepot('portfolio') {
+        name 'Depot'
+        balance 15000d
+        settings([
+            costBasis: 10000d, closeEnabled: true, closeDate: '2026-06-01',
+            policyOptions: [acquiredDate: '2020-01-01'],
+            initialYear: [quarterOpeningValues: [null, null, null, null]]
+        ])
+    }
+}
+collect {}

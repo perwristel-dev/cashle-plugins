@@ -1,0 +1,36 @@
+{
+  "id": "cashle.finance.dk-ask",
+  "archive": "cashle-dk-ask-source.zip",
+  "requires": [
+    "cashle.finance",
+    "cashle.account.support",
+    "cashle.account.tax.support"
+  ],
+  "ui": "ui.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui-en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui-sv.json"
+    }
+  ],
+  "sources": [
+    {
+      "path": "dk-ask.cashle",
+      "resources": [
+        "dev/cashle/accounts/dk_ask/DanishAskPlugin_en.properties",
+        "dev/cashle/accounts/dk_ask/DanishAskPlugin_sv.properties"
+      ]
+    },
+    {
+      "path": "dk-ask-tax.cashle",
+      "resources": [
+        "dev/cashle/accounts/dk_ask/DanishAskTaxPolicy_en.properties",
+        "dev/cashle/accounts/dk_ask/DanishAskTaxPolicy_sv.properties"
+      ]
+    }
+  ]
+}

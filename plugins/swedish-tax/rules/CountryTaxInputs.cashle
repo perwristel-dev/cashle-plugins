@@ -1,0 +1,62 @@
+package cashle.plugins.sweden.tax
+
+import groovy.transform.CompileStatic
+import dev.cashle.tax.*
+
+import java.time.LocalDate
+import java.util.*
+import static dev.cashle.tax.support.Inputs.*
+
+/** Built-in country mapping; external plugins own their assessAnnual implementation. */
+@CompileStatic
+final class CountryTaxInputs {
+    private CountryTaxInputs() {}
+
+    static Map<String,Object> swedish(Map<String,Object> options,int birthYear,int birthMonth,
+                                       int year,Map<String,Double> bases) {
+        validate(birthYear,birthMonth,options,bases)
+        def inputs=new LinkedHashMap<>(options)
+        inputs.put("dateOfBirth",LocalDate.of(birthYear-year+SwedishIncomeTax.RULE_YEAR,birthMonth,1).toString())
+        def taxBases=new LinkedHashMap<>(map(inputs,"taxBases"))
+        for(def entry:bases.entrySet()) {
+            if(entry.getKey().equals("privateHomeGain")) {
+                require(entry.getValue()>=0,"Private-home gains and losses must be classified separately before accumulation.")
+                // Equivalent to gain * 22 / 30; this order preserves the 22% boundary before SEK flooring.
+                add(taxBases,"capital.income",entry.getValue()*0.22d/0.30d)
+                continue
+            }
+            if(entry.getKey().equals("privateHomeLoss")) {
+                require(entry.getValue()>=0,"Private-home loss accumulator must be nonnegative.")
+                add(taxBases,"se.ink1.8.5",entry.getValue())
+                continue
+            }
+            String key = switchBasis(entry.getKey())
+            add(taxBases,key,entry.getValue())
+        }
+        inputs.put("taxBases",taxBases)
+        return inputs
+    }
+
+    private static String switchBasis(String basis) {
+        switch (basis) {
+            case "salary": return "employment"
+            case "capitalIncome": return "capital.income"
+            case "interestExpenses": return "interest.eligible"
+            case "businessIncome": return "se.ink1.10.1"
+            default: return basis
+        }
+    }
+
+    private static void validate(int birthYear,int birthMonth,Map<String,Object> options,Map<String,Double> bases) {
+        Objects.requireNonNull(options,"Tax options are required")
+        LocalDate.of(birthYear,birthMonth,1)
+        for(def entry:bases.entrySet()) {
+            require(SwedishIncomeTax.supportsBasis(entry.getKey()),"SE does not support tax basis: "+entry.getKey())
+            require(entry.getValue()!=null&&Double.isFinite(entry.getValue()),"Tax basis must be finite: "+entry.getKey())
+        }
+    }
+
+    private static void add(Map<String,Object> options,String key,double amount) {
+        options.put(key,number(options,key,0)+amount)
+    }
+}

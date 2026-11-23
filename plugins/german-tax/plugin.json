@@ -1,0 +1,28 @@
+{
+  "id": "cashle.tax.de",
+  "archive": "cashle-tax-de-source.zip",
+  "requires": [
+    "cashle.tax",
+    "cashle.tax.support"
+  ],
+  "ui": "ui.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui-en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui-sv.json"
+    }
+  ],
+  "sources": [
+    {
+      "path": "german-tax.cashle",
+      "resources": [
+        "dev/cashle/tax/germany/GermanTaxSource_en.properties",
+        "dev/cashle/tax/germany/GermanTaxSource_sv.properties"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,164 @@
+package cashle.plugins.sweden.tax
+
+import groovy.transform.CompileStatic
+import dev.cashle.tax.*
+
+import java.io.BufferedReader
+import java.io.IOException
+import java.io.InputStream
+import java.io.InputStreamReader
+import java.io.UncheckedIOException
+import java.nio.charset.StandardCharsets
+import java.util.ArrayList
+import java.util.List
+
+/** Skatteverket's 2025 withholding tables, with amounts in SEK. */
+@CompileStatic
+final class SwedishPreliminaryTax2025 {
+    private SwedishPreliminaryTax2025() { }
+
+    /** Lookup monthly gross income in table 29–42 and column 1–6. */
+    public static double monthly(double income, int table, int column) {
+        return lookup(income,table,column,MonthlyTables.ROWS)
+    }
+
+    /** Lookup a two-week gross payment in the official 2025 two-week table. */
+    public static double biweekly(double income, int table, int column) {
+        return lookup(income,table,column,BiweeklyTables.ROWS)
+    }
+
+    /** The weekly table rule uses twice the payment and half the two-week deduction. */
+    public static double weekly(double income,int table,int column) {
+        return Math.floor(biweekly(income*2d,table,column)/2d)
+    }
+
+    /** Rate for an irregular payment, using the explicitly estimated annual main income. */
+    public static double lumpSumRate(double annualIncome, int column) {
+        if (!Double.isFinite(annualIncome) || annualIncome < 0d) throw new IllegalArgumentException("Annual income must be finite and non-negative")
+        if (column < 1 || column > 6) throw new IllegalArgumentException("Tax table column must be from 1 through 6")
+        double amount = Math.floor(annualIncome)
+        List<Integer> upper = upperFor(column)
+        List<Integer> rates = ratesFor(column)
+        int index=0;while(index<upper.size() && amount>upper[index])index++
+        return rates[index]/100d
+    }
+
+    private static List<Integer> upperFor(int column) {
+        switch (column) {
+            case 1: return [24872,83100,190600,475200,643100]
+            case 2: return [65300,118800,190600,475200,643100]
+            case 3: return [24872,313600,475200,643100]
+            case 4: return [24872,53600,190600,643100]
+            case 5:
+            case 6: return [24872,58300,160000,463400,646300]
+            default: throw new IllegalArgumentException("Invalid column")
+        }
+    }
+
+    private static List<Integer> ratesFor(int column) {
+        switch (column) {
+            case 1: return [0,10,21,28,34,54]
+            case 2: return [0,23,20,28,34,55]
+            case 3: return [0,10,27,34,54]
+            case 4: return [0,10,23,30,50]
+            case 5:
+            case 6: return [0,35,29,36,34,54]
+            default: throw new IllegalArgumentException("Invalid column")
+        }
+    }
+
+    private static double lookup(double income,int table,int column,List<List<Row>> tables) {
+        if (!Double.isFinite(income) || income < 0) throw new IllegalArgumentException("Income must be finite and non-negative")
+        if (table < 29 || table > 42) throw new IllegalArgumentException("Tax table must be from 29 through 42")
+        if (column < 1 || column > 6) throw new IllegalArgumentException("Tax table column must be from 1 through 6")
+        if (income < 1) return 0
+        List<Row> rows = tables.get(table - 29)
+        double kronor = Math.floor(income)
+        int low = 0, high = rows.size() - 1
+        while (low < high) {
+            int middle = (low + high) >>> 1
+            if (kronor > rows.get(middle).upper()) low = middle + 1
+            else high = middle
+        }
+        Row row = rows.get(low)
+        int value = row.values()[column - 1]
+        // Percentage brackets retain gross öre until calculated tax is truncated.
+        return row.percentage() ? Math.floor(income * value / 100d) : value
+    }
+
+    /** Select the table from combined municipality, region, burial and membership rates. */
+    public static int tableNumber(double municipalRate, double burialFeeRate, boolean communityMember, double communityFeeRate) {
+        double rate = municipalRate + burialFeeRate + (communityMember ? communityFeeRate : 0d)
+        if (!Double.isFinite(rate) || rate < 0) throw new IllegalArgumentException("Combined tax rates must be finite and non-negative")
+        double percentage = Math.round(rate * 1e10d) / 1e8d
+        int number = (int) Math.ceil(percentage - 0.5d)
+        if (number < 29 || number > 42) throw new IllegalArgumentException("Combined rates must select tax table 29–42")
+        return number
+    }
+
+    /** Select the 2025 column for a supported payment category and birth cohort. */
+    public static int column(int birthYear, String category) {
+        if (category == null) throw new IllegalArgumentException("A payment category is required")
+        switch (category) {
+            case "salary": return birthYear <= 1958 ? 3 : 1
+            case "pension": return birthYear <= 1958 ? 2 : 6
+            case "sickness-activity": return birthYear <= 1958 ? 2 : 4
+            case "pensionable-benefit": return birthYear < 1938 ? 2 : 5
+            default: throw new IllegalArgumentException("Unknown monthly tax table income category")
+        }
+    }
+
+    private static final class Row {
+        final int upper
+        final boolean percentage
+        final int[] values
+
+        Row(int upper, boolean percentage, int[] values) {
+            this.upper = upper
+            this.percentage = percentage
+            this.values = values
+        }
+
+        int upper() { return upper }
+        boolean percentage() { return percentage }
+        int[] values() { return values }
+    }
+
+    private static final class MonthlyTables {
+        private static final List<List<Row>> ROWS = load("preliminary-tax-monthly-2025.txt","30",7934)
+    }
+    private static final class BiweeklyTables {
+        private static final List<List<Row>> ROWS = load("preliminary-tax-biweekly-2025.txt","14",7824)
+    }
+
+    private static List<List<Row>> load(String resource,String period,int expectedCount) {
+            List<List<Row>> tables = new ArrayList<>()
+            for (int i = 0; i < 14; i++) tables.add(new ArrayList<>())
+            InputStream stream = SwedishPreliminaryTax2025.class.getResourceAsStream(resource)
+            if (stream == null) throw new IllegalStateException("Missing 2025 Swedish tax tables: "+resource)
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+                String line; int count = 0
+                while ((line = reader.readLine()) != null) {
+                    if (count++ == 0 && line.startsWith("\uFEFF")) line = line.substring(1)
+                    if (line.length() != 49 || !line.startsWith(period) || (line.charAt(2) != ('B' as char) && line.charAt(2) != ('%' as char)))
+                        throw new IllegalStateException("Invalid Swedish tax table record " + count)
+                    int number = Integer.parseInt(line.substring(3, 5))
+                    if (number < 29 || number > 42) throw new IllegalStateException("Invalid Swedish tax table number")
+                    List<Row> rows = tables.get(number - 29)
+                    int lower = Integer.parseInt(line.substring(5, 12).trim())
+                    String upperText = line.substring(12, 19).trim()
+                    int upper = upperText.isEmpty() ? Integer.MAX_VALUE : Integer.parseInt(upperText)
+                    int expected = rows.isEmpty() ? 1 : rows.get(rows.size() - 1).upper() + 1
+                    if (lower != expected || upper < lower) throw new IllegalStateException("Invalid Swedish tax table interval")
+                    int[] values = new int[6]
+                    for (int column = 0; column < 6; column++) values[column] = Integer.parseInt(line.substring(19 + 5 * column, 24 + 5 * column).trim())
+                    rows.add(new Row(upper, line.charAt(2) == ('%' as char), values))
+                }
+                if (count != expectedCount || tables.stream().anyMatch(rows -> rows.isEmpty() || rows.get(rows.size() - 1).upper() != Integer.MAX_VALUE))
+                    throw new IllegalStateException("Incomplete Swedish tax tables: "+resource)
+                return tables.stream().map(List::copyOf).toList()
+            } catch (IOException error) {
+                throw new UncheckedIOException("Could not read Swedish tax tables: "+resource, error)
+            }
+        }
+}

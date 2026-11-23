@@ -1,0 +1,116 @@
+{
+  "id": "cashle.tax.se",
+  "requires": [
+    "cashle.tax",
+    "cashle.tax.support",
+    "cashle.account.ledger"
+  ],
+  "ui": "ui.js",
+  "uiAssets": [
+    "ui/emigration.js",
+    "ui/municipalities-2025.js",
+    "ui/property-fields.js",
+    "ui/property-links.js"
+  ],
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui-en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui-sv.json"
+    }
+  ],
+  "sources": [
+    {
+      "path": "swedish-tax.cashle",
+      "providers": [
+        "cashle.tax.se"
+      ],
+      "dependencies": [
+        "rules/CountryTaxInputs.cashle",
+        "rules/HistoricalPropertyValidation.cashle",
+        "rules/ProfileOptions.cashle",
+        "rules/ProfilePolicy.cashle",
+        "rules/SourceOptions.cashle",
+        "rules/SwedishEmigrationPolicy.cashle",
+        "rules/SwedishIncomeTax.cashle",
+        "rules/SwedishMunicipalities2025.cashle",
+        "rules/SwedishPreliminaryTax2025.cashle",
+        "rules/SwedishPreliminaryWithholdingPolicy.cashle",
+        "rules/SwedishPropertySaleRules.cashle"
+      ],
+      "resources": [
+        "cashle/plugins/sweden/tax/HistoricalPropertyValidation_en.properties",
+        "cashle/plugins/sweden/tax/HistoricalPropertyValidation_sv.properties",
+        "cashle/plugins/sweden/tax/SwedishTaxPlugin_en.properties",
+        "cashle/plugins/sweden/tax/SwedishTaxPlugin_sv.properties",
+        "cashle/plugins/sweden/tax/basic-allowance-2025.tsv",
+        "cashle/plugins/sweden/tax/preliminary-tax-biweekly-2025.txt",
+        "cashle/plugins/sweden/tax/preliminary-tax-monthly-2025.txt"
+      ]
+    },
+    {
+      "path": "account-lifecycle.cashle",
+      "providers": [
+        "cashle.tax.se.runtime"
+      ],
+      "dependencies": [
+        "account/AccountInputs.cashle",
+        "account/AccountInterestProgram.cashle",
+        "account/AccountInterest.cashle",
+        "account/PhysicalAccount.cashle"
+      ],
+      "resources": [
+        "cashle/plugins/sweden/account/messages_en.properties",
+        "cashle/plugins/sweden/account/messages_sv.properties"
+      ]
+    },
+    {
+      "path": "account/AccountInputs.cashle"
+    },
+    {
+      "path": "account/AccountInterest.cashle"
+    },
+    {
+      "path": "account/AccountInterestProgram.cashle"
+    },
+    {
+      "path": "account/PhysicalAccount.cashle"
+    },
+    {
+      "path": "rules/CountryTaxInputs.cashle"
+    },
+    {
+      "path": "rules/HistoricalPropertyValidation.cashle"
+    },
+    {
+      "path": "rules/ProfileOptions.cashle"
+    },
+    {
+      "path": "rules/ProfilePolicy.cashle"
+    },
+    {
+      "path": "rules/SourceOptions.cashle"
+    },
+    {
+      "path": "rules/SwedishEmigrationPolicy.cashle"
+    },
+    {
+      "path": "rules/SwedishIncomeTax.cashle"
+    },
+    {
+      "path": "rules/SwedishMunicipalities2025.cashle"
+    },
+    {
+      "path": "rules/SwedishPreliminaryTax2025.cashle"
+    },
+    {
+      "path": "rules/SwedishPreliminaryWithholdingPolicy.cashle"
+    },
+    {
+      "path": "rules/SwedishPropertySaleRules.cashle"
+    }
+  ]
+}

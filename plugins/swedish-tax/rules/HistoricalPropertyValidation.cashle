@@ -1,0 +1,63 @@
+package cashle.plugins.sweden.tax
+
+import groovy.transform.CompileStatic
+
+import java.time.LocalDate
+import dev.cashle.core.i18n.Messages
+import dev.cashle.tax.HistoricalPropertySale
+import java.util.*
+
+/** Validation boundary for a sale whose tax year ended before the plan. */
+@CompileStatic
+final class HistoricalPropertyValidation {
+    private HistoricalPropertyValidation() {}
+    static void validate(HistoricalPropertySale sale) {
+        Messages messages=new Messages(HistoricalPropertyValidation.class,HistoricalPropertyValidation.class.getName(),sale.language())
+        LocalDate contract=sale.contractDate(),from=sale.planStart()
+        Map<String,Object> options=sale.options()
+        Object openingAssessments = sale.taxOptions().get("openingAssessments")
+        if (!(openingAssessments instanceof List)) throw new IllegalArgumentException(messages.text("error.openingAssessments"))
+        List<?> records = (List<?>) openingAssessments
+        for(String person:sale.owners()) {
+            long matches=records.stream().filter(raw -> matchesYear(raw, person, contract.getYear())).count()
+            if(matches!=1)throw new IllegalArgumentException(messages.text("error.openingPerson").formatted(person,contract.getYear()))
+            String suffix = sale.jointOwners() ? ownerSuffix(person, messages) : ""
+            Object raw = options.getOrDefault("deferralStatus" + suffix, "none")
+            String status = raw instanceof String ? (String)raw : ""
+            if(contract.getYear()<from.getYear()-1) {
+                Object outcome=options.get("historicalProvisionalOutcome"+suffix)
+                if(!(outcome instanceof String) || !Set.of("none","reinstated","final").contains(outcome))throw new IllegalArgumentException(messages.text("error.priorOutcome").formatted(person))
+                if(!"none".equals(outcome)) {
+                    boolean found=records.stream().anyMatch(item -> matchesYear(item, person, contract.getYear() + 1))
+                    if(!found)throw new IllegalArgumentException(messages.text("error.openingDecision").formatted(person,contract.getYear()+1))
+                    if("reinstated".equals(outcome) && !"none".equals(status) || "final".equals(outcome) && !"final".equals(status))throw new IllegalArgumentException(messages.text("error.historicalOutcome"))
+                }
+            }
+            if("provisional".equals(status) && contract.getYear()<from.getYear()-1)throw new IllegalArgumentException(messages.text("error.historicalProvisional"))
+            if("final".equals(status) || "provisional".equals(status)) {
+                Object amount=options.get("requestedDeferral"+suffix),replacement=options.get("replacementHomeId"+suffix)
+                if(!Boolean.FALSE.equals(options.get("requestMaximumDeferral"+suffix)) || !(amount instanceof Number) || !Double.isFinite(((Number)amount).doubleValue()) || ((Number)amount).doubleValue()<=0d || ("final".equals(status) && (!(replacement instanceof String) || ((String)replacement).isBlank())))
+                    throw new IllegalArgumentException(messages.text("error.actualDeferral").formatted(person))
+                boolean pending=records.stream().anyMatch(rawRecord -> matchesYear(rawRecord, person, contract.getYear()) && "pending".equals(((Map<?,?>)rawRecord).get("status")))
+                if(pending)throw new IllegalArgumentException(messages.text("error.historicalDecision"))
+            } else if(!"none".equals(status))throw new IllegalArgumentException(messages.text("error.historicalStatus"))
+            Object reinstatement=options.get("requestedReinstatement"+suffix)
+            if(reinstatement instanceof Number && ((Number)reinstatement).doubleValue()>0d)throw new IllegalArgumentException(messages.text("error.historicalReinstatement"))
+        }
+    }
+
+    private static boolean matchesYear(Object input, String person, int year) {
+        if (!(input instanceof Map)) return false
+        Map<?,?> row = (Map<?,?>) input
+        Object value = row.get("taxYear")
+        return person.equals(row.get("personId")) && value instanceof Number && ((Number)value).doubleValue() == year
+    }
+
+    private static String ownerSuffix(String person, Messages messages) {
+        switch (person) {
+            case "self": return "Self"
+            case "partner": return "Partner"
+            default: throw new IllegalArgumentException(messages.text("error.jointOwners"))
+        }
+    }
+}

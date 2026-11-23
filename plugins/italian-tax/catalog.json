@@ -1,0 +1,13 @@
+{
+  "name": "Italian tax",
+  "description": {
+    "sv": "Italiensk beskattning av privatpersoners inkomster, investeringar och fastigheter.",
+    "en": "Italian individual income, investment and property tax."
+  },
+  "country": "IT",
+  "category": "tax",
+  "releases": [
+    "fa81a54080c0414fc8de20994c6fc22469223f81542396fe857f60919a451893",
+    "d757c26443e8bcb9d422547bd53032d9c7aeb5cd6940338068659a9026bcef5e"
+  ]
+}

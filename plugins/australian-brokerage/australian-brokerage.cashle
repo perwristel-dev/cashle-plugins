@@ -1,0 +1,106 @@
+import dev.cashle.tax.InvestmentRules.CostBasisMethod
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.InvestmentPosition
+import dev.cashle.tax.InvestmentWithdrawalResult
+import dev.cashle.tax.TaxPolicyField
+import dev.cashle.tax.TaxStateField
+
+investmentAccount('cashlab.au-brokerage', 1) {
+    pluginId 'cashle.finance.au-brokerage'
+    dsl 'auBrokerage'
+    country 'AU'
+    kind 'AUbrokerage'
+    taxPolicy 'brokerage'
+    messages 'dev.cashle.accounts.au_brokerage.AustralianBrokeragePlugin'
+    prepaidTax true
+    transfers false
+}
+
+accountTaxPolicy('brokerage') {
+    pluginId 'cashle.finance.au-brokerage.tax-policy'
+    messages 'dev.cashle.tax.australia.AustralianInvestmentRules'
+    country 'AU'
+    ruleYear 2026
+
+    annualBases 'dividendIncome', 'frankingCredits', 'capitalGains', 'capitalGainsDiscountEligible', 'investmentCapitalLoss'
+    retainedAccount true
+    costBasisMethod CostBasisMethod.HOMOGENEOUS_LOT
+    reinvestedDividendsIncreaseBasis true
+    dividendsTaxableOnReceipt true
+    permitsImmediateReinvestment false
+    internalSalesRealizeTax true
+
+    policyFields([
+        acquiredDate: new TaxPolicyField('Lot acquisition date', 'date'),
+        basisMethod: new TaxPolicyField('Basis identification', 'select', List.of('identified-lot')),
+        singleLotConfirmed: new TaxPolicyField('One identified acquisition lot', 'boolean'),
+        frankedFraction: new TaxPolicyField('Dividend franked fraction', 'number'),
+        companyTaxRate: new TaxPolicyField('Company tax rate', 'number'),
+    ])
+    stateFields([
+        discountEligibleGain: new TaxStateField('Gross discount-eligible gains this year', true),
+        gainTaxYear: new TaxStateField('Gain fiscal year', false),
+    ])
+
+    maximumDeposit { deposit -> deposit.remainingPrincipal() == 0d ? Double.POSITIVE_INFINITY : 0d }
+
+    withdraw { request ->
+        def options = request.policyOptions()
+        def position = request.position()
+        require(bool(options, 'singleLotConfirmed', false),
+            'Confirm one identified acquisition lot, no added/reinvested lots and no wash-sale arrangement.')
+        require(request.date() != null && request.acquiredDate() != null && !request.acquiredDate().isAfter(request.date()),
+            'Provide the identified lot acquisition date.')
+        double removed = request.resolvedCostBasis()
+        if (!Double.isFinite(removed)) {
+            require('identified-lot'.equals(options.get('basisMethod')),
+                'Declare identified-lot basis or provide resolved disposal basis.')
+            removed = position.marketValue() == 0d ? 0d : position.costBasis() * request.amount() / position.marketValue()
+        }
+        require(removed >= 0d && removed <= position.costBasis() + 1e-7d,
+            'Resolved disposal basis exceeds the remaining lot basis.')
+        double difference = request.amount() - removed
+        def remaining = new InvestmentPosition(Math.max(0d, position.marketValue() - request.amount()),
+            Math.max(0d, position.costBasis() - removed), 0d)
+        new InvestmentWithdrawalResult(remaining, Math.max(0d, difference), Math.max(0d, -difference), Math.max(0d, difference))
+    }
+
+    stateAfterWithdrawal { request ->
+        def sale = withdraw(request)
+        def day = request.date()
+        int year = day.monthValue < 7 ? day.year - 1 : day.year
+        def state = request.state()
+        double previous = state.getOrDefault('gainTaxYear', 0d) == year ? state.getOrDefault('discountEligibleGain', 0d) : 0d
+        boolean eligible = day.isAfter(request.acquiredDate().plusYears(1))
+        [gainTaxYear: (double) year, discountEligibleGain: previous + (eligible ? sale.realizedGain() : 0d)]
+    }
+
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        double dividends = 0d
+        double gain = 0d
+        double eligible = 0d
+        double loss = 0d
+        double credits = 0d
+        for (def account : accounts) {
+            require(account.realizedGain() == 0d || (account.acquiredDate() != null && account.date() != null),
+                'Capital gains require acquisition/disposal holding-period facts.')
+            // Disposal state distinguishes long- and short-held gains within the same fiscal year.
+            def state = account.state()
+            double qualified = state.getOrDefault('gainTaxYear', 0d) == money.assessmentYear() ?
+                state.getOrDefault('discountEligibleGain', 0d) : 0d
+            require(qualified >= 0d && qualified <= account.realizedGain() + 1e-7d,
+                'Discount-eligible gains cannot exceed gross realized gains.')
+            double franked = number(account.policyOptions(), 'frankedFraction', 0d)
+            double company = number(account.policyOptions(), 'companyTaxRate', 0.3d)
+            require(franked >= 0d && franked <= 1d && company >= 0d && company < 1d, 'Invalid dividend franking assumptions.')
+            credits += account.dividends() * franked * company / (1d - company)
+            dividends += account.dividends()
+            eligible += qualified
+            gain += Math.max(0d, account.realizedGain() - qualified)
+            loss += account.realizedLoss()
+        }
+        new InvestmentAnnualAssessment([dividendIncome: dividends, frankingCredits: credits,
+            capitalGains: gain, capitalGainsDiscountEligible: eligible, investmentCapitalLoss: loss], 0d, [:])
+    }
+}

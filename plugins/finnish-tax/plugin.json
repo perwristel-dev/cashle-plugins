@@ -1,0 +1,28 @@
+{
+  "id": "cashle.tax.fi",
+  "archive": "cashle-tax-fi-source.zip",
+  "requires": [
+    "cashle.tax",
+    "cashle.tax.support"
+  ],
+  "ui": "ui.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui-en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui-sv.json"
+    }
+  ],
+  "sources": [
+    {
+      "path": "finnish-tax.cashle",
+      "resources": [
+        "dev/cashle/tax/finland/FinnishTaxSource_en.properties",
+        "dev/cashle/tax/finland/FinnishTaxSource_sv.properties"
+      ]
+    }
+  ]
+}

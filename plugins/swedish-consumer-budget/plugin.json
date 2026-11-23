@@ -1,0 +1,12 @@
+{
+  "id": "cashle.finance.budget.se",
+  "requires": ["cashle.finance", "cashle.tax", "cashle-query-sdk"],
+  "sources": [{
+    "path": "consumer-budget.cashle",
+    "providers": ["cashle.finance.budget.se"],
+    "resources": ["budget/messages_en.properties", "budget/messages_sv.properties", "budget/municipality-population-2025.properties"]
+  }],
+  "ui": "ui.js",
+  "uiAssets": ["budget-events.js"],
+  "uiTranslations": [{"locale": "en", "path": "ui-en.json"}, {"locale": "sv", "path": "ui-sv.json"}]
+}

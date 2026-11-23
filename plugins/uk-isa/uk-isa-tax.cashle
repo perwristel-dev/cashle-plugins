@@ -1,0 +1,56 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.TaxPolicyField
+import dev.cashle.tax.TaxStateField
+import java.time.LocalDate
+
+accountTaxPolicy('isa') {
+    pluginId 'cashle.finance.gb-isa.tax'
+    messages 'dev.cashle.accounts.gb_isa.BritishIsaTaxPolicy'
+    country 'GB'
+    ruleYear 2026
+    maxAccountsPerPerson 1
+
+    policyFields([
+        otherIsaSubscriptions: new TaxPolicyField('Subscriptions to other ISAs this tax year', 'number')
+    ])
+    stateFields([
+        isaSubscriptions: new TaxStateField('Gross ISA subscriptions', true),
+        isaTaxYear: new TaxStateField('Subscription tax year', false)
+    ])
+
+    def fiscalYear = { date, checks ->
+        checks.require(date != null, 'ISA contribution date is required.')
+        int year = date.getYear()
+        date.isBefore(LocalDate.of(year, 4, 6)) ? year - 1 : year
+    }
+    def usedSubscriptions = { deposit, year ->
+        if (deposit.state().getOrDefault('isaTaxYear', 0d) == year) {
+            return Math.max(deposit.grossDeposits(), deposit.state().getOrDefault('isaSubscriptions', 0d))
+        }
+        Math.max(0d, deposit.grossDeposits())
+    }
+
+    maximumDeposit { deposit ->
+        double used = usedSubscriptions(deposit, fiscalYear(deposit.date(), delegate))
+        double other = number(deposit.policyOptions(), 'otherIsaSubscriptions', 0d)
+        require(other >= 0d, 'Other ISA subscriptions must be nonnegative.')
+        Math.max(0d, nominal(20000d, deposit.money()) - used - other)
+    }
+    stateAfterDeposit { deposit ->
+        int year = fiscalYear(deposit.date(), delegate)
+        Map.of('isaTaxYear', (double) year, 'isaSubscriptions', usedSubscriptions(deposit, year) + deposit.amount())
+    }
+    withdraw { request -> withdrawal(request, false, false, true) }
+
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        double subscriptions = 0d, otherSubscriptions = 0d
+        for (def account : accounts) {
+            subscriptions += account.externalDeposits()
+            otherSubscriptions = Math.max(otherSubscriptions, number(account.policyOptions(), 'otherIsaSubscriptions', 0d))
+        }
+        require(subscriptions + otherSubscriptions <= nominal(20000d, money) + 1e-7d,
+            'ISA subscriptions across all ISAs exceed £20,000 annual allowance; ordinary withdrawals do not restore it.')
+        new InvestmentAnnualAssessment([:], 0d, [:])
+    }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "Swedish defined-benefit pension",
+  "description": {
+    "sv": "Svensk tjänstepension som beräknas enligt förmånsreglerna i valt avtal.",
+    "en": "Swedish occupational pension calculated from the selected agreement’s benefit rules."
+  },
+  "country": "SE",
+  "category": "income",
+  "releases": [
+    "52958a1c791b5bcdccab288f5cd3a1436c3def2dcccfc34070710712c9b8e2ec",
+    "6898ab4b5a827ec7e9ca9c9dc472ab71d012bcdeac6430f56c005c014b85311c"
+  ]
+}

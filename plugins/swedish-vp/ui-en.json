@@ -1,0 +1,23 @@
+{
+  "label": "Securities account",
+  "Ange ett giltigt aktieinnehav.": "Enter a valid share holding.",
+  "Ange aktiens identitet utan inledande eller avslutande blanksteg.": "Enter the share identity without leading or trailing spaces.",
+  "Ange ett giltigt antal aktier; ett innehav med värde måste ha fler än noll aktier.": "Enter a valid number of shares; a holding with value must contain more than zero shares.",
+  "Ange en positiv nominell aktiekurs vid den framtida öppningen.": "Enter a positive nominal share price at the future opening.",
+  "En framtida VP-depå ska ha noll aktier vid kalkylstart.": "An account opening in the future must have zero shares at the calculation date.",
+  "Ett tomt aktieinnehav kan inte ha omkostnadsbelopp.": "An empty share holding cannot have a cost basis.",
+  "Ange aktieslag även för ägarens övriga VP-depåer innan gemensamt omkostnadsbelopp kan beräknas.": "Identify the shares in all of this owner’s securities accounts before calculating pooled cost basis.",
+  "Samma aktie för samma ägare måste ha samma kurs och avkastningsantaganden i alla depåer.": "The same owner’s shares of the same class must have the same price and return assumptions in every account.",
+  "Ange giltiga inställningar för svensk skatt efter utflyttning.": "Enter valid settings for Swedish tax after emigration.",
+  "Kontots förval är vanliga aktier förvärvade före flytten. Ändra om detta inte stämmer.": "The default is ordinary shares acquired before the move. Change it if that is not correct.",
+  "Aktier som omfattas av tioårsregeln (förvalt)": "Shares covered by the ten-year rule (default)",
+  "Fondandelar": "Fund units",
+  "Undantagna innehav": "Exempt holdings",
+  "Okänd klassificering": "Unknown classification",
+  "Bekräftad avtalsbegränsning undantar värdepappersvinster från svensk skatt": "Confirmed treaty restriction exempts securities gains from Swedish tax",
+  "Bekräftad kupongskatt enligt avtal": "Confirmed treaty withholding tax",
+  "Klassificering efter svensk utflyttning": "Classification after leaving Sweden",
+  "Svensk depå med aktier och fonder: vinster och förluster uppskattas från marknadsvärde och genomsnittligt omkostnadsbelopp. Nya köp ökar omkostnadsbeloppet; delförsäljningar minskar det proportionellt.": "Swedish securities account with shares and funds: gains and losses are estimated from market value and average cost basis. Purchases increase cost basis; partial sales reduce it proportionally.",
+  "30 % enligt nationella regler är förval. Skatteavtal kan begränsa svensk utdelningsskatt.": "The default national rate is 30%. Tax treaties can reduce Swedish dividend tax.",
+  "Svensk aktiedepå: vanliga aktier förvärvade före utflyttning antas omfattas av tioårsregeln. Bekräftade skatteavtalsbegränsningar kan ändra svensk skatt.": "Swedish securities account: ordinary shares acquired before departure are assumed to fall under the ten-year rule. Confirmed treaty restrictions may change Swedish tax."
+}

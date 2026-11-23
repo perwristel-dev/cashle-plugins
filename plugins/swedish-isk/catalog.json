@@ -1,0 +1,13 @@
+{
+  "name": "Swedish investment savings account (ISK)",
+  "description": {
+    "sv": "Svenskt investeringssparkonto med årlig schablonintäkt.",
+    "en": "Swedish investment savings account with annual standard income."
+  },
+  "country": "SE",
+  "category": "accounts",
+  "releases": [
+    "24ba7680fe6ba13523b36f28e7b60513f0e98d1362db37f856614847faf786d2",
+    "74345a66a0a8e017dfc7dfba606fdbb603be4f63e72ede7f6e3b8d51009d22ae"
+  ]
+}

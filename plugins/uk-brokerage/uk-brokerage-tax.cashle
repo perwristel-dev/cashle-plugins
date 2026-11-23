@@ -1,0 +1,64 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.InvestmentPosition
+import dev.cashle.tax.InvestmentRules.CostBasisMethod
+import dev.cashle.tax.InvestmentWithdrawalResult
+import dev.cashle.tax.TaxPolicyField
+
+accountTaxPolicy('brokerage') {
+    pluginId 'cashle.finance.gb-brokerage.tax'
+    messages 'dev.cashle.accounts.gb_brokerage.BritishBrokerageTaxPolicy'
+    country 'GB'
+    ruleYear 2026
+
+    retainedAccount true
+    costBasisMethod CostBasisMethod.HOMOGENEOUS_LOT
+    reinvestedDividendsIncreaseBasis true
+    dividendsTaxableOnReceipt true
+    permitsImmediateReinvestment false
+    internalSalesRealizeTax true
+    annualBases 'dividendIncome', 'capitalGains', 'investmentCapitalLoss'
+
+    policyFields([
+        acquiredDate: new TaxPolicyField('Pool acquisition date', 'date'),
+        basisMethod: new TaxPolicyField('Basis identification', 'select', ['section104-pool']),
+        section104EligibilityConfirmed: new TaxPolicyField('Verified no same-day/30-day matching acquisitions', 'boolean')
+    ])
+
+    maximumDeposit { deposit -> deposit.remainingPrincipal() == 0d ? Double.POSITIVE_INFINITY : 0d }
+
+    withdraw { request ->
+        def options = request.policyOptions()
+        require(bool(options, 'section104EligibilityConfirmed', false),
+            'Confirm one share class/Section 104 pool and no same-day or subsequent 30-day matching acquisitions, including external accounts.')
+        require(request.date() != null && request.acquiredDate() != null && !request.acquiredDate().isAfter(request.date()),
+            'Declare acquisition and disposal dates for the supported pool.')
+
+        def position = request.position()
+        double removed = request.resolvedCostBasis()
+        if (!Double.isFinite(removed)) {
+            require('section104-pool' == options.get('basisMethod'),
+                'Declare a verified Section 104 pool or supply resolved disposal basis.')
+            removed = position.marketValue() == 0d ? 0d : position.costBasis() * request.amount() / position.marketValue()
+        }
+        require(removed >= 0d && removed <= position.costBasis() + 1e-7d,
+            'Resolved basis exceeds the remaining Section 104 pool.')
+
+        double difference = request.amount() - removed
+        double gain = Math.max(0d, difference)
+        def remaining = new InvestmentPosition(Math.max(0d, position.marketValue() - request.amount()),
+            Math.max(0d, position.costBasis() - removed), 0d)
+        new InvestmentWithdrawalResult(remaining, gain, Math.max(0d, -difference), gain)
+    }
+
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        double dividends = 0d, gains = 0d, losses = 0d
+        for (def account : accounts) {
+            dividends += account.dividends()
+            gains += account.realizedGain()
+            losses += account.realizedLoss()
+        }
+        new InvestmentAnnualAssessment([dividendIncome: dividends, capitalGains: gains, investmentCapitalLoss: losses],
+            0d, [:])
+    }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "French tax",
+  "description": {
+    "sv": "Fransk inkomstskatt och skatteregler för investeringar och fastigheter för bosatta.",
+    "en": "French income tax and investment and property tax rules for residents."
+  },
+  "country": "FR",
+  "category": "tax",
+  "releases": [
+    "c22e8c0bbafc2823990e470938025577176cdeebe44cf0889cfadf01621640bb",
+    "4c29d83cbc0d37e055246b821a058733264255dd79029d5fbb816de14a466d6e"
+  ]
+}

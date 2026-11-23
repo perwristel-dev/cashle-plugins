@@ -1,0 +1,470 @@
+package cashle.plugins.sweden.account
+
+import dev.cashle.accounts.ledger.AccountJournal
+import dev.cashle.core.AccountKind
+import dev.cashle.core.i18n.Messages
+import dev.cashle.sdk.model.AccountHandle
+import dev.cashle.sdk.model.FlowHandle
+import dev.cashle.sdk.model.ModelBuilder
+import dev.cashle.sdk.model.ValueNode
+import dev.cashle.sdk.model.Variable
+import dev.cashle.sdk.tax.lifecycle.TaxLifecycleHost
+import dev.cashle.sdk.tax.lifecycle.TaxAccountLifecycle.Assessment
+import dev.cashle.sdk.tax.lifecycle.TaxAccountLifecycle.ForecastNotice
+import dev.cashle.sdk.tax.lifecycle.TaxAccountLifecycle.FundingRequest
+import dev.cashle.sdk.tax.lifecycle.TaxAccountLifecycle.HistoricalNotice
+import dev.cashle.sdk.tax.lifecycle.TaxAccountLifecycle.Notice
+import dev.cashle.sdk.tax.lifecycle.TaxAccountLifecycle.OpeningAssessment
+import dev.cashle.sdk.tax.lifecycle.TaxAccountLifecycle.RefundPolicy
+import groovy.transform.CompileStatic
+import groovy.transform.TupleConstructor
+import java.time.LocalDate
+import java.util.function.BooleanSupplier
+import java.util.function.Supplier
+
+/** Model-local final tax notices, deposits, refunds and settlement. */
+@CompileStatic
+final class PhysicalAccount {
+    private static final double TAX_TOLERANCE = 1e-7d
+    private static final double NO_DEFERRED_DATE = Integer.MIN_VALUE
+
+    private final TaxLifecycleHost host
+    private final Messages messages
+    private AccountSpec spec
+    private List<PostedNotice> postings = []
+    private List<ForecastNotice> forecastNotices = []
+    private List<NoticeState> notices = []
+    private TaxLifecycleHost.Calendar refundCalendar
+    private RefundPolicy refundPolicy
+    private FlowHandle refundFlow
+    private boolean fundingObserved
+    private boolean lateEnabled
+    private Variable noticeVersion
+    private Variable noticeHandled
+    private Variable deferredDay
+    private Variable lateSequence
+    private Variable lateRequest
+    AccountHandle account
+
+    PhysicalAccount(TaxLifecycleHost host) {
+        this.host = host
+        messages = AccountInputs.languageMessages(host.language())
+    }
+
+    void configureInputs(Map<String, Object> input) {
+        if (account != null || spec != null || host.fundingConfigured()) {
+            throw new IllegalStateException('Configure the tax account before funding')
+        }
+        requirePlan()
+        LocalDate from = host.model().timelineStart()
+        LocalDate until = host.model().timelineEnd()
+        AccountSpec entered = new AccountInputs(host.language()).read(input, host.openings())
+        if (!from.isBefore(until) || entered.history.from.isAfter(from)) {
+            throw new IllegalArgumentException(messages.text('input.timeline'))
+        }
+        for (Deposit deposit : entered.deposits) {
+            if (deposit.date.isBefore(from) || !deposit.date.isBefore(until)) {
+                throw new IllegalArgumentException(messages.text('input.depositDate'))
+            }
+        }
+        BigDecimal balance = entered.historyOpening.balance
+        for (Movement movement : entered.history.movements) {
+            if (!movement.effectiveDate.isAfter(from)) balance = balance.add(movement.amount)
+        }
+        for (InterestEntry entry : entered.history.booked) balance = balance.add(entry.credit).subtract(entry.cost)
+        if (balance.subtract(entered.openingBalance).abs().compareTo(0.000001G) > 0) {
+            throw new IllegalArgumentException(messages.text('input.openingBalance'))
+        }
+
+        AccountHandle physical = host.taxAccount().entity.account()
+        physical.kind = AccountKind.ASSET
+        physical.name = messages.text('account')
+        AccountHandle equity = host.taxAccount().entity.account()
+        equity.kind = AccountKind.EQUITY
+        FlowHandle openingFlow = host.flow(host.on(from), physical, equity, { -> entered.openingBalance.doubleValue() })
+        openingFlow.name = 'cashlab:opening'
+        host.dependency(host.taxCalculation(), openingFlow)
+        List<PostedNotice> actualPostings = []
+        List<Notice> enteredNotices = []
+        List<HistoricalNotice> historicalNotices = []
+        List<ForecastNotice> forecasts = []
+        List<TaxLifecycleHost.Calendar> dates = []
+        for (OpeningAssessment opening : host.openings()) {
+            FinalNotice finalNotice = AccountInputs.finalNotice(opening)
+            Assessment assessment = new Assessment(finalNotice.taxYear, finalNotice.decisionDate, finalNotice.postingDate,
+                    finalNotice.dueDate, finalNotice.netTax.doubleValue())
+            dates.add(host.on(opening.settlementDate()))
+            if (opening.status() == 'pending') {
+                FlowHandle posting = host.flow(host.on(opening.postingDate()), host.taxAccount(), physical, opening.&netTax)
+                posting.inactive { -> opening.netTax() == 0d }
+                actualPostings.add(new PostedNotice(finalNotice, posting, { -> true }))
+                enteredNotices.add(new Notice(assessment, posting, { -> true }, opening.settlementDate()))
+            } else {
+                historicalNotices.add(new HistoricalNotice(assessment, opening.settlementDate()))
+            }
+        }
+        for (ForecastDates entry : entered.forecasts) {
+            ForecastNotice notice = forecast(physical, entry.taxYear, entry.decisionDate, entry.postingDate, entry.settlementDate, { -> true })
+            forecasts.add(notice)
+            dates.add(host.onDate(notice.&settlementDate))
+        }
+        configureNotices(physical, enteredNotices, historicalNotices, forecasts, host.union(dates), entered.refundPolicy)
+        spec = entered
+        postings = List.copyOf(actualPostings)
+        forecastNotices = List.copyOf(forecasts)
+    }
+
+    List<FundingRequest> fundingRequests() {
+        if (spec == null) return []
+        TreeMap<LocalDate, BigDecimal> totals = new TreeMap<>()
+        for (Deposit deposit : spec.deposits) totals.merge(deposit.date, deposit.amount, BigDecimal.&add)
+        List<FundingRequest> requests = []
+        for (Map.Entry<LocalDate, BigDecimal> entry : totals.entrySet()) {
+            LocalDate date = entry.key
+            double total = entry.value.doubleValue()
+            requests.add(new FundingRequest('deposit:' + date, account, date, {
+                -> host.date() == date ? Math.max(0d, total - host.pendingSettlement().value) : 0d
+            }))
+        }
+        requests
+    }
+
+    void observeFunding(List<? extends FlowHandle> funding) {
+        if (spec == null) return
+        if (fundingObserved) throw new IllegalStateException(messages.text('alreadyFunded'))
+        Set<FlowHandle> flows = new LinkedHashSet<>()
+        for (PostedNotice posted : postings) flows.add(posted.posting)
+        for (ForecastNotice forecast : forecastNotices) flows.add(forecast.posting())
+        for (FlowHandle flow : host.taxFlows()) if (touchesAccount(flow)) flows.add(flow)
+        for (FlowHandle flow : funding) if (touchesAccount(flow)) flows.add(flow)
+        ModelBuilder model = host.model()
+        LocalDate from = model.timelineStart()
+        LocalDate until = model.timelineEnd()
+        AccountJournal journal = new AccountJournal(model, account, from, until, List.copyOf(flows))
+        new AccountInterestProgram(model, account, host.interestIncome(), host.interestExpense(), journal,
+                from, until, spec, postings, forecastNotices, host.language())
+        fundingObserved = true
+    }
+
+    private boolean touchesAccount(FlowHandle flow) {
+        flow.debit().is(account) || flow.credit().is(account)
+    }
+
+    private void requirePlan() {
+        if (host.plugin().country() != 'SE' || !host.singleJurisdictionPlan()) {
+            throw new IllegalArgumentException(messages.text('singleJurisdiction'))
+        }
+    }
+
+    void validatePropertyAdvance(double preliminary, double settled) {
+        if (preliminary != 0d || settled != 0d) throw new IllegalStateException(messages.text('propertyAdvances'))
+    }
+
+    void validateOpening(OpeningAssessment opening) {
+        if (host.fundingConfigured()) throw new IllegalStateException(messages.text('openingBeforeFunding'))
+        requirePlan()
+        LocalDate from = host.years().start()
+        if (opening.taxYear() < 1800 || opening.taxYear() >= from.year || opening.settlementDate().year <= opening.taxYear()
+                || opening.status() == 'pending' && opening.postingDate().isBefore(from)
+                || opening.status() != 'pending' && !opening.postingDate().isBefore(from)
+                || Math.abs(opening.remainingTax()) > TAX_TOLERANCE && opening.settlementDate().isBefore(from)) {
+            throw new IllegalArgumentException(messages.text('openingTimeline'))
+        }
+        if (account != null) requireMatchingOpening(opening, notices)
+    }
+
+    ForecastNotice forecast(AccountHandle physical, int year, LocalDate decision, LocalDate postingDate,
+                            LocalDate settlement, BooleanSupplier active) {
+        requirePlan()
+        if (!host.validPhysicalAccount(physical)) throw new IllegalArgumentException(messages.text('forecastAccount'))
+        if (host.fundingConfigured() || account != null || decision.year <= year || decision.isBefore(host.years().start())
+                || postingDate.isBefore(decision) || settlement.isBefore(postingDate)) {
+            throw new IllegalArgumentException(messages.text('forecastDates'))
+        }
+        host.years().forecastSettlement(year, settlement)
+        Variable amount = host.variable(0d)
+        Variable resolved = host.variable(0d)
+        Variable resolvedDay = host.variable(0d)
+        TaxLifecycleHost.Calendar dates = host.union([host.on(decision), host.on(postingDate)])
+        ValueNode resolution = host.calculation(dates, { ->
+            if (!active.getAsBoolean()) return 0d
+            if (host.date() == decision) {
+                if (!host.years().hasAssessment(year)) throw new IllegalStateException(yearMessage('missingAnnualAssessment', year))
+                double value = host.years().originalAssessment(year)
+                LocalDate effective = host.years().forecastSettlementDate(year, settlement)
+                if (effective.isBefore(postingDate)) throw new IllegalArgumentException(messages.text('dueBeforePosting'))
+                new FinalNotice(year, decision, postingDate, value > 0d ? effective : null, BigDecimal.valueOf(value))
+                amount.value = value
+                resolvedDay.value = effective.toEpochDay()
+                resolved.value = 1d
+            }
+            if (resolved.value == 0d) throw new IllegalStateException(yearMessage('missingForecastAmount', year))
+            amount.value
+        })
+        FlowHandle posting = host.flow(host.on(postingDate), host.taxAccount(), physical, { ->
+            if (resolved.value == 0d) throw new IllegalStateException(yearMessage('missingForecastAmount', year))
+            amount.value
+        }, resolution)
+        posting.inactive { -> !active.getAsBoolean() || resolved.value != 0d && amount.value == 0d }
+        new BoundForecast(year, decision, postingDate, settlement, active, amount, resolved, resolvedDay, resolution,
+                posting, yearMessage('unresolvedForecast', year))
+    }
+
+    void configureNotices(AccountHandle physical, List<Notice> entered, List<HistoricalNotice> historical,
+                          List<ForecastNotice> forecasts, TaxLifecycleHost.Calendar refunds, RefundPolicy policy) {
+        if (host.fundingConfigured() || account != null) {
+            throw new IllegalStateException('Configure the Swedish tax account before funding')
+        }
+        requirePlan()
+        if (!host.validPhysicalAccount(physical)) throw new IllegalArgumentException(messages.text('separateAccount'))
+        account = physical
+        refundCalendar = Objects.requireNonNull(refunds)
+        refundPolicy = Objects.requireNonNull(policy)
+        noticeVersion = host.variable(0d)
+        noticeHandled = host.variable(0d)
+        deferredDay = host.variable(NO_DEFERRED_DATE)
+        lateSequence = host.variable(0d)
+        lateRequest = host.variable(0d)
+        List<NoticeState> states = []
+        Set<Integer> years = new HashSet<>()
+        for (Notice notice : entered) states.add(observeEnteredNotice(notice, years))
+        for (HistoricalNotice notice : historical) {
+            Assessment assessment = notice.assessment()
+            if (!years.add(assessment.taxYear()) || !assessment.postingDate().isBefore(host.years().start())) {
+                throw new IllegalArgumentException(messages.text('historicalNoticeDate'))
+            }
+            states.add(new NoticeState(assessment.taxYear(), { -> assessment }, assessment.postingDate(), notice.&settlementDate,
+                    { -> true }, { -> true }, host.variable(assessment.netTax()), true))
+        }
+        for (ForecastNotice notice : forecasts) states.add(observeForecastNotice(notice, years))
+        for (OpeningAssessment opening : host.openings()) requireMatchingOpening(opening, states)
+        notices = List.copyOf(states)
+        host.defer {
+            for (NoticeState notice : notices) {
+                if (!notice.historical) continue
+                OpeningAssessment opening = host.openings().find { OpeningAssessment row -> row.taxYear() == notice.year }
+                if (opening == null) throw new IllegalArgumentException(yearMessage('missingOpeningYear', notice.year))
+                requireMatchingOpening(opening, notices)
+            }
+        }
+        refundFlow = host.flow(refundCalendar, host.cash(), account, this.&refund, host.taxCalculation())
+        refundFlow.name = messages.text('refund')
+        refundFlow.inactive { -> host.settlement().value >= 0d || refundPolicy == RefundPolicy.RETAIN || account.balance <= 0d }
+        host.addFlows([refundFlow])
+    }
+
+    private NoticeState observeEnteredNotice(Notice notice, Set<Integer> years) {
+        Assessment assessment = notice.assessment()
+        int year = assessment.taxYear()
+        FlowHandle posting = notice.posting()
+        if (!years.add(year) || !posting.debit().is(host.taxAccount()) || !posting.credit().is(account)) {
+            throw new IllegalArgumentException(messages.text('oneNoticePerYear'))
+        }
+        Variable posted = host.variable(0d)
+        posting.observePostings { double amount ->
+            if (!notice.active().getAsBoolean() || host.date() != assessment.postingDate()) {
+                throw new IllegalStateException(messages.text('invalidNoticePosting'))
+            }
+            if (!host.years().hasAssessment(year) || Math.abs(host.years().originalAssessment(year) - assessment.netTax()) > 0.01d) {
+                throw new IllegalStateException(messages.text('noticeMismatch'))
+            }
+            recordPosting(posted, amount)
+        }
+        host.dependency(host.taxCalculation(), posting)
+        new NoticeState(year, { -> assessment }, assessment.postingDate(), notice.&settlementDate,
+                notice.active(), { -> true }, posted, false)
+    }
+
+    private NoticeState observeForecastNotice(ForecastNotice forecast, Set<Integer> years) {
+        int year = forecast.taxYear()
+        FlowHandle posting = forecast.posting()
+        if (!years.add(year) || !posting.debit().is(host.taxAccount()) || !posting.credit().is(account)) {
+            throw new IllegalArgumentException(messages.text('forecastNoticeAccount'))
+        }
+        Variable posted = host.variable(0d)
+        posting.observePostings { double amount ->
+            if (!forecast.active() || !forecast.resolved() || host.date() != forecast.postingDate()
+                    || Math.abs(amount - forecast.assessment().netTax()) > TAX_TOLERANCE) {
+                throw new IllegalStateException(yearMessage('invalidYearPosting', year))
+            }
+            recordPosting(posted, amount)
+        }
+        host.dependency(host.taxCalculation(), posting)
+        new NoticeState(year, forecast.&assessment, forecast.postingDate(), forecast.&settlementDate,
+                forecast.&active, forecast.&resolved, posted, false)
+    }
+
+    private void recordPosting(Variable posted, double amount) {
+        posted.value = posted.value + amount
+        if (amount != 0d) noticeVersion.value = noticeVersion.value + 1d
+    }
+
+    private double refund() {
+        double signedSettlement = host.settlement().value
+        if (signedSettlement >= 0d || refundPolicy == RefundPolicy.RETAIN) return 0d
+        double available = Math.max(0d, account.balance)
+        refundPolicy == RefundPolicy.FULL_AVAILABLE ? available : Math.min(available, -signedSettlement)
+    }
+
+    private void requireMatchingOpening(OpeningAssessment opening, List<NoticeState> states) {
+        for (NoticeState state : states) {
+            if (!state.resolved.getAsBoolean()) continue
+            Assessment notice = state.assessment.get()
+            if (notice.taxYear() == opening.taxYear() && notice.decisionDate() == opening.decisionDate()
+                    && notice.postingDate() == opening.postingDate() && state.settlementDate.get() == opening.settlementDate()
+                    && state.historical != (opening.status() == 'pending')
+                    && Math.abs(notice.netTax() - opening.netTax()) <= TAX_TOLERANCE) return
+        }
+        throw new IllegalArgumentException(yearMessage('matchingOpening', opening.taxYear()))
+    }
+
+    double applySettlement(LocalDate date, double scheduled) {
+        if (account == null) return scheduled
+        double futureDebt = 0d
+        for (NoticeState state : notices) {
+            if (state.settlementDate.get().isAfter(date) && state.active.getAsBoolean() && state.resolved.getAsBoolean()
+                    && state.assessment.get().netTax() > 0d && fullyPosted(state)) {
+                futureDebt += Math.max(0d, host.years().remainingAssessment(state.year))
+            }
+        }
+        double due = Math.max(0d, -account.balance - futureDebt)
+        host.pendingSettlement().value = Math.min(host.pendingSettlement().value, due)
+        if (scheduled < 0d && refundPolicy != RefundPolicy.RETAIN && !host.occurs(refundCalendar, date)) {
+            throw new IllegalStateException(messages.text('missingRefundDate'))
+        }
+        scheduled > 0d ? Math.max(0d, -account.balance - futureDebt - host.pendingSettlement().value) : scheduled
+    }
+
+    boolean allowSettlement(int year, LocalDate date) {
+        if (lateEnabled) {
+            for (NoticeState state : notices) {
+                if (state.year != year || state.settlementDate.get() != date || state.historical || state.postingDate != date) continue
+                if (!state.active.getAsBoolean() || !state.resolved.getAsBoolean() || !fullyPosted(state)) {
+                    if (deferredDay.value != date.toEpochDay()) noticeHandled.value = noticeVersion.value
+                    deferredDay.value = date.toEpochDay()
+                    return false
+                }
+            }
+        }
+        for (NoticeState state : notices) {
+            if (state.year != year || state.settlementDate.get() != date || !state.active.getAsBoolean()) continue
+            if (!state.resolved.getAsBoolean()) throw new IllegalStateException(yearMessage('unresolvedNotice', year))
+            if (!fullyPosted(state)) throw new IllegalStateException(yearMessage('postBeforeFunding', year))
+            return true
+        }
+        throw new IllegalStateException(yearMessage('missingSettlement', year))
+    }
+
+    private static boolean fullyPosted(NoticeState notice) {
+        Math.abs(notice.posted.value - notice.assessment.get().netTax()) <= TAX_TOLERANCE
+    }
+
+    List<TaxLifecycleHost.Calendar> settlementEvents() {
+        if (account == null) return []
+        List<TaxLifecycleHost.Calendar> calendars = [refundCalendar]
+        for (NoticeState notice : notices) {
+            calendars.add(host.onDate(notice.settlementDate))
+            if (!notice.historical) calendars.add(host.on(notice.postingDate))
+        }
+        calendars
+    }
+
+    void fundingReconciled(boolean selected) {
+        if (lateRequest != null && selected && host.phase() != 0) lateRequest.value = 0d
+    }
+
+    void afterFunding() {
+        if (account == null || !host.sameDayEnabled()) return
+        lateEnabled = true
+        ValueNode late = host.calculation(host.fundingEvents(), this.&settleLate)
+        host.optionalDependencies(late)
+        host.recomputeWhenActivated(late)
+        BooleanSupplier waiting = { -> waitingForLateSettlement() }
+        if (refundFlow == null) {
+            host.latePhase(waiting, late)
+        } else {
+            host.dependency(refundFlow, late)
+            host.latePhase(waiting, late, refundFlow)
+        }
+        host.repeatLateSettlement({ -> (long) lateSequence.value }, { -> lateRequest.value != 0d })
+        List<TaxLifecycleHost.Calendar> dueDates = notices.collect { NoticeState notice -> host.onDate(notice.settlementDate) }
+        ValueNode guard = host.calculation(host.union(dueDates), { ->
+            if (deferredDay.value == host.date().toEpochDay()) throw new IllegalStateException(messages.text('dueNoticeNotPosted'))
+            0d
+        })
+        host.endOfDay({ -> true }, guard)
+    }
+
+    private boolean waitingForLateSettlement() {
+        deferredDay.value == host.date().toEpochDay() && noticeVersion.value > noticeHandled.value
+    }
+
+    private double settleLate() {
+        if (host.phase() == 0 || !waitingForLateSettlement()) return 0d
+        LocalDate date = host.date()
+        noticeHandled.value = noticeVersion.value
+        boolean waiting = false
+        double amount = host.years().settleIf(date, { int year ->
+            boolean ready = allowSettlement(year, date)
+            waiting = waiting || !ready
+            ready
+        })
+        if (!waiting) deferredDay.value = NO_DEFERRED_DATE
+        double scheduled = applySettlement(date, amount)
+        double due = host.pendingSettlement().value + scheduled
+        host.pendingSettlement().value = Math.max(0d, due)
+        host.settlement().value = Math.min(0d, due)
+        if (scheduled > 0d) {
+            lateSequence.value = lateSequence.value + 1d
+            lateRequest.value = 1d
+        }
+        amount
+    }
+
+    private String yearMessage(String key, int year) {
+        messages.text(key).replace('{year}', Integer.toString(year))
+    }
+}
+
+@CompileStatic
+@TupleConstructor(defaults = false)
+final class NoticeState {
+    final int year
+    final Supplier<Assessment> assessment
+    final LocalDate postingDate
+    final Supplier<LocalDate> settlementDate
+    final BooleanSupplier active
+    final BooleanSupplier resolved
+    final Variable posted
+    final boolean historical
+}
+
+@CompileStatic
+@TupleConstructor(defaults = false)
+final class BoundForecast implements ForecastNotice {
+    final int year
+    final LocalDate decision
+    final LocalDate postingDay
+    final LocalDate enteredSettlement
+    final BooleanSupplier activity
+    final Variable amount
+    final Variable ready
+    final Variable resolvedDay
+    final ValueNode resolutionNode
+    final FlowHandle postingFlow
+    final String unresolvedMessage
+
+    int taxYear() { year }
+    LocalDate decisionDate() { decision }
+    LocalDate postingDate() { postingDay }
+    LocalDate settlementDate() { resolved() ? LocalDate.ofEpochDay((long) resolvedDay.value) : enteredSettlement }
+    boolean active() { activity.getAsBoolean() }
+    boolean resolved() { ready.value != 0d }
+    ValueNode resolution() { resolutionNode }
+    FlowHandle posting() { postingFlow }
+
+    Assessment assessment() {
+        if (!resolved()) throw new IllegalStateException(unresolvedMessage)
+        new Assessment(year, decision, postingDay, amount.value > 0d ? settlementDate() : null, amount.value)
+    }
+}

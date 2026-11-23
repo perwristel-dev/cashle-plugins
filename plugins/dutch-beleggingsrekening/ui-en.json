@@ -1,0 +1,4 @@
+{
+  "label": "Beleggingsrekening (Box 3)",
+  "help": "Netherlands 2026: ordinary investment account without a tax-free account allowance. The January 1 market value is included in the owner’s total Box 3 wealth. Dividends and sale gains are not added to salary or separate deemed capital income. Enter the actual opening value for existing accounts when the projection starts mid-year. External bank savings, other wealth and debts are required in the tax profile. The engine uses preliminary deemed returns; actual-return counter-evidence and qualified green exemptions are excluded."
+}

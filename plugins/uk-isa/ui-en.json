@@ -1,0 +1,11 @@
+{
+  "label": "Stocks and Shares ISA",
+  "sections.growth": "Growth and dividends",
+  "sections.trades": "Planned sales and repurchases",
+  "sections.tax": "Tax basis and closure",
+  "sections.liquidity": "Liquidity and withdrawals",
+  "sections.options": "More options",
+  "Vuxens brittiska Stocks and Shares ISA. Inkomst och kapitalvinster är skattefria. £20 000 årligt sammanlagt insättningstak delas med andra ISAs; ange externa ISA-insättningar. Endast en modellerad ISA per ägare. Detta är en icke flexibel ISA: uttag återställer inte årets insättningsutrymme. Inga pensions-, Junior- eller Lifetime ISA-regler.": "Adult UK Stocks and Shares ISA. Income and capital gains are tax-free. The £20,000 annual contribution limit is shared with other ISAs; enter external ISA contributions. One modelled ISA per owner. This is a non-flexible ISA: withdrawals do not restore the year’s contribution room. Pension, Junior and Lifetime ISA rules are excluded.",
+  "Årets insättningar till andra ISAs (GBP)": "Contributions to other ISAs this year (GBP)",
+  "Ange årets externa ISA-insättningar.": "Enter the external ISA contributions for this year."
+}

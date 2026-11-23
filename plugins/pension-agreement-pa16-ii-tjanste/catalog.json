@@ -1,0 +1,13 @@
+{
+  "name": "PA16 II Occupational Pension",
+  "description": {
+    "sv": "Tjänstepensionspremier enligt PA16 avdelning II.",
+    "en": "Occupational pension contributions under PA16 Section II."
+  },
+  "country": "SE",
+  "category": "income",
+  "releases": [
+    "137117a49d7b5cb59daed10a8b3edbf060e999a774330e2df1daf09c326c2f3f",
+    "cd0431cd8120d9253e2b6d1242fb535343ae8bfaa25aeb28c0df0b3838758193"
+  ]
+}

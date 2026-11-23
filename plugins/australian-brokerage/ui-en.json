@@ -1,0 +1,14 @@
+{
+  "label": "Australian brokerage account",
+  "Andel franked utdelning": "Share of franked dividends",
+  "Ange anskaffningsdag.": "Enter the acquisition date.",
+  "Ange giltiga franking-andelar och bolagsskattesats.": "Enter valid dividend franking and company tax rates.",
+  "Bekräfta en identifierad post.": "Confirm an identified acquisition lot.",
+  "Bolagsskattesats för franking": "Company tax rate for franking",
+  "En daterad homogen post. Blandade anskaffningar ska ligga i separata konton.": "One dated homogeneous lot. Mixed acquisitions must be held in separate accounts.",
+  "En daterad identifierad post utan wash-sale-arrangemang": "A dated identified lot without a wash-sale arrangement",
+  "En identifierad anskaffningspost. Uttag säljer proportionellt inom just den posten; flera datum behöver separata konton. Ingen extra insättning eller återinvesterad utdelning. Utdelning betalas till kontanter. 50 % CGT-rabatt kräver mer än tolv månader, räknat utan anskaffnings- och försäljningsdag. Årets förluster används före rabatten. Ange franking-antaganden och verifiera rätten till credits i skatteprofilen.": "One identified acquisition lot. Withdrawals sell proportionally within that lot; multiple dates need separate accounts. No additional contributions or reinvested dividends. Dividends are paid to cash. The 50% CGT discount requires more than twelve months, excluding acquisition and sale days. Current-year losses are applied before the discount. Enter franking assumptions and verify eligibility for credits in the tax profile.",
+  "Startår för dessa realiserade vinster (0 om inga)": "Start year for these realized gains (0 if none)",
+  "Tidigare realiserade bruttovinster med CGT-rabatt detta år": "Previous realized gross gains eligible for CGT discount this year",
+  "Ursprunglig anskaffningsdag": "Original acquisition date"
+}

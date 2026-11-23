@@ -1,0 +1,28 @@
+{
+  "id": "cashle.tax.fr",
+  "archive": "cashle-tax-fr-source.zip",
+  "requires": [
+    "cashle.tax",
+    "cashle.tax.support"
+  ],
+  "ui": "ui.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui-en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui-sv.json"
+    }
+  ],
+  "sources": [
+    {
+      "path": "french-tax.cashle",
+      "resources": [
+        "dev/cashle/tax/france/FrenchTaxSource_en.properties",
+        "dev/cashle/tax/france/FrenchTaxSource_sv.properties"
+      ]
+    }
+  ]
+}

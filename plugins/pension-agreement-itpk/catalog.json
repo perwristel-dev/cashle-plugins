@@ -1,0 +1,13 @@
+{
+  "name": "ITPK",
+  "description": {
+    "sv": "Villkor och premier för den kompletterande tjänstepensionen ITPK.",
+    "en": "Eligibility and contributions for the supplementary ITPK pension."
+  },
+  "country": "SE",
+  "category": "income",
+  "releases": [
+    "d45cbb59bbe4e4e38ffa030ce05d455c69ba56f0a08d7cb30093cf283c82ed2f",
+    "432029012dbffe163243e56095a0172808e1d5361781502e502b019873e993c7"
+  ]
+}

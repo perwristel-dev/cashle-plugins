@@ -1,0 +1,65 @@
+investmentAccount('cashlab.isk', 1) {
+    pluginId 'cashle.finance.isk'
+    dsl 'isk'
+    country 'SE'
+    kind 'SEisk'
+    taxPolicy 'isk'
+    messages 'dev.cashle.accounts.isk.IskPlugin'
+}
+
+accountTaxPolicy('isk') {
+    pluginId 'cashle.finance.isk.policy'
+    country 'SE'
+    ruleYear 2025
+    messages 'dev.cashle.accounts.isk.IskTaxPolicy'
+    annualOnly 'cashlab.isk'
+    annualBases 'capitalIncome'
+    retainedAccount true
+    residentSourceFacts true
+    quarterOpeningValues true
+    existingYearFacts true
+    excludeOwnTransfers true
+    foreignEconomicFacts true
+
+    sourceDefaults([
+        securitiesClassification: 'excluded',
+        securitiesTreatyExemptionConfirmed: false,
+        treatyCouponRate: 0.30d,
+    ])
+
+    proportionalWithdrawals {
+        taxableGain false
+        economicGain true
+    }
+
+    double imputedRate = 0.0296d
+    double personalAllowance = 150_000d
+    String insuranceBase = 'se.tax.base.isk-insurance-allowance'
+
+    annualAssessment { accounts, money, options ->
+        requireInput('error.ruleYear') { money.ruleYear() == 2025 }
+        requireInput('error.duplicate') { accounts*.id().toSet().size() == accounts.size() }
+        double capitalBase = 0d
+        for (def account : accounts) {
+            requireInput('error.quarters') { account.quarterOpeningValues().size() == 4 }
+            capitalBase += (account.quarterOpeningValues().sum(0d) + account.externalDeposits()) / 4d
+        }
+        def bases = taxBases(options, 'error.bases', 'error.basisKey')
+        double insurance = Math.max(0d, finiteAmount(bases.getOrDefault(insuranceBase, 0d), 'error.allowance'))
+        double remainingAllowance = Math.max(0d, personalAllowance - insurance)
+        double income = Math.max(0d, money.inRuleMoney(capitalBase) - remainingAllowance) * imputedRate
+        basis 'capitalIncome', income * money.nominalPerRuleUnit(), 'error.income'
+    }
+
+    // External insurance uses the allowance first. Move its deduction into ordinary capital income.
+    assessmentOptions { options, money ->
+        def bases = taxBases(options, 'error.bases', 'error.basisKey')
+        if (!bases.containsKey(insuranceBase)) return options
+
+        double insurance = Math.max(0d, finiteAmount(bases.remove(insuranceBase), 'error.allowance'))
+        double deduction = Math.min(personalAllowance, money.inRuleMoney(insurance)) * imputedRate * money.nominalPerRuleUnit()
+        double income = finiteAmount(bases.getOrDefault('capital.income', 0d), 'error.income')
+        bases['capital.income'] = income - deduction
+        options + [taxBases: Map.copyOf(bases)]
+    }
+}

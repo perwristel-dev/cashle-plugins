@@ -1,0 +1,21 @@
+{
+  "id": "cashle.pension.agreement.PA16-II-tjanste",
+  "sources": [
+    {
+      "path": "pa16-ii-tjanste.cashle",
+      "providers": [
+        "cashle.pension.agreement.PA16-II-tjanste"
+      ],
+      "imports": {
+        "cashle.pension.agreement.rules": [
+          "SwedishAgreementRules.groovy",
+          "Pa16AgreementRules.groovy"
+        ]
+      }
+    }
+  ],
+  "ui": "agreement-entry.js",
+  "requires": [
+    "cashle.pension.agreement.rules"
+  ]
+}

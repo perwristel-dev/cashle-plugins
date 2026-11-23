@@ -1,0 +1,8 @@
+{
+  "label": "Kanada – TFSA",
+  "Kanada – TFSA": "Kanada – TFSA",
+  "Kanada 2026: skattefri avkastning och uttag. Modellera personens samtliga TFSA som ett konto med verifierat kvarvarande bidragsutrymme vid prognosstart; inkludera årets redan tilldelade 7 000 CAD. Insättningar förbrukar utrymmet. Uttag återställs först den 1 januari följande år, tillsammans med nästa års schablonmässiga 7 000 CAD i regelårets penningvärde. Värdeförlust skapar inget nytt utrymme. Inga icke-kvalificerade placeringar eller överinsättningar stöds.": "Kanada 2026: skattefri avkastning och uttag. Modellera personens samtliga TFSA som ett konto med verifierat kvarvarande bidragsutrymme vid prognosstart; inkludera årets redan tilldelade 7 000 CAD. Insättningar förbrukar utrymmet. Uttag återställs först den 1 januari följande år, tillsammans med nästa års schablonmässiga 7 000 CAD i regelårets penningvärde. Värdeförlust skapar inget nytt utrymme. Inga icke-kvalificerade placeringar eller överinsättningar stöds.",
+  "Verifierat kvarvarande personligt TFSA-utrymme (CAD)": "Verifierat kvarvarande personligt TFSA-utrymme (CAD)",
+  "Totalt kvarvarande utrymme nu, inklusive årets gräns och tidigare outnyttjat utrymme. Uttag under innevarande år får inte läggas tillbaka ännu.": "Totalt kvarvarande utrymme nu, inklusive årets gräns och tidigare outnyttjat utrymme. Uttag under innevarande år får inte läggas tillbaka ännu.",
+  "Den nya TFSA-insättningen vid start överstiger verifierat bidragsutrymme.": "Den nya TFSA-insättningen vid start överstiger verifierat bidragsutrymme."
+}

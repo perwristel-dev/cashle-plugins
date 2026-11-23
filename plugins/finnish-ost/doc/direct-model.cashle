@@ -1,0 +1,27 @@
+// Owned fi-ost DSL calculation regression; synthetic values, version 1.
+plugins {
+    id 'cashle.finance'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.fi-ost' from '../finnish-ost.cashle'
+    id 'cashle.finance.fi-ost.policy' from '../finnish-ost-tax.cashle'
+    id 'cashle.tax.fi' from '../../finnish-tax/finnish-tax.cashle'
+}
+finance {
+    language 'en'
+    plan { from '2026-01-01'; until '2027-06-01'; currency 'EUR'; inflation 0d }
+    person('self') { name 'Synthetic Finnish investor'; birthYear 1980; birthMonth 1 }
+    tax {
+        country 'FI'
+        preliminaryRate 0d
+        options([ruleYear:2026, residency:'full-year', territory:'mainland', municipalRate:0.075d,
+                 churchRate:0d, children:0, singleParent:false, productionExpenses:0d])
+    }
+    fiOst('portfolio') {
+        name 'OST'
+        balance 15000d
+        settings([costBasis:10000d, closeEnabled:true, closeDate:'2026-06-01',
+                  initialYear:[quarterOpeningValues:[null, null, null, null]]])
+    }
+}
+collect { }

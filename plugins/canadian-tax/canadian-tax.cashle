@@ -1,0 +1,395 @@
+import dev.cashle.tax.InvestmentAccountYear
+import dev.cashle.tax.PropertySaleAssessment
+import dev.cashle.tax.PropertyTaxCalendar
+import dev.cashle.tax.StatefulTaxAssessment
+import dev.cashle.tax.TaxAssessment
+import dev.cashle.tax.TaxMoneyBasis
+import dev.cashle.tax.TaxProfileContext
+import dev.cashle.tax.TaxStateField
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
+
+import static dev.cashle.tax.support.Inputs.*
+import static dev.cashle.tax.support.PropertyInputs.MONEY
+import static dev.cashle.tax.support.PropertyInputs.base
+import static dev.cashle.tax.support.PropertyInputs.date
+import static dev.cashle.tax.support.PropertyInputs.gain
+import static dev.cashle.tax.support.PropertyInputs.integer
+import static dev.cashle.tax.support.PropertyInputs.noReplacementRollover
+import static dev.cashle.tax.support.PropertyInputs.requiredBool
+import static dev.cashle.tax.support.PropertyInputs.scope
+import static dev.cashle.tax.support.PropertyInputs.weekday
+
+int referenceYear = 2026
+def provinces = ['AB', 'ON'].asImmutable()
+def externalBases = ['salary', 'capitalIncome', 'eligibleDividends', 'nonEligibleDividends', 'capitalGains', 'capitalLosses'].asImmutable()
+def bases = (externalBases + ['investmentCapitalLoss', 'businessIncome']).asImmutable()
+def nativeMoneyFields = ['adjustedFamilyNetIncome', 'cppPensionableEmploymentIncome', 'cppPensionableBusinessIncome'].asImmutable()
+
+def amount = { Map input, String key ->
+    double result = number(input, key, 0d)
+    require(result >= 0d, "$key must be nonnegative.")
+    result
+}
+
+def assessScope = { Map input, Set options, int minBirth, int maxBirth ->
+    keys(input, (bases + options + ['ruleYear', 'birthYear', 'residency', 'noticeDatesByYear',
+        'noticeAmountsByYear', 'settlementCalendar']).toSet())
+    require(number(input, 'ruleYear', 0d) == referenceYear, 'Select explicit ruleYear:2026.')
+    require('full-year'.equals(input.get('residency')), 'Only full-year resident individuals are supported.')
+    double birth = number(input, 'birthYear', 0d)
+    require(birth == Math.rint(birth) && birth >= minBirth && birth <= maxBirth,
+        "This profile requires birthYear ${minBirth}–${maxBirth} (supported adult age band).")
+    for (String basis : bases) amount(input, basis)
+}
+
+def progressive = { double income, List limits, List rates ->
+    double tax = 0d
+    double lower = 0d
+    for (int index = 0; index < rates.size(); index++) {
+        double upper = index < limits.size() ? limits[index] : Double.POSITIVE_INFINITY
+        double rate = rates[index]
+        tax += Math.max(0d, Math.min(income, upper) - lower) * rate
+        lower = upper
+    }
+    tax
+}
+
+def healthPremium = { double income ->
+    if (income <= 20000) return 0d
+    if (income <= 36000) return Math.min(300d, (income - 20000d) * 0.06d)
+    if (income <= 48000) return Math.min(450d, 300d + (income - 36000d) * 0.06d)
+    if (income <= 72000) return Math.min(600d, 450d + (income - 48000d) * 0.25d)
+    if (income <= 200000) return Math.min(750d, 600d + (income - 72000d) * 0.25d)
+    Math.min(900d, 750d + (income - 200000d) * 0.25d)
+}
+
+def toAnnualInput = { Map options, int birthYear, int birthMonth, int year, Map amounts ->
+    def input = new LinkedHashMap(options)
+    input.remove('initialState')
+    input.remove('settlementDate')
+    input.put('ruleYear', referenceYear)
+    input.put('birthYear', birthYear - year + referenceYear)
+    for (def entry : amounts.entrySet()) {
+        require(bases.contains(entry.key), "Unsupported tax basis: ${entry.key}")
+        require(Double.isFinite(entry.value) && entry.value >= 0d,
+            'Negative movements need explicit capital-loss classifications.')
+        input.put(entry.key, number(input, entry.key, 0d) + entry.value)
+    }
+    input.put('birthMonth', birthMonth)
+    input
+}
+
+def assessIncome = { Map input ->
+    assessScope(input, Set.of('province', 'capitalLossCarry', 'propertyFlippingIncomeConfirmed',
+        'adjustedFamilyNetIncome', 'ontarioReductionDependants', 'liftEligible', 'birthMonth', 'cppAfter65',
+        'cppContributionMonths', 'cppPensionableEmploymentIncome', 'cppPensionableBusinessIncome'), 1, 2007)
+    require(provinces.contains(Objects.toString(input.get('province'), '')),
+        'Unsupported Canadian province: choose Alberta (AB) or Ontario (ON); other provincial tax is not silently omitted.')
+    boolean ontario = 'ON'.equals(input.get('province'))
+    double salary = amount(input, 'salary')
+    double interest = amount(input, 'capitalIncome')
+    double business = amount(input, 'businessIncome')
+    require(business == 0d || bool(input, 'propertyFlippingIncomeConfirmed', false),
+        'businessIncome is restricted to separately verified residential flipping income; general self-employment is unsupported.')
+    double eligible = amount(input, 'eligibleDividends')
+    double other = amount(input, 'nonEligibleDividends')
+    double grossDiv = eligible * 1.38d + other * 1.15d
+    double currentLosses = amount(input, 'capitalLosses') + amount(input, 'investmentCapitalLoss')
+    double losses = currentLosses + amount(input, 'capitalLossCarry')
+    double gains = amount(input, 'capitalGains')
+    double currentNetGains = Math.max(0d, gains - currentLosses)
+    double netGains = Math.max(0d, gains - losses)
+    require(salary + interest + business + eligible + other + currentNetGains <= 181440d ||
+        currentNetGains + eligible + other == 0d,
+        'This investment-income profile may require Canadian alternative minimum tax (T691), which is unsupported.')
+
+    int age = referenceYear - (int) number(input, 'birthYear', 0d)
+    double months = 12d
+    double cppSalary = salary
+    double cppBusiness = business
+    for (String key : ['cppPensionableEmploymentIncome', 'cppPensionableBusinessIncome']) {
+        if (input.containsKey(key)) amount(input, key)
+    }
+    if (input.containsKey('cppContributionMonths')) {
+        double value = number(input, 'cppContributionMonths', 0d)
+        require(value == Math.rint(value) && value >= 0d && value <= 12d,
+            'cppContributionMonths must be an integer from 0 to 12.')
+    }
+    if (input.containsKey('birthMonth')) {
+        double value = number(input, 'birthMonth', 0d)
+        require(value == Math.rint(value) && value >= 1d && value <= 12d, 'birthMonth must be an integer from 1 to 12.')
+    }
+    String cppProfile = Objects.toString(input.get('cppAfter65'), '')
+    require(['', 'contribute', 'prior-election-exempt'].contains(cppProfile), 'Choose cppAfter65 contribute or prior-election-exempt.')
+    if (age >= 71) {
+        months = 0d
+        cppSalary = 0d
+        cppBusiness = 0d
+    } else if (age >= 65 && salary + business > 0d) {
+        require(!cppProfile.isEmpty(), 'Employment/business income at ages 65–70 requires an explicit cppAfter65 contribution/election profile.')
+        if (age == 70 || (age == 65 && cppProfile == 'prior-election-exempt')) {
+            require(input.containsKey('cppContributionMonths'),
+                'The CPP age-65 election or age-70 transition year needs actual cppContributionMonths and pensionable income for those months.')
+            months = number(input, 'cppContributionMonths', 0d)
+            double birthMonth = number(input, 'birthMonth', 0d)
+            require(birthMonth == Math.rint(birthMonth) && birthMonth >= 1d && birthMonth <= 12d,
+                'The CPP transition year requires the actual birthMonth.')
+            require(age != 70 || months <= birthMonth, 'CPP cannot continue past the month of the 70th birthday.')
+            require(age != 70 || cppProfile != 'contribute' || months == birthMonth,
+                'A continuing CPP contributor contributes through the 70th birthday month.')
+            require(age != 65 || months >= birthMonth, 'A CPP age-65 election cannot stop contributions before the 65th birthday month.')
+            require(salary == 0d || input.containsKey('cppPensionableEmploymentIncome'),
+                'Provide actual cppPensionableEmploymentIncome received in the contributory months; annual salary cannot determine it.')
+            require(business == 0d || input.containsKey('cppPensionableBusinessIncome'),
+                'Provide actual cppPensionableBusinessIncome attributable to the contributory months.')
+            cppSalary = amount(input, 'cppPensionableEmploymentIncome')
+            cppBusiness = amount(input, 'cppPensionableBusinessIncome')
+            require(cppSalary <= salary && cppBusiness <= business && (months > 0d || cppSalary + cppBusiness == 0d),
+                'CPP transition pensionable income must fit annual earnings and the contributory months.')
+        } else if (cppProfile == 'prior-election-exempt') {
+            months = 0d
+            cppSalary = 0d
+            cppBusiness = 0d
+        }
+    }
+
+    double fraction = months / 12d
+    double ympe = 74600d * fraction
+    double yampe = 85000d * fraction
+    double exempt = 3500d * fraction
+    double pensionable = Math.max(0d, Math.min(cppSalary, ympe) - exempt)
+    double cppBase = pensionable * 0.0495d
+    double cppEnhanced = pensionable * 0.01d
+    double cpp2 = Math.max(0d, Math.min(cppSalary, yampe) - ympe) * 0.04d
+    double cpp = cppBase + cppEnhanced
+    double selfPensionable = Math.max(0d, Math.min(cppSalary + cppBusiness, ympe) - exempt - pensionable)
+    double selfBase = selfPensionable * 0.0495d
+    double selfEnhanced = selfPensionable * 0.01d
+    double selfCpp2 = Math.max(0d, Math.min(cppSalary + cppBusiness, yampe) - ympe) * 0.04d - cpp2
+    double selfCpp = 2d * (selfBase + selfEnhanced + Math.max(0d, selfCpp2))
+    double ei = Math.min(salary, 68900d) * 0.0163d
+    double enhancedDeduction = cppEnhanced + cpp2 + 2d * (selfEnhanced + Math.max(0d, selfCpp2))
+    double netIncome = Math.max(0d, salary + interest + business + grossDiv + currentNetGains * 0.5d - enhancedDeduction - selfBase)
+    double taxable = Math.max(0d, netIncome - (currentNetGains - netGains) * 0.5d)
+
+    double bpa = 16452d - Math.min(1623d, Math.max(0d, netIncome - 181440d) / (258482d - 181440d) * 1623d)
+    double federalBefore = progressive(taxable, [58523, 117045, 181440, 258482], [0.14d, 0.205d, 0.26d, 0.29d, 0.33d])
+    double federalAge = age >= 65 ? Math.max(0d, 9208d - Math.max(0d, netIncome - 46432d) * 0.15d) : 0d
+    double provincialAge = age >= 65 ? Math.max(0d, (ontario ? 6342d : 6345d) - Math.max(0d, netIncome - (ontario ? 47210d : 47234d)) * 0.15d) : 0d
+    double federalCredits = (bpa + federalAge + cppBase + selfBase + ei + Math.min(1501d, salary)) * 0.14d
+    double federalDiv = eligible * 0.38d * 6d / 11d + other * 0.15d * 9d / 13d
+    double federal = Math.max(0d, federalBefore - federalCredits - federalDiv)
+
+    double provincialBpa = ontario ? 12989d : 22769d
+    double provincialCredits = (provincialBpa + provincialAge + cppBase + selfBase + ei) * (ontario ? 0.0505d : 0.08d)
+    double provincialBefore = ontario ?
+        progressive(taxable, [53891, 107785, 150000, 220000], [0.0505d, 0.0915d, 0.1116d, 0.1216d, 0.1316d]) :
+        progressive(taxable, [61200, 154259, 185111, 246813, 370220], [0.08d, 0.10d, 0.12d, 0.13d, 0.14d, 0.15d])
+    double supplemental = ontario ? 0d : Math.max(0d, (provincialCredits - 4896d) * 0.25d)
+    double provincialDiv = eligible * 1.38d * (ontario ? 0.10d : 0.0812d) + other * 1.15d * (ontario ? 0.029863d : 0.0218d)
+    double provincialBasic = Math.max(0d, provincialBefore - provincialCredits - supplemental)
+    double surtax = ontario ? Math.max(0d, provincialBasic - 5818d) * 0.20d +
+        Math.max(0d, provincialBasic - 7446d) * 0.36d : 0d
+    double provincial = Math.max(0d, provincialBasic + surtax - provincialDiv)
+    double health = 0d
+    double reduction = 0d
+    double lift = 0d
+    if (ontario) {
+        double dependants = number(input, 'ontarioReductionDependants', 0d)
+        require(dependants >= 0d && dependants == Math.rint(dependants) && dependants <= 30d,
+            'Provide 0–30 eligible Ontario tax-reduction dependant units.')
+        reduction = Math.min(provincial, Math.max(0d, 2d * (300d + 575d * dependants) - provincial))
+        provincial -= reduction
+        double declaredFamily = number(input, 'adjustedFamilyNetIncome', netIncome)
+        require(declaredFamily >= 0d, 'adjustedFamilyNetIncome must be nonnegative.')
+        double family = Math.max(netIncome, declaredFamily)
+        lift = bool(input, 'liftEligible', true) ?
+            Math.min(provincial, Math.max(0d, Math.min(875d, salary * 0.0505d) -
+                Math.max(Math.max(0d, netIncome - 32500d), Math.max(0d, family - 65000d)) * 0.05d)) : 0d
+        provincial -= lift
+        health = healthPremium(taxable)
+        provincial += health
+    }
+    new TaxAssessment(federal + provincial, cpp + cpp2 + ei + selfCpp,
+        components('federalIncomeTax', federal, 'provincialIncomeTax', provincial,
+            'federalBasicPersonalAmount', bpa, 'federalAgeAmount', federalAge, 'provincialAgeAmount', provincialAge,
+            'cppContributionMonths', months, 'provincialBasicPersonalAmount', provincialBpa, 'netIncome', netIncome,
+            'taxableIncome', taxable, 'taxableCapitalGains', netGains * 0.5d, 'grossedUpDividends', grossDiv,
+            'federalDividendCredit', federalDiv, 'provincialDividendCredit', provincialDiv,
+            'provincialSupplementalCredit', supplemental, 'provincialSurtax', surtax, 'ontarioHealthPremium', health,
+            'ontarioTaxReduction', reduction, 'ontarioLiftCredit', lift, 'selfEmploymentCpp', selfCpp,
+            'cpp', cpp, 'cpp2', cpp2, 'ei', ei, 'enhancedCppDeduction', enhancedDeduction,
+            'investmentCapitalLossRemaining', Math.max(0d, losses - gains)))
+}
+
+def finite = { value -> value instanceof Number && Double.isFinite(value.doubleValue()) }
+def whole = { value -> finite(value) && Math.rint(value.doubleValue()) == value.doubleValue() }
+def arrayString
+arrayString = { List values ->
+    values.collect { value ->
+        value == null ? '' : value instanceof List ? arrayString(value) : value instanceof Map ? '[object Object]' : value.toString()
+    }.join(',')
+}
+def positiveCoerced = { value ->
+    if (value instanceof Number) return value.doubleValue() > 0d
+    if (value instanceof Boolean) return value
+    String text = value instanceof List ? arrayString(value) : value instanceof String ? value : ''
+    text = text.trim()
+    if (text.isEmpty()) return false
+    try {
+        if (text.matches('0[xX][0-9a-fA-F]+')) return new BigInteger(text.substring(2), 16).signum() > 0
+        if (text.matches('0[bB][01]+')) return new BigInteger(text.substring(2), 2).signum() > 0
+        if (text.matches('0[oO][0-7]+')) return new BigInteger(text.substring(2), 8).signum() > 0
+        Double.parseDouble(text) > 0d
+    } catch (NumberFormatException ignored) {
+        false
+    }
+}
+
+countryTaxPolicy('CA') {
+    pluginId 'cashle.tax.ca'
+    currency 'CAD'
+    ruleYear referenceYear
+    incomeBases bases
+    sourceBases externalBases
+    requiresTaxPlan true
+    nativeMonetaryOptions nativeMoneyFields
+    residenceReferenceDate { int year -> LocalDate.of(year, 12, 31) }
+    settlementDate { int year, options -> weekday(LocalDate.of(year + 1, 4, 30)) }
+    stateFields([capitalLossCarry: new TaxStateField('Canadian gross capital loss carry', true)])
+    messages 'dev.cashle.tax.canada.CanadianTaxSource'
+
+    validateProfile { Map options, TaxProfileContext context, catalog ->
+        def errors = []
+        def year = options.get('ruleYear')
+        if (!finite(year) || year.doubleValue() != referenceYear || !'full-year'.equals(options.get('residency')))
+            errors.add(catalog.text('profile.ruleYearResidency'))
+        if (context.people().any { person ->
+            def birth = person.get('birthYear')
+            whole(birth) && (birth.doubleValue() < 1d || birth.doubleValue() > 2007d)
+        }) errors.add(catalog.text('profile.birthYear'))
+        if (!provinces.contains(options.get('province'))) errors.add(catalog.text('profile.province'))
+        def opening = options.get('openingCapitalLoss')
+        if (!finite(opening) || opening.doubleValue() < 0d)
+            errors.add(catalog.text('profile.nonnegativeFiniteAmount').replace('{field}', 'openingCapitalLoss'))
+        def family = options.get('adjustedFamilyNetIncome')
+        boolean ontario = 'ON'.equals(options.get('province'))
+        if ((family != null && (!finite(family) || family.doubleValue() < 0d)) ||
+                (ontario && context.household().size() > 1 && !finite(family)))
+            errors.add(catalog.text('profile.familyNetIncome'))
+        def dependants = options.get('ontarioReductionDependants')
+        if (context.people().size() > 1 && (positiveCoerced(opening) || (ontario && positiveCoerced(dependants))))
+            errors.add(catalog.text('profile.personalCapitalLoss'))
+        if (!whole(dependants) || dependants.doubleValue() < 0d || dependants.doubleValue() > 30d)
+            errors.add(catalog.text('profile.ontarioDependants'))
+        def cpp = options.get('cppAfter65')
+        if (cpp != null && !['', 'contribute', 'prior-election-exempt'].contains(cpp))
+            errors.add(catalog.text('profile.cppAfter65'))
+        for (String field : ['cppContributionMonths', 'cppPensionableEmploymentIncome', 'cppPensionableBusinessIncome']) {
+            def value = options.get(field)
+            if (value != null && (!finite(value) || value.doubleValue() < 0d))
+                errors.add(catalog.text('profile.nonnegativeValue').replace('{field}', field))
+        }
+        def months = options.get('cppContributionMonths')
+        if (months != null && (!whole(months) || months.doubleValue() > 12d))
+            errors.add(catalog.text('profile.cppContributionMonths'))
+        if (!(options.get('liftEligible') instanceof Boolean) || !(options.get('propertyFlippingIncomeConfirmed') instanceof Boolean))
+            errors.add(catalog.text('profile.conditions'))
+        errors
+    }
+
+    assessmentOptions { Map raw ->
+        def result = raw.findAll { key, value -> value != null }
+        result.remove('openingCapitalLoss')
+        result.put('initialState', raw.containsKey('openingCapitalLoss') ? [capitalLossCarry: raw.get('openingCapitalLoss')] : [:])
+        result
+    }
+
+    optionsInRuleMoney { Map options, TaxMoneyBasis money ->
+        money.convertFields(money.convertFields(options, bases.toSet()),
+            (nativeMoneyFields + ['capitalLossCarry']).toSet(), nativeMoneyFields.toSet())
+    }
+
+    annualInputs { Map options, int birthYear, int birthMonth, int year, Map amounts ->
+        toAnnualInput(options, birthYear, birthMonth, year, amounts)
+    }
+
+    assess { Map input -> assessIncome(input) }
+
+    assessAnnualStateful { Map options, int birthYear, int birthMonth, int year, Map amounts, Map state ->
+        def merged = new LinkedHashMap(options)
+        merged.put('capitalLossCarry', state.getOrDefault('capitalLossCarry', 0d))
+        def assessment = assessIncome(toAnnualInput(merged, birthYear, birthMonth, year, amounts))
+        new StatefulTaxAssessment(assessment, [capitalLossCarry: assessment.components().get('investmentCapitalLossRemaining')])
+    }
+
+    foreignInvestmentBases { InvestmentAccountYear account, TaxMoneyBasis prices ->
+        Objects.requireNonNull(account)
+        Objects.requireNonNull(prices)
+        require(prices.ruleYear() == referenceYear, 'Foreign investment money basis must match the destination rule year.')
+        require(prices.nativePerPlanUnit() == 1d && (prices.planCurrency() == null || prices.planCurrency().equals(prices.taxCurrency())),
+            "Foreign investment facts must already be in the destination's native currency; use inflationOnly().")
+        require(prices.taxCurrency() == null || 'CAD'.equals(prices.taxCurrency()), 'Foreign investment currency must match the destination.')
+        def options = account.policyOptions()
+        require(!'fund'.equalsIgnoreCase(Objects.toString(options.get('securitiesClassification'), '')),
+            'Foreign fund taxation is unsupported; a fund cannot use ordinary listed-share rules.')
+        require('listed-shares'.equals(Objects.toString(options.get('foreignInvestmentAssetType'), 'listed-shares')),
+            'Foreign investment taxation supports ordinary listed shares only; funds, pensions and other asset classifications need separate rules.')
+        boolean lossesAllowed = bool(options, 'foreignLossReliefConfirmed', false) || bool(options, 'noSuperficialLossConfirmed', false)
+        require(!lossesAllowed || account.realizedLoss() == 0d || Math.abs(account.dividends() - account.distributedDividends()) <= 0.00001d,
+            'Loss-year foreign share holdings with reinvested dividends require provider-resolved superficial-loss allocation.')
+        String treatment = account.dividends() == 0d ? 'foreign' : Objects.toString(options.get('foreignDividendTreatment'), 'foreign')
+        require(['foreign', 'eligible', 'nonEligible'].contains(treatment), "Unsupported foreignDividendTreatment: $treatment")
+        String dividendBasis = treatment == 'eligible' ? 'eligibleDividends' : treatment == 'nonEligible' ? 'nonEligibleDividends' : 'capitalIncome'
+        Map.of('capitalGains', account.realizedGain(), 'capitalLosses', lossesAllowed ? account.realizedLoss() : 0d,
+            dividendBasis, account.dividends())
+    }
+
+    propertySales {
+        overridesAnnualNotice false
+        inputsInRuleMoney { Map input, TaxMoneyBasis money -> money.convertFields(input, MONEY) }
+
+        assess { Map input ->
+            def common = new LinkedHashMap(input)
+            common.remove('province')
+            scope(common, 'CAD')
+            noReplacementRollover(input)
+            require(provinces.contains(Objects.toString(input.get('province'), '')),
+                'Canadian property sale requires Alberta (AB) or Ontario (ON) tax residence; other provincial assessments are unsupported.')
+            LocalDate acquired = date(input, 'acquiredDate')
+            LocalDate sold = date(input, input.containsKey('settlementDate') ? 'settlementDate' : 'closingDate')
+            require(!sold.isBefore(date(input, 'contractDate')), 'closingDate cannot precede contractDate.')
+            require(acquired.year >= 1972, 'Pre-1972 Canadian property needs unsupported valuation rules.')
+            require(requiredBool(input, 'canadianResidentThroughoutOwnership'), 'Nonresident-year principal residence profiles are unsupported.')
+            boolean shortHold = ChronoUnit.DAYS.between(acquired, sold) < 365
+            boolean exception = requiredBool(input, 'flippingLifeEventExceptionVerified')
+            double gainAmount = gain(input)
+            if (shortHold && !exception) {
+                double taxable = Math.max(0d, gainAmount)
+                return new PropertySaleAssessment(sold.year, 0d, 0d, base('businessIncome', taxable),
+                    components('gain', gainAmount, 'flippingBusinessIncome', taxable, 'flippingLossDenied', Math.max(0d, -gainAmount)))
+            }
+            require(requiredBool(input, 'capitalPropertyConfirmed'),
+                'Being outside the 365-day rule does not establish capital treatment: confirm the actual capital-property facts.')
+            int owned = sold.year - acquired.year + 1
+            int designated = integer(input, 'principalResidenceYears')
+            require(designated <= owned, 'Principal residence years exceed calendar years owned.')
+            boolean designate = requiredBool(input, 'principalResidenceDesignationConfirmed')
+            require(designate || designated == 0, 'Principal residence years require an explicit verified designation and family-unit eligibility.')
+            double exempt = designate && designated > 0 ? Math.max(0d, gainAmount) * Math.min(1d, (designated + 1d) / owned) : 0d
+            double taxable = Math.max(0d, gainAmount - exempt)
+            new PropertySaleAssessment(sold.year, taxable * 0.5d, 0d, base('capitalGains', taxable),
+                components('gain', gainAmount, 'principalResidenceExemptGain', exempt, 'capitalGainBeforeInclusion', taxable,
+                    'taxableCapitalGain', taxable * 0.5d, 'personalLossNondeductible', Math.max(0d, -gainAmount)))
+        }
+
+        calendar { Map input ->
+            LocalDate sold = date(input, input.containsKey('settlementDate') ? 'settlementDate' : 'closingDate')
+            def entered = input.get('paymentDueDate')
+            LocalDate due = entered != null && !entered.toString().isBlank() ?
+                date(input, 'paymentDueDate') : weekday(LocalDate.of(sold.year + 1, 4, 30))
+            new PropertyTaxCalendar(sold.year, Map.of('taxRecognitionDate', sold, 'paymentDueDate', due), Set.of())
+        }
+    }
+}

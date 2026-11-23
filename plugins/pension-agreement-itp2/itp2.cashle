@@ -1,0 +1,33 @@
+import dev.cashle.pension.agreement.PensionAgreement.BenefitInput
+import dev.cashle.pension.agreement.PensionAgreement.ContributionInput
+import dev.cashle.pension.agreement.PensionAgreement.Kind
+
+import java.time.LocalDate
+
+import static SwedishAgreementRules.*
+
+def itp2 = localized('ITP2', 55, 5)
+pensionAgreement('ITP2') {
+    pluginId 'cashle.pension.agreement.ITP2'
+    kind Kind.DEFINED_BENEFIT
+    metadata itp2('sv')
+    localizedMetadata itp2
+    eligible { ContributionInput input ->
+        !input.date().isBefore(input.birth().plusYears(28).plusMonths(1)) && input.date().isBefore(input.birth().plusYears(65))
+    }
+    accruedServiceYears { double existing, double increment -> Math.min(30d, existing + increment) }
+    canBatchEstimatedServiceByMonth true
+    canBatchStatementServiceByMonth true
+    annualBenefit { BenefitInput input -> itp2Benefit(input.salary(), input.serviceYears(), input.date(), input.baseGrowth()) }
+    // Protected statement rights add benefit at the new wage for the incremental service only.
+    incrementalBenefit { BenefitInput previous, BenefitInput current ->
+        itp2Benefit(current.salary(), current.serviceYears() - previous.serviceYears(), current.date(), current.baseGrowth())
+    }
+}
+
+static double itp2Benefit(double salary, double serviceYears, LocalDate date, double growth) {
+    double base = yearlyIncomeBase(date, growth)
+    double fullBenefit = band(salary, 0d, 7.5d * base, .10d) + band(salary, 7.5d * base, 20d * base, .65d) +
+            band(salary, 20d * base, 30d * base, .325d)
+    fullBenefit * Math.min(1d, Math.max(0d, serviceYears) / 30d)
+}

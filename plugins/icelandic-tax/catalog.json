@@ -1,0 +1,13 @@
+{
+  "name": "Icelandic tax",
+  "description": {
+    "sv": "Isländska skatteregler för inkomst och bostad.",
+    "en": "Icelandic income and housing tax rules."
+  },
+  "country": "IS",
+  "category": "tax",
+  "releases": [
+    "74a9b2df97cb56bb6a9f8b13f78458dc86292531b35ad99333db2601b85ea1e2",
+    "326ba80988a789d65239cb0376b41181773f483c45b48ac320b85cbad61e6702"
+  ]
+}

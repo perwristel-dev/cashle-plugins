@@ -1,0 +1,11 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.tax'
+    id 'cashle.pension.types'
+    id 'cashle.finance.pension.dc'
+    id 'cashle.pension.agreement.PA16-I'
+}
+
+String pensionAgreementId = 'PA16-I'
+apply from: '../../pension-agreement-rules/doc/contribution-example.cashle'

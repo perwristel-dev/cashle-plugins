@@ -1,0 +1,13 @@
+{
+  "name": "PA16 I Flex",
+  "description": {
+    "sv": "Premier för flexpension enligt PA16 avdelning I.",
+    "en": "Flex pension contributions under PA16 Section I."
+  },
+  "country": "SE",
+  "category": "income",
+  "releases": [
+    "a6998f96854b74152a5c97ad513023ca4680dbfe845dcdcfc52083fd7787817f",
+    "5ab8452dd23db182542a247508e17ebf9867285679797590f4ce662affd1ae4d"
+  ]
+}

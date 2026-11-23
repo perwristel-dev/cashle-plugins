@@ -1,0 +1,30 @@
+// Owned ca-tfsa DSL calculation regression; synthetic values, version 1.
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.ca-tfsa' from '../canadian-tfsa.cashle'
+    id 'cashle.finance.ca-tfsa.tax-policy' from '../canadian-tfsa.cashle'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.ca' from '../../canadian-tax/canadian-tax.cashle'
+}
+finance {
+    language 'en'
+    plan { from '2026-01-01'; until '2027-06-01'; currency 'CAD'; inflation 0d }
+    person('self') { name 'Synthetic Canadian investor'; birthYear 1980; birthMonth 1 }
+    tax {
+        country 'CA'
+        preliminaryRate 0d
+        options([ruleYear:2026, residency:'full-year', province:'AB', openingCapitalLoss:0d,
+                 propertyFlippingIncomeConfirmed:false, adjustedFamilyNetIncome:null, ontarioReductionDependants:0,
+                 liftEligible:true, cppAfter65:'contribute', cppContributionMonths:null,
+                 cppPensionableEmploymentIncome:null, cppPensionableBusinessIncome:null])
+    }
+    caTfsa('sheltered') {
+        name 'TFSA'
+        balance 15000d
+        settings([costBasis:10000d, closeEnabled:true, closeDate:'2026-06-01',
+                  policyOptions:[openingContributionRoom:2000d],
+                  initialYear:[quarterOpeningValues:[null, null, null, null]]])
+    }
+}
+collect { }

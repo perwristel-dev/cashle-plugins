@@ -1,0 +1,13 @@
+{
+  "name": "Swedish defined-contribution pension",
+  "description": {
+    "sv": "Svensk tjänstepension som bygger på premier enligt valt avtal.",
+    "en": "Swedish occupational pension based on contributions under the selected agreement."
+  },
+  "country": "SE",
+  "category": "income",
+  "releases": [
+    "927612c5359af25282bdfc7eeb096a4e70264e9020240e7bae6a7d9a07f82fb2",
+    "33bd2962de4e73de5a1675abffa05cabd958ee92d6233babb08691430ab96f83"
+  ]
+}

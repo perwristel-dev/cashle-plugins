@@ -1,0 +1,13 @@
+{
+  "name": "Norwegian ASK",
+  "description": {
+    "sv": "Norskt aktiesparkonto med skärmningsavdrag.",
+    "en": "Norwegian equity savings account with a shielding allowance."
+  },
+  "country": "NO",
+  "category": "accounts",
+  "releases": [
+    "7e4fc826f6ff23e693eb355ed5dfad18ce545550a5d7be7c5d7f34ed4c36dfb0",
+    "74b18a745d9bc1d9845a70a43e4c11e88443b855426eb41a30cfc20adc379cda"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "ITP 1",
+  "description": {
+    "sv": "Villkor och premier för den svenska tjänstepensionen ITP 1.",
+    "en": "Eligibility and contributions for the Swedish ITP 1 occupational pension."
+  },
+  "country": "SE",
+  "category": "income",
+  "releases": [
+    "2a647ff820925145ef58435cbe84ad775639261c1c2007ce447f621bf94b2a52",
+    "e1b7f96b0209c3c7df2851980bdfdde3f61b43aed48315f70e547f8db72f33c8"
+  ]
+}

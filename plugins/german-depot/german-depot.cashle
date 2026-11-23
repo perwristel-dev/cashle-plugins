@@ -1,0 +1,64 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.InvestmentRules.CostBasisMethod
+import dev.cashle.tax.TaxPolicyField
+import java.time.LocalDate
+
+investmentAccount('cashlab.de-depot', 1) {
+    pluginId 'cashle.finance.de-depot'
+    dsl 'deDepot'
+    messages 'dev.cashle.accounts.de_depot.GermanDepotSource'
+    country 'DE'
+    kind 'DEdepot'
+    taxPolicy 'depot'
+    prepaidTax true
+    transfers false
+}
+
+accountTaxPolicy('depot') {
+    pluginId 'cashle.finance.de-depot.policy'
+    messages 'dev.cashle.accounts.de_depot.GermanDepotSource'
+    country 'DE'
+    ruleYear 2026
+    annualBases 'capitalIncome', 'shareIncome'
+    retainedAccount true
+    costBasisMethod CostBasisMethod.HOMOGENEOUS_LOT
+    permitsImmediateReinvestment false
+    reinvestedDividendsIncreaseBasis true
+    dividendsTaxableOnReceipt true
+    internalSalesRealizeTax true
+    policyFields([acquiredDate: new TaxPolicyField('depot.acquiredDate', 'date')])
+
+    def earliestAcquisition = LocalDate.of(2009, 1, 1)
+
+    maximumDeposit { deposit ->
+        deposit.remainingPrincipal() > 0d ? 0d : Double.POSITIVE_INFINITY
+    }
+
+    preliminaryTaxRate { configuredRate -> configuredRate }
+
+    quoteWithdrawalForNet { snapshot, desiredNet, rate ->
+        quoteNet(snapshot, desiredNet, rate, false)
+    }
+
+    withdraw { request ->
+        require(request.acquiredDate() != null || request.closeAccount() ||
+            Math.abs(request.amount() - request.position().marketValue()) < 1e-8d, 'depot.partialSaleBasis')
+        if (request.acquiredDate() != null) {
+            require(!request.acquiredDate().isBefore(earliestAcquisition), 'depot.pre2009')
+        }
+        withdrawal(request, false, false, false)
+    }
+
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        double dividends = 0d
+        double netShareIncome = 0d
+        for (def account in accounts) {
+            require(account.acquiredDate() != null && !account.acquiredDate().isBefore(earliestAcquisition),
+                'depot.annualAcquiredDate')
+            dividends += account.dividends()
+            netShareIncome += account.realizedGain() - account.realizedLoss()
+        }
+        new InvestmentAnnualAssessment([capitalIncome: dividends, shareIncome: netShareIncome], 0d, [:])
+    }
+}

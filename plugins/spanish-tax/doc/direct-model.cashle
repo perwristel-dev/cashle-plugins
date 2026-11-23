@@ -1,0 +1,20 @@
+// Savings bands yield 1,980; state and regional personal minimums deduct 1,054.50.
+// TaxPlugin is a pure country API. The authored model books its returned amounts once on the selected annual date.
+plugins {
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.es' from '../spanish-tax.cashle'
+}
+timeline { from '2025-12-30'; until '2026-01-02' }
+def nationalTax = dev.cashle.tax.TaxRegistry.discover(classLoader()).require('ES')
+Map<String, Object> resolvedInput = ['ruleYear':2025, 'residency':'full-year', 'birthYear':1990, 'autonomousCommunity':'configured-common-territory', 'regionalSchedule':[['upTo':12450, 'rate':0.095d], ['upTo':20200, 'rate':0.12d], ['upTo':35200, 'rate':0.15d], ['upTo':60000, 'rate':0.185d], ['upTo':300000, 'rate':0.225d], ['rate':0.245d]], 'regionalMinimum':5550, 'employeeSocialContributions':0, 'capitalIncome':10000]
+def taxpayer = entity()
+def cash = taxpayer.account(); cash.setName('Cash'); cash.setKind(dev.cashle.core.AccountKind.ASSET)
+def equity = taxpayer.account(); equity.setKind(dev.cashle.core.AccountKind.EQUITY)
+def incomeTax = taxpayer.account(); incomeTax.setName('Income tax'); incomeTax.setKind(dev.cashle.core.AccountKind.EXPENSE)
+def social = taxpayer.account(); social.setName('Social contributions'); social.setKind(dev.cashle.core.AccountKind.EXPENSE)
+def opening = schedule() on '2025-12-30'
+def annual = schedule() on '2025-12-31'
+flow { on opening; debit cash; credit equity; amount { 10000000d } }
+flow { on annual; debit incomeTax; credit cash; amount { nationalTax.assess(resolvedInput).liability() } }
+flow { on annual; debit social; credit cash; amount { nationalTax.assess(resolvedInput).socialContributions() } }
+collect { }

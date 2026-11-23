@@ -1,0 +1,36 @@
+{
+  "id": "cashle.finance.es-cuenta-valores",
+  "archive": "cashle-account-es-cuenta-valores-source.zip",
+  "requires": [
+    "cashle.finance",
+    "cashle.account.support",
+    "cashle.account.tax.support"
+  ],
+  "ui": "ui.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui-en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui-sv.json"
+    }
+  ],
+  "sources": [
+    {
+      "path": "spanish-cuenta-valores.cashle",
+      "resources": [
+        "dev/cashle/accounts/es_cuenta_valores/SpanishSecuritiesPlugin_en.properties",
+        "dev/cashle/accounts/es_cuenta_valores/SpanishSecuritiesPlugin_sv.properties"
+      ]
+    },
+    {
+      "path": "spanish-cuenta-valores-tax.cashle",
+      "resources": [
+        "dev/cashle/accounts/es_cuenta_valores/SpanishOrdinaryTaxPolicy_en.properties",
+        "dev/cashle/accounts/es_cuenta_valores/SpanishOrdinaryTaxPolicy_sv.properties"
+      ]
+    }
+  ]
+}

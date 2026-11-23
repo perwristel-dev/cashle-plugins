@@ -1,0 +1,307 @@
+package cashle.plugins.sweden.account
+
+import dev.cashle.accounts.ledger.AccountJournal
+import dev.cashle.core.AccountKind
+import dev.cashle.core.i18n.Messages
+import dev.cashle.sdk.model.AccountHandle
+import dev.cashle.sdk.model.FlowHandle
+import dev.cashle.sdk.model.ModelBuilder
+import dev.cashle.sdk.model.NodeHandle
+import dev.cashle.sdk.model.RuntimeClock
+import dev.cashle.sdk.model.ScheduleSpec
+import dev.cashle.sdk.model.ValueNode
+import dev.cashle.sdk.model.Variable
+import dev.cashle.sdk.tax.lifecycle.TaxAccountLifecycle
+import groovy.transform.CompileStatic
+import groovy.transform.TupleConstructor
+import java.time.LocalDate
+import java.util.function.BooleanSupplier
+import java.util.function.Supplier
+
+@CompileStatic
+@TupleConstructor(defaults = false)
+final class PostedNotice {
+    final FinalNotice assessment
+    final FlowHandle posting
+    final BooleanSupplier active
+}
+
+@CompileStatic
+@TupleConstructor(defaults = false)
+final class ObservedNotice {
+    final Supplier<FinalNotice> assessment
+    final LocalDate decisionDate
+    final LocalDate postingDate
+    final BooleanSupplier active
+    final BooleanSupplier resolved
+    final Variable posted
+}
+
+/** Book ordinary and corrected interest from the dated account journal. */
+@CompileStatic
+final class AccountInterestProgram {
+    private final RuntimeClock clock
+    private final Messages messages
+    private final AccountHandle account
+    private final AccountJournal journal
+    private final LocalDate from
+    private final AccountSpec spec
+    private final AccountHistory history
+    private final List<LocalDate> reconciliationDates
+    private final List<ObservedNotice> notices
+    private final BigDecimal historicalOpeningBalance
+    private final double openingCredit
+    private final double openingCost
+    private final Variable bookedCredit
+    private final Variable bookedCost
+    private final Variable pendingCredit
+    private final Variable pendingCost
+    private final Variable creditCorrection
+    private final Variable costCorrection
+    final List<FlowHandle> flows
+
+    AccountInterestProgram(ModelBuilder model, AccountHandle account, AccountHandle income, AccountHandle expense,
+                  AccountJournal journal, LocalDate from, LocalDate until, AccountSpec spec,
+                  List<PostedNotice> actualNotices, List<TaxAccountLifecycle.ForecastNotice> forecasts, String language) {
+        this.clock = model.clock()
+        this.from = from
+        this.account = account
+        this.journal = journal
+        this.spec = spec
+        this.history = spec.history
+        messages = AccountInputs.languageMessages(language)
+        if (history.from.isAfter(from)) throw new IllegalArgumentException(messages.text('historyStart'))
+        if (!journal.account().is(account) || !model.accounts().contains(account) || !model.accounts().contains(income)
+                || !model.accounts().contains(expense) || account.kind != AccountKind.ASSET
+                || income.kind != AccountKind.INCOME || expense.kind != AccountKind.EXPENSE
+                || !account.entity.is(income.entity) || !account.entity.is(expense.entity)) {
+            throw new IllegalArgumentException('Invalid physical Swedish tax-account program accounts')
+        }
+        if (!from.isBefore(until)) throw new IllegalArgumentException('Invalid tax-account timeline')
+        historicalOpeningBalance = replayOpeningHistory()
+        List<LocalDate> allDates = new ArrayList<>(history.reconciliationDates)
+        allDates.addAll(spec.reconciliations)
+        reconciliationDates = List.copyOf(allDates)
+        if (reconciliationDates.isEmpty()) throw new IllegalArgumentException('Specify tax-account reconciliation dates')
+        notices = observeNotices(model, actualNotices, forecasts)
+
+        double initialCredit = history.booked.stream().mapToDouble { InterestEntry entry -> entry.credit.doubleValue() }.sum()
+        double initialCost = history.booked.stream().mapToDouble { InterestEntry entry -> entry.cost.doubleValue() }.sum()
+        openingCredit = initialCredit
+        openingCost = initialCost
+        bookedCredit = model.variable(initialCredit)
+        bookedCost = model.variable(initialCost)
+        pendingCredit = model.variable(0d)
+        pendingCost = model.variable(0d)
+        creditCorrection = model.variable(0d)
+        costCorrection = model.variable(0d)
+        List<FlowHandle> registered = []
+        for (LocalDate date : new TreeSet<LocalDate>(reconciliationDates)) {
+            ScheduleSpec schedule = ScheduleSpec.on(date)
+            ValueNode calculate = model.calculation(schedule, this.&calculate, journal.observedFlows().toArray(new NodeHandle[0]))
+            registered.add(interestFlow(model, schedule, account, income, creditCorrection, bookedCredit, 'creditCorrection', calculate))
+            registered.add(interestFlow(model, schedule, expense, account, costCorrection, bookedCost, 'costCorrection', calculate))
+            registered.add(interestFlow(model, schedule, account, income, pendingCredit, bookedCredit, 'creditInterest', calculate))
+            registered.add(interestFlow(model, schedule, expense, account, pendingCost, bookedCost, 'costInterest', calculate))
+        }
+        flows = List.copyOf(registered)
+    }
+
+    private FlowHandle interestFlow(ModelBuilder model, ScheduleSpec schedule, AccountHandle debit, AccountHandle credit,
+                                    Variable pending, Variable booked, String label, ValueNode calculate) {
+        FlowHandle flow = model.flow(schedule, debit, credit, pending.&getValue, calculate)
+        flow.setName(messages.text(label))
+        flow.inactive { -> pending.value == 0d }
+        flow.observePostings { double actual -> booked.value = booked.value + actual }
+        flow
+    }
+
+    private BigDecimal replayOpeningHistory() {
+        for (Movement movement : history.movements) {
+            if (movement.effectiveDate.isBefore(history.from) || movement.effectiveDate.isAfter(from)) {
+                throw new IllegalArgumentException(messages.text('historicalMovementDate'))
+            }
+        }
+        for (LocalDate date : history.reconciliationDates) {
+            if (date.isBefore(history.from) || !date.isBefore(from)) {
+                throw new IllegalArgumentException(messages.text('historicalReconciliationDate'))
+            }
+        }
+        for (InterestEntry entry : history.booked) {
+            if (!history.reconciliationDates.contains(entry.date)) {
+                throw new IllegalArgumentException(messages.text('historicalInterestReconciliation'))
+            }
+        }
+        BigDecimal balance = spec.historyOpening.balance
+        if (history.from.isBefore(from) && history.historicalAssessments.isEmpty()) {
+            InterestResult replay = AccountInterest.replay(history.from, from, spec.historyOpening,
+                    history.movements.findAll { Movement row -> row.effectiveDate.isBefore(from) },
+                    spec.rates, spec.overdue, history.reconciliationDates)
+            for (LocalDate date : history.reconciliationDates) checkBooked(replay, date, 'bookedHistoryMismatch')
+            balance = replay.balance
+        }
+        if (!history.historicalAssessments.isEmpty()) {
+            validateHistoricalAssessments()
+            for (LocalDate date : history.reconciliationDates.toSorted()) {
+                List<BasisAdjustment> adjustments = []
+                List<Overdue> statuses = new ArrayList<>(spec.overdue)
+                for (FinalNotice notice : history.historicalAssessments) includeNotice(notice, date, adjustments, statuses)
+                InterestResult replay = AccountInterest.replay(history.from, date.plusDays(1), spec.historyOpening,
+                        history.movements.findAll { Movement row -> !row.effectiveDate.isAfter(date) }, spec.rates,
+                        uniqueStatuses(statuses), history.reconciliationDates.findAll { LocalDate day -> !day.isAfter(date) }, adjustments)
+                checkBooked(replay, date, 'bookedAssessmentMismatch')
+            }
+            for (Movement movement : history.movements) {
+                if (movement.effectiveDate.isBefore(from)) balance = balance.add(movement.amount)
+            }
+            for (InterestEntry entry : history.booked) balance = balance.add(entry.credit).subtract(entry.cost)
+        }
+        for (Movement movement : history.movements) {
+            if (movement.effectiveDate == from) balance = balance.add(movement.amount)
+        }
+        balance
+    }
+
+    private void checkBooked(InterestResult replay, LocalDate date, String key) {
+        if (!AccountInterest.difference(history.booked, replay.postings, date).empty) {
+            throw new IllegalArgumentException(messages.text(key).replace('{date}', date.toString()))
+        }
+    }
+
+    private void validateHistoricalAssessments() {
+        Set<Integer> years = new HashSet<>()
+        List<Movement> unused = new ArrayList<>(history.movements)
+        for (FinalNotice notice : history.historicalAssessments) {
+            if (!years.add(notice.taxYear) || !notice.postingDate.isBefore(from)) {
+                throw new IllegalArgumentException(messages.text('historicalUniqueNotices'))
+            }
+            if (notice.netTax.signum() == 0) continue
+            if (AccountInterest.overThresholdStart(notice.taxYear).isBefore(history.from)) {
+                throw new IllegalArgumentException(messages.text('historicalNoticeHistory'))
+            }
+            LocalDate effectiveDate = notice.postingDate.plusDays(1)
+            BigDecimal amount = notice.netTax.negate()
+            int match = unused.findIndexOf { Movement row -> row.effectiveDate == effectiveDate && row.amount.compareTo(amount) == 0 }
+            if (match < 0) throw new IllegalArgumentException(messages.text('historicalNoticeMovement'))
+            unused.remove(match)
+        }
+    }
+
+    private List<ObservedNotice> observeNotices(ModelBuilder model, List<PostedNotice> actualNotices,
+                                                List<TaxAccountLifecycle.ForecastNotice> forecasts) {
+        List<ObservedNotice> result = []
+        Set<FlowHandle> postings = Collections.newSetFromMap(new IdentityHashMap<FlowHandle, Boolean>())
+        Set<Integer> years = new HashSet<>()
+        for (FinalNotice notice : history.historicalAssessments) years.add(notice.taxYear)
+        for (PostedNotice entry : actualNotices) {
+            FinalNotice notice = entry.assessment
+            if (!years.add(notice.taxYear)) throw new IllegalArgumentException(messages.text('duplicateNoticeYear'))
+            if (!observedPosting(postings, entry.posting)) {
+                throw new IllegalArgumentException('Final-tax notice must reference its own observed tax-account posting')
+            }
+            if (notice.postingDate.isBefore(from)) {
+                throw new IllegalArgumentException('Final-tax notice before the journal requires an explicit historical opening')
+            }
+            if (notice.netTax.signum() != 0 && AccountInterest.overThresholdStart(notice.taxYear).isBefore(history.from)) {
+                throw new IllegalArgumentException(messages.text('noticeHistory'))
+            }
+            Variable posted = model.variable(0d)
+            entry.posting.observePostings { double amount ->
+                if (clock.date != notice.postingDate) throw new IllegalStateException('Final-tax notice posted on an unexpected date')
+                posted.value = posted.value + amount
+            }
+            result.add(new ObservedNotice({ -> notice }, notice.decisionDate, notice.postingDate, entry.active, { -> true }, posted))
+        }
+        for (TaxAccountLifecycle.ForecastNotice forecast : forecasts) {
+            if (!years.add(forecast.taxYear())) throw new IllegalArgumentException(messages.text('duplicateNoticeYear'))
+            if (!observedPosting(postings, forecast.posting())) throw new IllegalArgumentException(messages.text('forecastObservedPosting'))
+            if (forecast.postingDate().isBefore(from) || AccountInterest.overThresholdStart(forecast.taxYear()).isBefore(history.from)) {
+                throw new IllegalArgumentException(messages.text('forecastHistory'))
+            }
+            Variable posted = model.variable(0d)
+            forecast.posting().observePostings { double amount ->
+                if (!forecast.active() || !forecast.resolved() || clock.date != forecast.postingDate()) {
+                    throw new IllegalStateException(messages.text('invalidForecastPosting'))
+                }
+                posted.value = posted.value + amount
+            }
+            result.add(new ObservedNotice({ -> AccountInputs.finalNotice(forecast.assessment()) },
+                    forecast.decisionDate(), forecast.postingDate(), forecast.&active, forecast.&resolved, posted))
+        }
+        List.copyOf(result)
+    }
+
+    private boolean observedPosting(Set<FlowHandle> postings, FlowHandle flow) {
+        postings.add(flow) && journal.observedFlows().contains(flow) && flow.credit().is(account)
+    }
+
+    private static void includeNotice(FinalNotice notice, LocalDate date, List<BasisAdjustment> adjustments, List<Overdue> statuses) {
+        InterestEvents events = AccountInterest.resolve(notice, date)
+        adjustments.addAll(events.adjustments)
+        statuses.addAll(events.overdue)
+    }
+
+    private static List<Overdue> uniqueStatuses(List<Overdue> statuses) {
+        TreeMap<LocalDate, Overdue> result = new TreeMap<>()
+        for (Overdue status : statuses) {
+            Overdue prior = result.putIfAbsent(status.from, status)
+            if (prior != null && prior.highCost != status.highCost) {
+                throw new IllegalArgumentException('Conflicting tax-account overdue states on the same date')
+            }
+        }
+        new ArrayList<Overdue>(result.values())
+    }
+
+    private double calculate() {
+        LocalDate today = clock.date
+        LocalDate end = today.plusDays(1)
+        // The account is booked today and the signed movement earns interest tomorrow.
+        List<Movement> actual = journal.movements().collect { AccountJournal.Movement movement ->
+            new Movement(movement.date().plusDays(1), BigDecimal.valueOf(movement.amount()))
+        }
+        double actualChanges = actual.stream().filter { Movement row -> !row.effectiveDate.isAfter(end) }
+                .mapToDouble { Movement row -> row.amount.doubleValue() }.sum()
+        double expected = (historicalOpeningBalance.doubleValue() + actualChanges + bookedCredit.value - openingCredit
+                - bookedCost.value + openingCost)
+        if (Math.abs(account.balance - expected) > Math.max(1e-6d, 8d * Math.ulp(expected))) {
+            throw new IllegalStateException(messages.text('journalMismatch'))
+        }
+        List<Movement> movements = history.movements.findAll { Movement row -> row.effectiveDate.isBefore(end) }
+        movements.addAll(actual.findAll { Movement row -> !row.effectiveDate.isBefore(from) && row.effectiveDate.isBefore(end) })
+        List<LocalDate> dates = reconciliationDates.findAll { LocalDate date -> !date.isAfter(today) }
+        List<BasisAdjustment> adjustments = []
+        List<Overdue> statuses = new ArrayList<>(spec.overdue)
+        for (FinalNotice notice : history.historicalAssessments) includeNotice(notice, today, adjustments, statuses)
+        for (ObservedNotice observed : notices) {
+            boolean active = observed.active.getAsBoolean()
+            if (!active && observed.posted.value != 0d) throw new IllegalStateException('Inactive final-tax notice was actually posted')
+            if (!active || today.isBefore(observed.decisionDate)) continue
+            if (!observed.resolved.getAsBoolean()) throw new IllegalStateException(messages.text('unresolvedOnReconciliation'))
+            FinalNotice notice = observed.assessment.get()
+            if (!today.isBefore(observed.postingDate) && Math.abs(observed.posted.value - notice.netTax.doubleValue()) > 1e-7d) {
+                throw new IllegalStateException('Final-tax notice does not match the actual tax-account posting')
+            }
+            includeNotice(notice, today, adjustments, statuses)
+        }
+        InterestResult replay = AccountInterest.replay(history.from, end, spec.historyOpening, movements,
+                spec.rates, uniqueStatuses(statuses), dates, adjustments)
+        BigDecimal pastCredit = BigDecimal.ZERO
+        BigDecimal pastCost = BigDecimal.ZERO
+        BigDecimal currentCredit = BigDecimal.ZERO
+        BigDecimal currentCost = BigDecimal.ZERO
+        for (InterestEntry posting : replay.postings) {
+            if (posting.date == today) {
+                currentCredit = currentCredit.add(posting.credit)
+                currentCost = currentCost.add(posting.cost)
+            } else {
+                pastCredit = pastCredit.add(posting.credit)
+                pastCost = pastCost.add(posting.cost)
+            }
+        }
+        creditCorrection.value = pastCredit.doubleValue() - bookedCredit.value
+        costCorrection.value = pastCost.doubleValue() - bookedCost.value
+        pendingCredit.value = currentCredit.doubleValue()
+        pendingCost.value = currentCost.doubleValue()
+        pendingCredit.value + pendingCost.value + creditCorrection.value + costCorrection.value
+    }
+}

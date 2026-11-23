@@ -1,0 +1,13 @@
+{
+  "name": "UK brokerage",
+  "description": {
+    "sv": "Brittisk värdepappersdepå med sammanlagt anskaffningsvärde enligt Section 104.",
+    "en": "UK securities account with Section 104 cost pooling."
+  },
+  "country": "GB",
+  "category": "accounts",
+  "releases": [
+    "bc807ad9e2f0e86da680ab65376b9141302eb0f832a6d6f880e28ba9f11fe942",
+    "7bff167b71d3df4b8e64e322d70b69b0d4f1998ee41055e917880e2480ec5ddd"
+  ]
+}

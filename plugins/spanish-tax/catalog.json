@@ -1,0 +1,13 @@
+{
+  "name": "Spanish tax",
+  "description": {
+    "sv": "Spansk inkomstskatt inom det allmänna skatteområdet och skatteregler för fastigheter.",
+    "en": "Spanish common-territory income tax and property tax settings."
+  },
+  "country": "ES",
+  "category": "tax",
+  "releases": [
+    "0219ac55716c5508cfcd3908d68864b2d610049cc8d2a685ec2d175b335a0899",
+    "24ee057abf1480513c2baade04026b1f86035524b2051e5ce8655bb68acc94da"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "German tax",
+  "description": {
+    "sv": "Tysk inkomstskatt och privatbostadsförsäljning.",
+    "en": "German income tax and private-home sales."
+  },
+  "country": "DE",
+  "category": "tax",
+  "releases": [
+    "fa2e143099fad2590b8c97da66754d7a1b07429d95323a85dcab8382b64c9fca",
+    "eaf2a3e5162b2458d11b9f94647bad275771e8f5f3a5b68bed7bc01df2fe5861"
+  ]
+}

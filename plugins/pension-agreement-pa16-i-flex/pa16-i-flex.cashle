@@ -1,0 +1,16 @@
+import dev.cashle.pension.agreement.PensionAgreement.ContributionInput
+import dev.cashle.pension.agreement.PensionAgreement.Kind
+
+import static Pa16AgreementRules.*
+import static SwedishAgreementRules.*
+
+def sectionIFlex = localized('PA16-I-flex', 63, 10)
+pensionAgreement('PA16-I-flex') {
+    pluginId 'cashle.pension.agreement.PA16-I-flex'
+    kind Kind.DEFINED_CONTRIBUTION
+    metadata sectionIFlex('sv')
+    localizedMetadata sectionIFlex
+    eligible { ContributionInput input -> pa16IEligible(input) }
+    historicalContributionBreakpoints { ContributionInput input -> new double[0] }
+    contribution { ContributionInput input -> pa16IEligible(input) ? pa16IFlex(input) : 0d }
+}

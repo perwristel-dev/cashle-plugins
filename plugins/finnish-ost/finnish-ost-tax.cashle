@@ -1,0 +1,47 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.InvestmentRules
+
+double principalLimit = 100000d
+
+accountTaxPolicy('ost') {
+    pluginId 'cashle.finance.fi-ost.policy'
+    country 'FI'
+    ruleYear 2026
+    messages 'dev.cashle.accounts.fi_ost.FinnishOstTaxPolicy'
+    annualBases 'taxableCapitalIncome', 'investmentCapitalLoss'
+    maxAccountsPerPerson 1
+
+    preliminaryTaxRate { double configuredRate -> 0.30d }
+    quoteWithdrawalForNet { snapshot, double desiredNet, double rate ->
+        quoteNet(snapshot, desiredNet, rate, false)
+    }
+    maximumPrincipal { money ->
+        validate([], money)
+        nominal(principalLimit, money)
+    }
+    maximumDeposit { deposit ->
+        def money = deposit.money()
+        validate([], money)
+        double remainingPrincipal = deposit.remainingPrincipal()
+        InvestmentRules.nonnegative(remainingPrincipal, 'Remaining principal')
+        double limit = nominal(principalLimit, money)
+        Math.max(0d, limit - remainingPrincipal)
+    }
+    withdraw { request ->
+        withdrawal(request, false, true, false)
+    }
+
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        double gains = 0d
+        double losses = 0d
+        for (def account : accounts) {
+            require(account.realizedLoss() == 0d || account.closed(),
+                'OST losses are recognized only on explicit account closure.')
+            gains += account.realizedGain()
+            losses += account.realizedLoss()
+        }
+        new InvestmentAnnualAssessment(
+            [taxableCapitalIncome: gains, investmentCapitalLoss: losses], 0d, [:])
+    }
+}

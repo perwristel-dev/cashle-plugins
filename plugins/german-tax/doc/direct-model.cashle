@@ -1,0 +1,29 @@
+// The EUR 1,000 saver allowance leaves EUR 250 of capital tax and EUR 13.75 of solidarity levy.
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.de' from '../german-tax.cashle'
+}
+
+finance {
+    plan { from '2026-01-01'; until '2027-01-02'; currency 'EUR'; inflation 0d }
+    person('self') { name 'Example resident'; birthYear 1990; birthMonth 1 }
+    tax {
+        country 'DE'
+        preliminaryRate 0d
+        options([
+            ruleYear: 2026, residency: 'full-year', profile: 'single-childless-statutory',
+            churchRate: 0d, healthAdditionalRate: 0.029d, saxony: false,
+            employmentExpenses: 0d, churchTaxPaid: 0d, settlementDate: '2027-09-30'
+        ])
+    }
+    customIncome('interest') {
+        name 'Interest income'
+        amount 2000d
+        frequency 'once'
+        settings([taxTreatment: 'taxable', taxBasis: 'capitalIncome'])
+    }
+}
+collect {}

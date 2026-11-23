@@ -1,0 +1,13 @@
+{
+  "name": "Canadian TFSA",
+  "description": {
+    "sv": "Kanadensiskt skattefritt sparkonto med insättningsutrymme.",
+    "en": "Canadian tax-free savings account with contribution room."
+  },
+  "country": "CA",
+  "category": "accounts",
+  "releases": [
+    "54e5d8a778b66c15186818708d0ad201735cb7ef40eb3abf13d2b49cbde8713b",
+    "8ada91c1cc88ca7107e9add215bd8c4cd724699ab65afbdc1b667d8c8849dce3"
+  ]
+}

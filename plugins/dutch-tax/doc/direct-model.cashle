@@ -1,0 +1,30 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.nl' from '../dutch-tax.cashle'
+}
+
+finance {
+    plan { from '2026-01-01'; until '2027-06-01'; currency 'EUR'; inflation 0d }
+    person('self') { name 'Example resident'; birthYear 1990; birthMonth 1 }
+    tax {
+        country 'NL'
+        preliminaryRate 0d
+        options([
+            ruleYear: 2026, residency: 'full-year', wealthFactsConfirmed: true,
+            box3Mode: 'provisional-deemed', box3SavingsRate: 0.0128d, box3DebtRate: 0.027d,
+            externalSavingsJan1: 0d, externalInvestmentsJan1: 0d, externalDebtsJan1: 0d,
+            settlementDate: '2027-05-01'
+        ])
+    }
+    salary('job') {
+        name 'Example salary'
+        owner 'self'
+        amount 40000d
+        frequency 'once'
+        taxTreatment 'taxable'
+    }
+}
+collect {}

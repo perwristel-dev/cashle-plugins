@@ -1,0 +1,25 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.no' from '../norwegian-tax.cashle'
+}
+
+finance {
+    plan { from '2026-01-01'; until '2027-01-02'; currency 'NOK'; inflation 0d }
+    person('self') { name 'Example resident'; birthYear 1986; birthMonth 1 }
+    tax {
+        country 'NO'
+        preliminaryRate 0d
+        options([ruleYear: 2026, residency: 'full-year', region: 'ordinary', youngWorkerTrialSelected: false])
+    }
+    salary('job') {
+        name 'Example salary'
+        owner 'self'
+        amount 50000d
+        frequency 'monthly'
+        taxTreatment 'taxable'
+    }
+}
+collect {}

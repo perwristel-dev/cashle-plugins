@@ -1,0 +1,7 @@
+{
+  "label": "Wertpapierdepot (noterade aktier)",
+  "help": "Tyskland 2026. Ange verklig anskaffningsdag och nominellt anskaffningsbelopp för en homogen post noterade aktier per konto. Partiella försäljningar använder postens proportionella anskaffningsutgift, vilket motsvarar FIFO för en enda post. Utdelningar är vanlig kapitalinkomst. Aktieförluster får endast möta aktievinster. Sparer-Pauschbetrag på 1 000 EUR delas per ägare över alla depåer och externa kapitalinkomster. Ytterligare insättningar, återinvesterade utdelningar, planerade återköp, sambeskattningens gräns på 2 000 EUR, fonder, 30 % Teilfreistellung och Vorabpauschale ingår inte.",
+  "acquiredDate": "Faktisk anskaffningsdag för den enda aktieposten",
+  "acquiredDateHelp": "Ange ett datum från 2009 eller senare. Äldre skattebefriade poster kräver särskilda regler.",
+  "acquiredDateInvalid": "Ange verkligt anskaffningsdatum för en aktiepost förvärvad från 2009."
+}

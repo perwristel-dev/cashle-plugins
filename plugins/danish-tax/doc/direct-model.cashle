@@ -1,0 +1,25 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.dk' from '../danish-tax.cashle'
+}
+
+finance {
+    plan { from '2026-01-01'; until '2027-01-02'; currency 'DKK'; inflation 0d }
+    person('self') { name 'Example resident'; birthYear 1986; birthMonth 1 }
+    tax {
+        country 'DK'
+        preliminaryRate 0d
+        options([ruleYear: 2026, residency: 'full-year', municipalRate: 0.25d, churchRate: 0d, civilStatus: 'single', seniorSupplement: false, singleParentSupplement: false])
+    }
+    salary('job') {
+        name 'Example salary'
+        owner 'self'
+        amount 50000d
+        frequency 'monthly'
+        taxTreatment 'taxable'
+    }
+}
+collect {}

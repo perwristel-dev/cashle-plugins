@@ -1,0 +1,196 @@
+import dev.cashle.tax.InvestmentAccountYear
+import dev.cashle.tax.PropertyLossCarry
+import dev.cashle.tax.PropertySaleAssessment
+import dev.cashle.tax.TaxAssessment
+import dev.cashle.tax.TaxMoneyBasis
+import dev.cashle.tax.support.Inputs
+import dev.cashle.tax.support.PropertyInputs
+
+import java.time.LocalDate
+
+import static dev.cashle.tax.support.Inputs.*
+import static dev.cashle.tax.support.PropertyInputs.MONEY
+import static dev.cashle.tax.support.PropertyInputs.base
+import static dev.cashle.tax.support.PropertyInputs.date
+import static dev.cashle.tax.support.PropertyInputs.gain
+import static dev.cashle.tax.support.PropertyInputs.money
+import static dev.cashle.tax.support.PropertyInputs.noReplacementRollover
+import static dev.cashle.tax.support.PropertyInputs.requiredBool
+import static dev.cashle.tax.support.PropertyInputs.scope
+
+int referenceYear = 2026
+def externalBases = ['salary', 'pension', 'capitalIncome', 'interestExpenses', 'shareIncome'].asImmutable()
+def acceptedBases = (externalBases + ['netCapitalIncome']).asImmutable()
+def monetary = ['salary', 'pension', 'netCapitalIncome', 'shareIncome', 'prepaidTax'].toSet().asImmutable()
+def numeric = (monetary + ['birthYear', 'municipalRate', 'churchRate']).asImmutable()
+def allowedOptions = (numeric + ['ruleYear', 'residency', 'civilStatus', 'seniorSupplement', 'singleParentSupplement']).asImmutable()
+def finite = { value -> value instanceof Number && Double.isFinite(value.doubleValue()) }
+def single = { options ->
+    'single'.equals(options.get('civilStatus')) &&
+        Boolean.FALSE.equals(options.get('seniorSupplement')) &&
+        Boolean.FALSE.equals(options.get('singleParentSupplement'))
+}
+
+countryTaxPolicy('DK') {
+    pluginId 'cashle.tax.dk'
+    currency 'DKK'
+    ruleYear referenceYear
+    incomeBases acceptedBases
+    sourceBases externalBases
+    messages 'dev.cashle.tax.denmark.DanishTaxSource'
+
+    validateOptions { options ->
+        def errors = []
+        if (!finite(options.ruleYear) || options.ruleYear.doubleValue() != referenceYear) errors.add('profile.ruleYear')
+        if (!'full-year'.equals(options.residency)) errors.add('profile.residency')
+        if (!finite(options.municipalRate) || options.municipalRate < 0d || options.municipalRate > 0.4d) errors.add('profile.municipalRate')
+        if (!finite(options.churchRate) || options.churchRate < 0d || options.churchRate > 0.1d) errors.add('profile.churchRate')
+        if (!single(options)) errors.add('profile.supplements')
+        errors
+    }
+
+    assessmentOptions { options -> options.findAll { key, value -> value != null && !''.equals(value) } }
+    optionsInRuleMoney { options, prices -> prices.convertFields(options, monetary) }
+
+    annualInputs { options, int birthYear, int birthMonth, int year, amounts ->
+        Objects.requireNonNull(options, 'Tax options are required')
+        LocalDate.of(birthYear, birthMonth, 1)
+        for (def entry : amounts.entrySet()) {
+            require(acceptedBases.contains(entry.key), "DK does not support tax basis: ${entry.key}")
+            require(entry.value != null && Double.isFinite(entry.value), "Tax basis must be finite: ${entry.key}")
+        }
+        def inputs = new LinkedHashMap(options)
+        require(number(inputs, 'ruleYear', referenceYear) == referenceYear, 'Unsupported ruleYear for DK')
+        inputs.put('ruleYear', referenceYear)
+        inputs.put('birthYear', birthYear - year + referenceYear)
+        inputs.putIfAbsent('residency', 'full-year')
+        for (String basis : ['salary', 'pension', 'shareIncome']) {
+            inputs.put(basis, number(inputs, basis, 0d) + amounts.getOrDefault(basis, 0d))
+        }
+        double netCapital = amounts.getOrDefault('capitalIncome', 0d) - amounts.getOrDefault('interestExpenses', 0d)
+        inputs.put('netCapitalIncome', number(inputs, 'netCapitalIncome', 0d) + netCapital + amounts.getOrDefault('netCapitalIncome', 0d))
+        inputs
+    }
+
+    assess { options ->
+        keys(options, allowedOptions)
+        for (String key : numeric) {
+            if (options.containsKey(key)) require(number(options, key, 0d) >= 0d, "$key must be nonnegative.")
+        }
+        require(number(options, 'ruleYear', 0d) == referenceYear, 'Select explicit ruleYear:2026; other years are unsupported.')
+        require('full-year'.equals(options.residency), 'Only full-year residency is supported.')
+        double birthYear = number(options, 'birthYear', 0d)
+        require(birthYear == Math.floor(birthYear) && birthYear >= 1900d && birthYear <= 2007d,
+            'Provide a supported adult birthYear (1900–2007).')
+        require('single'.equals(options.civilStatus), 'Only single-person assessments are supported; spousal tax transfers are unsupported.')
+        require(single(options), 'Confirm seniorSupplement:false and singleParentSupplement:false; additional deductions are unsupported.')
+
+        double salary = number(options, 'salary', 0d)
+        double pension = number(options, 'pension', 0d)
+        double capital = number(options, 'netCapitalIncome', 0d)
+        double shares = number(options, 'shareIncome', 0d)
+        require(salary == 0d || referenceYear - birthYear <= 60d, 'Senior wage deduction profiles are unsupported.')
+        double municipal = number(options, 'municipalRate', Double.NaN)
+        double church = number(options, 'churchRate', 0d)
+        require(Double.isFinite(municipal) && municipal >= 0d && municipal <= 0.4d && church <= 0.1d,
+            'Provide actual 2026 municipalRate and churchRate as decimal rates.')
+
+        double labour = salary * 0.08d
+        double personal = salary - labour + pension
+        double employment = Math.min(63300d, salary * 0.1275d)
+        double job = Math.min(3100d, Math.max(0d, salary - 235200d) * 0.045d)
+        double taxable = Math.max(0d, personal + capital - employment - job)
+        double middlePersonal = Math.max(0d, personal - 641200d)
+        double middleCapital = Math.max(0d, personal + Math.max(0d, capital - 55000d) - 641200d) - middlePersonal
+        double lowerShares = Math.min(shares, 79400d) * 0.27d
+        def parts = components('labourMarket', labour, 'base', (personal + capital) * 0.1201d,
+            'municipal', taxable * municipal, 'church', taxable * church,
+            'middle', (middlePersonal + middleCapital) * 0.075d,
+            'top', Math.max(0d, personal - 777900d) * 0.075d,
+            'topTop', Math.max(0d, personal - 2592700d) * 0.05d,
+            'shares', lowerShares + Math.max(0d, shares - 79400d) * 0.42d)
+
+        double ceilingPersonal = Math.max(0d, 0.1201d + 0.075d + municipal - 0.4457d) * middlePersonal
+        double ceilingCapital = Math.max(0d, 0.1201d + 0.075d + municipal - 0.42d) * middleCapital
+        double eligible = sum(parts) - labour - lowerShares - ceilingPersonal - ceilingCapital
+        double allowance = Math.min(eligible, 54100d * (0.1201d + municipal + church))
+        new TaxAssessment(labour + lowerShares + Math.max(0d, eligible - allowance), 0d, parts)
+    }
+
+    foreignInvestmentBases { InvestmentAccountYear account, TaxMoneyBasis prices ->
+        Objects.requireNonNull(account)
+        Objects.requireNonNull(prices)
+        require(prices.ruleYear() == referenceYear, 'Foreign investment money basis must match the destination rule year.')
+        require(prices.nativePerPlanUnit() == 1d &&
+            (prices.planCurrency() == null || prices.planCurrency().equals(prices.taxCurrency())),
+            "Foreign investment facts must already be in the destination's native currency; use inflationOnly().")
+        require(prices.taxCurrency() == null || 'DKK'.equals(prices.taxCurrency()), 'Foreign investment currency must match the destination.')
+        def options = account.policyOptions()
+        require(!'fund'.equalsIgnoreCase(Objects.toString(options.get('securitiesClassification'), '')),
+            'Foreign fund taxation is unsupported; a fund cannot use ordinary listed-share rules.')
+        require('listed-shares'.equals(Objects.toString(options.get('foreignInvestmentAssetType'), 'listed-shares')),
+            'Foreign investment taxation supports ordinary listed shares only; funds, pensions and other asset classifications need separate rules.')
+        double net = account.dividends() + account.realizedGain() - account.realizedLoss()
+        require(net >= 0d, 'Danish excess foreign listed-share losses require unsupported loss carry and reporting rules.')
+        require(Double.isFinite(net), 'Foreign investment basis must remain finite: shareIncome')
+        Map.of('shareIncome', net)
+    }
+
+    propertySales {
+        inputsInRuleMoney { input, prices ->
+            def result = prices.convertFields(input, MONEY)
+            if (input.containsKey('improvementsByYear')) {
+                def converted = new LinkedHashMap()
+                Inputs.map(input, 'improvementsByYear').forEach { year, value ->
+                    converted.put(year, prices.inRuleMoney(number(Map.of(year, value), year, 0d)))
+                }
+                result.put('improvementsByYear', converted)
+            }
+            result
+        }
+
+        assess { input ->
+            scope(input, 'DKK')
+            noReplacementRollover(input)
+            boolean lived = requiredBool(input, 'genuineResidence')
+            LocalDate acquired = date(input, 'acquiredDate')
+            require(!acquired.isBefore(LocalDate.of(1993, 5, 19)), 'Danish pre-19 May 1993 acquisition basis requires separate legacy rules.')
+            double plot = money(input, 'plotAreaM2', Double.NaN)
+            boolean areaEligible = plot < 1400d
+            if (!areaEligible) {
+                areaEligible = requiredBool(input, 'subdivisionProhibited') || requiredBool(input, 'valueReductionOver20Percent')
+            }
+            require(!input.containsKey('improvements') || money(input, 'improvements', 0d) == 0d,
+                'Provide Danish qualifying expenses in improvementsByYear; annual DKK10,000 exclusion applies.')
+            int purchaseYear = acquired.year
+            int saleYear = date(input, 'contractDate').year
+            double share = number(input, 'ownershipShare', 1d)
+            double annualAllowance = 10000d * share
+            double addition = annualAllowance * Math.max(1, saleYear - purchaseYear)
+            double improvements = 0d
+            for (def entry : Inputs.map(input, 'improvementsByYear').entrySet()) {
+                int year
+                try {
+                    year = Integer.parseInt(entry.key)
+                } catch (NumberFormatException invalid) {
+                    throw new IllegalArgumentException('improvementsByYear keys must be calendar years.', invalid)
+                }
+                require(year >= purchaseYear && year <= saleYear, 'Improvement year is outside ownership.')
+                improvements += Math.max(0d, money(Map.of('amount', entry.value), 'amount', 0d) - annualAllowance)
+            }
+            double gainAmount = gain(input) - addition - improvements
+            boolean exempt = lived && areaEligible
+            double brought = money(input, 'propertyLossBroughtForward', 0d)
+            double offset = exempt ? 0d : Math.min(Math.max(0d, gainAmount), brought)
+            double taxable = exempt ? 0d : Math.max(0d, gainAmount) - offset
+            double loss = exempt ? 0d : Math.max(0d, -gainAmount)
+            double carry = brought - offset + loss
+            new PropertySaleAssessment(saleYear, taxable, 0d, base('capitalIncome', taxable),
+                components('gain', gainAmount, 'exempt', exempt ? 1 : 0, 'annualBasisAddition', addition,
+                    'propertyLossUsed', offset, 'propertyLossCarryForward', carry),
+                new PropertyLossCarry(loss, offset, -1, Set.of('capitalIncome'), true))
+        }
+
+        calendar { input -> PropertyInputs.calendar(input) }
+    }
+}

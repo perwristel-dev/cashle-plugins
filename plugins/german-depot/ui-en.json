@@ -1,0 +1,7 @@
+{
+  "label": "Wertpapierdepot (listed shares)",
+  "help": "Germany 2026. Enter the actual acquisition date and nominal cost for one lot of listed shares per account. Partial sales use the proportional cost of this lot, which applies FIFO to a single lot. Dividends are ordinary capital income. Share losses can only offset share gains. The EUR 1,000 saver allowance is shared per owner across all depots and external capital income. Additional deposits, reinvested dividends, planned repurchases, the EUR 2,000 joint allowance, funds, the 30% partial exemption and Vorabpauschale are outside this model.",
+  "acquiredDate": "Actual acquisition date of the single listed-share lot",
+  "acquiredDateHelp": "Enter a date from 2009 onwards. Earlier tax-exempt lots require separate rules.",
+  "acquiredDateInvalid": "Enter the actual acquisition date of a listed-share lot acquired in 2009 or later."
+}

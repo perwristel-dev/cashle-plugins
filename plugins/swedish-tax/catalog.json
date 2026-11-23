@@ -1,0 +1,13 @@
+{
+  "name": "Swedish tax",
+  "description": {
+    "sv": "Svensk inkomstskatt, preliminärskatt, bostadsförsäljning och utflyttningsregler.",
+    "en": "Swedish income tax, withholding, home sales and emigration rules."
+  },
+  "country": "SE",
+  "category": "tax",
+  "releases": [
+    "bfdbab3559710c2dbbafdcf74b171efa6a7f98ab84911e468e3e4ab0a924276d",
+    "16b94a8d734f13613ee726a1b9bddecf0d540dd1593fa39270f80b4a525fac36"
+  ]
+}

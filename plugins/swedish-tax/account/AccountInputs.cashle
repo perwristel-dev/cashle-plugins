@@ -1,0 +1,269 @@
+package cashle.plugins.sweden.account
+
+import dev.cashle.core.i18n.Messages
+import dev.cashle.sdk.tax.lifecycle.TaxAccountLifecycle
+import groovy.transform.CompileStatic
+import groovy.transform.EqualsAndHashCode
+import groovy.transform.TupleConstructor
+import java.time.LocalDate
+
+@CompileStatic
+final class AccountInputs {
+    private final Messages messages
+
+    AccountInputs(String language) {
+        messages = languageMessages(language)
+    }
+
+    static Messages languageMessages(String language) {
+        new Messages(AccountInputs, 'cashle.plugins.sweden.account.messages', language)
+    }
+
+    /** Read only supplied account balances, booked history and forecast dates. */
+    AccountSpec read(Map<String, Object> input, List<TaxAccountLifecycle.OpeningAssessment> openings) {
+        LocalDate historyFrom = date(input, 'historyFrom')
+        BigDecimal openingBalance = number(input, 'openingBalance')
+        AccountOpening historyOpening = new AccountOpening(number(input, 'historyOpeningBalance'),
+                number(input, 'creditRemainder'), number(input, 'costRemainder'))
+        List<Movement> movements = []
+        for (Map<String, Object> row : rows(input, 'historicalMovements')) {
+            movements.add(new Movement(date(row, 'effectiveDate'), number(row, 'amount')))
+        }
+        List<InterestEntry> booked = []
+        for (Map<String, Object> row : rows(input, 'historicalInterest')) {
+            booked.add(new InterestEntry(date(row, 'date'), number(row, 'credit'), number(row, 'cost')))
+        }
+        List<FinalNotice> historicalNotices = []
+        for (TaxAccountLifecycle.OpeningAssessment opening : openings) {
+            if (opening.status() != 'pending') historicalNotices.add(finalNotice(opening))
+        }
+        AccountHistory history = new AccountHistory(historyFrom, List.copyOf(movements), List.copyOf(booked),
+                dates(input, 'historicalReconciliations'), List.copyOf(historicalNotices))
+
+        List<InterestRates> rates = []
+        for (Map<String, Object> row : rows(input, 'rates')) {
+            rates.add(new InterestRates(date(row, 'from'), number(row, 'creditPercent').movePointLeft(2),
+                    number(row, 'lowCostPercent').movePointLeft(2), number(row, 'highCostPercent').movePointLeft(2)))
+        }
+        if (rates.isEmpty()) throw new IllegalArgumentException(messages.text('input.rates'))
+        List<Overdue> overdue = []
+        for (Map<String, Object> row : rows(input, 'overdue')) {
+            Object highCost = row.get('highCost')
+            if (!(highCost instanceof Boolean)) throw new IllegalArgumentException(messages.text('input.highCost'))
+            overdue.add(new Overdue(date(row, 'from'), (Boolean) highCost))
+        }
+        List<ForecastDates> forecasts = []
+        Set<Integer> years = new HashSet<>()
+        for (Map<String, Object> row : rows(input, 'forecastNotices')) {
+            Object value = row.get('taxYear')
+            Number yearValue = value instanceof Number ? (Number) value : Double.NaN
+            double enteredYear = yearValue.doubleValue()
+            if (!Double.isFinite(enteredYear) || enteredYear != Math.rint(enteredYear)) {
+                throw new IllegalArgumentException(messages.text('input.forecastYear'))
+            }
+            int year = yearValue.intValue()
+            if (!years.add(year)) throw new IllegalArgumentException(messages.text('input.duplicateForecastYear'))
+            forecasts.add(new ForecastDates(year, date(row, 'decisionDate'), date(row, 'postingDate'), date(row, 'settlementDate')))
+        }
+        List<Deposit> deposits = []
+        for (Map<String, Object> row : rows(input, 'futureDeposits')) {
+            deposits.add(new Deposit(date(row, 'date'), number(row, 'amount')))
+        }
+        TaxAccountLifecycle.RefundPolicy policy
+        try {
+            policy = TaxAccountLifecycle.RefundPolicy.valueOf(Objects.toString(input.get('refundPolicy'), ''))
+        } catch (IllegalArgumentException failure) {
+            throw new IllegalArgumentException(messages.text('input.refundPolicy'), failure)
+        }
+        new AccountSpec(openingBalance, historyOpening, history, List.copyOf(rates), List.copyOf(overdue),
+                dates(input, 'reconciliations'), List.copyOf(forecasts), List.copyOf(deposits), policy)
+    }
+
+    static FinalNotice finalNotice(TaxAccountLifecycle.OpeningAssessment value) {
+        new FinalNotice(value.taxYear(), value.decisionDate(), value.postingDate(),
+                value.netTax() > 0d ? value.settlementDate() : null, BigDecimal.valueOf(value.netTax()))
+    }
+
+    static FinalNotice finalNotice(TaxAccountLifecycle.Assessment value) {
+        new FinalNotice(value.taxYear(), value.decisionDate(), value.postingDate(), value.dueDate(),
+                BigDecimal.valueOf(value.netTax()))
+    }
+
+    private BigDecimal number(Map<String, Object> input, String key) {
+        Object value = input.get(key)
+        if (!(value instanceof Number) || !Double.isFinite(((Number) value).doubleValue())) {
+            throw new IllegalArgumentException(messages.text('input.amount').replace('{key}', key))
+        }
+        new BigDecimal(value.toString())
+    }
+
+    private LocalDate date(Map<String, Object> input, String key) {
+        parseDate(input.get(key), key)
+    }
+
+    private LocalDate parseDate(Object value, String key) {
+        try {
+            LocalDate.parse(Objects.toString(value, ''))
+        } catch (RuntimeException failure) {
+            throw new IllegalArgumentException(messages.text('input.date').replace('{key}', key), failure)
+        }
+    }
+
+    private List<LocalDate> dates(Map<String, Object> input, String key) {
+        Object value = input.get(key)
+        if (value == null) return []
+        if (!(value instanceof List)) {
+            throw new IllegalArgumentException(messages.text('input.dateList').replace('{key}', key))
+        }
+        List<LocalDate> result = []
+        for (Object entry : value) result.add(parseDate(entry, 'date'))
+        List.copyOf(result)
+    }
+
+    private List<Map<String, Object>> rows(Map<String, Object> input, String key) {
+        Object value = input.get(key)
+        if (value == null) return []
+        if (!(value instanceof List)) throw new IllegalArgumentException(messages.text('input.list').replace('{key}', key))
+        List<Map<String, Object>> result = []
+        for (Object row : value) {
+            if (!(row instanceof Map)) throw new IllegalArgumentException(messages.text('input.record').replace('{key}', key))
+            result.add((Map<String, Object>) row)
+        }
+        result
+    }
+}
+
+@CompileStatic
+@TupleConstructor(defaults = false)
+final class ForecastDates {
+    final int taxYear
+    final LocalDate decisionDate
+    final LocalDate postingDate
+    final LocalDate settlementDate
+}
+
+@CompileStatic
+final class Deposit {
+    final LocalDate date
+    final BigDecimal amount
+
+    Deposit(LocalDate date, BigDecimal amount) {
+        if (amount.signum() <= 0) throw new IllegalArgumentException('Extra skatteinbetalning ska vara positiv.')
+        this.date = date
+        this.amount = amount
+    }
+}
+
+@CompileStatic
+@TupleConstructor(defaults = false)
+final class AccountHistory {
+    final LocalDate from
+    final List<Movement> movements
+    final List<InterestEntry> booked
+    final List<LocalDate> reconciliationDates
+    final List<FinalNotice> historicalAssessments
+}
+
+@CompileStatic
+@TupleConstructor(defaults = false)
+final class AccountSpec {
+    final BigDecimal openingBalance
+    final AccountOpening historyOpening
+    final AccountHistory history
+    final List<InterestRates> rates
+    final List<Overdue> overdue
+    final List<LocalDate> reconciliations
+    final List<ForecastDates> forecasts
+    final List<Deposit> deposits
+    final TaxAccountLifecycle.RefundPolicy refundPolicy
+}
+
+@CompileStatic
+final class FinalNotice {
+    final int taxYear
+    final LocalDate decisionDate
+    final LocalDate postingDate
+    final LocalDate dueDate
+    final BigDecimal netTax
+
+    FinalNotice(int taxYear, LocalDate decisionDate, LocalDate postingDate, LocalDate dueDate, BigDecimal netTax) {
+        if (postingDate.isBefore(decisionDate)) throw new IllegalArgumentException('Final tax cannot be posted before the decision')
+        if (netTax.signum() > 0 && (dueDate == null || dueDate.isBefore(decisionDate.plusDays(90)))) {
+            throw new IllegalArgumentException('Final tax needs an explicit due date at least 90 days after the decision')
+        }
+        if (decisionDate.year <= taxYear) throw new IllegalArgumentException('Final tax decision must follow the income year')
+        this.taxYear = taxYear
+        this.decisionDate = decisionDate
+        this.postingDate = postingDate
+        this.dueDate = dueDate
+        this.netTax = netTax
+    }
+}
+
+@CompileStatic
+final class AccountOpening {
+    final BigDecimal balance
+    final BigDecimal creditRemainder
+    final BigDecimal costRemainder
+
+    AccountOpening(BigDecimal balance, BigDecimal creditRemainder, BigDecimal costRemainder) {
+        for (BigDecimal value : [creditRemainder, costRemainder]) {
+            if (value.signum() < 0 || value.compareTo(BigDecimal.ONE) >= 0) {
+                throw new IllegalArgumentException('Opening interest remainder must be in [0,1)')
+            }
+        }
+        this.balance = balance
+        this.creditRemainder = creditRemainder
+        this.costRemainder = costRemainder
+    }
+}
+
+@CompileStatic
+@TupleConstructor(defaults = false)
+@EqualsAndHashCode
+final class Movement {
+    final LocalDate effectiveDate
+    final BigDecimal amount
+}
+
+@CompileStatic
+final class InterestRates {
+    final LocalDate from
+    final BigDecimal credit
+    final BigDecimal lowCost
+    final BigDecimal highCost
+
+    InterestRates(LocalDate from, BigDecimal credit, BigDecimal lowCost, BigDecimal highCost) {
+        if (credit.signum() < 0 || lowCost.signum() < 0 || highCost.signum() < 0) {
+            throw new IllegalArgumentException('Interest rate cannot be negative')
+        }
+        this.from = from
+        this.credit = credit
+        this.lowCost = lowCost
+        this.highCost = highCost
+    }
+}
+
+@CompileStatic
+@TupleConstructor(defaults = false)
+final class Overdue {
+    final LocalDate from
+    final boolean highCost
+}
+
+@CompileStatic
+@EqualsAndHashCode
+final class InterestEntry {
+    final LocalDate date
+    final BigDecimal credit
+    final BigDecimal cost
+
+    InterestEntry(LocalDate date, BigDecimal credit, BigDecimal cost) {
+        if (credit.stripTrailingZeros().scale() > 0 || cost.stripTrailingZeros().scale() > 0) {
+            throw new IllegalArgumentException('Tax-account interest postings must be whole kronor')
+        }
+        this.date = date
+        this.credit = credit
+        this.cost = cost
+    }
+}

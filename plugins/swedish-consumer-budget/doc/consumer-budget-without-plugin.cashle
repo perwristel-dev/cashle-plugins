@@ -1,0 +1,10 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.expenses'
+}
+
+finance {
+    plan { from '2026-01-01'; until '2026-03-01' }
+    consumerBudget('budget') { name 'Budget' }
+}
+collect { }

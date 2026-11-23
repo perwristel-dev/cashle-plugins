@@ -1,0 +1,60 @@
+package cashle.plugins.sweden.tax
+
+import groovy.transform.CompileStatic
+import dev.cashle.tax.*
+import dev.cashle.core.i18n.Messages
+import java.util.*
+import java.time.*
+import static dev.cashle.tax.support.Inputs.*
+@CompileStatic
+final class ProfilePolicy {
+    private final Messages messages
+    private ProfilePolicy(Messages messages) { this.messages = messages }
+    static List<String> validate(Map<String,Object> options, Messages messages) { return new ProfilePolicy(messages).errors(options) }
+    private List<String> errors(Map<String,Object> options) {def errors=new ArrayList<String>();sweden(options,errors);return List.copyOf(errors);}
+
+
+    private void sweden(Map<String,Object> o,List<String> e) {
+        common(o,2025,e)
+        for(String key:List.of("foreignTaxPaidAmount","foreignTaxAttributableOrdinaryTax"))if(o.containsKey(key) && (!finite(o.get(key)) || number(o.get(key))<0))e.add(messages.text("profile.foreignTaxCreditAmounts"))
+        Object year=o.get("foreignTaxCreditYear")
+        if((positiveCoerced(o.get("foreignTaxPaidAmount")) || positiveCoerced(o.get("foreignTaxAttributableOrdinaryTax"))) && (!integer(year) || number(year)<2025 || number(year)>2300))e.add(messages.text("profile.foreignTaxCreditYear"))
+        if(o.containsKey("afterEmigrationLiability") && !choice(o.get("afterEmigrationLiability"),"limited","unlimited"))e.add(messages.text("profile.emigrationLiability"))
+        Object municipality=o.get("municipality"), suppliedRate=o.get("municipalRate")
+        boolean nationalAverage=municipality==null || "".equals(municipality)
+        Double rate=nationalAverage ? Double.valueOf(0.3241d) : SwedishMunicipalities2025.RATES.get(municipality)
+        boolean implicitAverage=nationalAverage && suppliedRate==null
+        if(!implicitAverage && (rate==null || !finite(suppliedRate) || rate.doubleValue()!=number(suppliedRate)))e.add(messages.text("profile.municipality"))
+        Object months=o.get("residentMonths");if(!integer(months) || number(months)<1 || number(months)>12)e.add(messages.text("profile.residentMonths"))
+        range(o,"burialFeeRate",1,messages.text("profile.label.burialFee"),e)
+        if(!(o.get("communityMember") instanceof Boolean))e.add(messages.text("profile.communityMember"))
+        if(truthy(o.get("communityMember")))range(o,"communityFeeRate",1,messages.text("profile.label.communityFee"),e)
+    }
+
+    private void common(Map<String,Object> o,int year,List<String> e){if(!finite(o.get("ruleYear")) || number(o.get("ruleYear"))!=year)e.add(messages.text("profile.ruleYear").replace("{year}",Integer.toString(year)));}
+
+    private void range(Map<String,Object> o,String key,double max,String label,List<String> e){if(!finite(o.get(key)) || number(o.get(key))<0 || number(o.get(key))>max)e.add(messages.text("profile.range").replace("{label}",label).replace("{max}",Integer.toString((int)(max*100))));}
+
+    private static boolean choice(Object value,String... choices){for(String candidate:choices)if(candidate.equals(value))return true;return false;}
+
+    private static boolean finite(Object value){return value instanceof Number && Double.isFinite(((Number)value).doubleValue());}
+
+    private static boolean integer(Object value){return finite(value) && Math.rint(number(value))==number(value);}
+
+    private static double number(Object value){return value instanceof Number?((Number)value).doubleValue():Double.NaN;}
+
+    private static boolean truthy(Object value){if(value==null || Boolean.FALSE.equals(value))return false;if(value instanceof Number)return ((Number)value).doubleValue()!=0 && !Double.isNaN(((Number)value).doubleValue());if(value instanceof String)return !((String)value).isEmpty();return true;}
+
+    private static boolean positiveCoerced(Object value){
+        if(value instanceof Number)return ((Number)value).doubleValue()>0;if(value instanceof Boolean)return (boolean)value
+        if(value instanceof List)return positiveCoerced(arrayString((List<?>)value))
+        if(value instanceof String){try{String text=((String)value).trim();if(text.isEmpty())return false
+            if(text.matches("0[xX][0-9a-fA-F]+"))return new java.math.BigInteger(text.substring(2),16).signum()>0
+            if(text.matches("0[bB][01]+"))return new java.math.BigInteger(text.substring(2),2).signum()>0
+            if(text.matches("0[oO][0-7]+"))return new java.math.BigInteger(text.substring(2),8).signum()>0
+            return Double.parseDouble(text)>0;}catch(NumberFormatException ignored){return false;}}
+        return false
+    }
+
+    private static String arrayString(List<?> list){return String.join(",",list.stream().map(value->value==null?"":value instanceof List?arrayString((List<?>)value):value instanceof Map?"[object Object]":value.toString()).toList());}
+}

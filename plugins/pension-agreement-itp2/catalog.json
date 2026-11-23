@@ -1,0 +1,13 @@
+{
+  "name": "ITP 2",
+  "description": {
+    "sv": "Villkor och intjänande för den svenska tjänstepensionen ITP 2.",
+    "en": "Eligibility and benefit accrual for the Swedish ITP 2 occupational pension."
+  },
+  "country": "SE",
+  "category": "income",
+  "releases": [
+    "dbfb92dd64a7c60f458f6a3c897d299178e62164461433fcf88cad1af836f546",
+    "344743c4542545e2d81c4cbbda8ea23602468006b24d73999e87cfe956743e28"
+  ]
+}

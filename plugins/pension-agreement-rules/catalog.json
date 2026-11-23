@@ -1,0 +1,13 @@
+{
+  "name": "Swedish pension agreement rules",
+  "description": {
+    "sv": "Gemensamma regler för lön, ålder och konton i svensk tjänstepension.",
+    "en": "Shared salary, age and account rules for Swedish occupational pensions."
+  },
+  "country": "SE",
+  "category": "library",
+  "releases": [
+    "c9ede5f8c0f5888c3f34b4e5d94fd20af1b402638851400ba23b0f12697d7cbd",
+    "916a609ebe8217c9856d620e25e869d6e290d0e339cecf3b04f061b054e3aec0"
+  ]
+}

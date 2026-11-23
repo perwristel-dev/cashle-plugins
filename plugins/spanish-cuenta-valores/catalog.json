@@ -1,0 +1,13 @@
+{
+  "name": "Spanish cuenta de valores",
+  "description": {
+    "sv": "Spansk värdepappersdepå för ett förvärvsparti av noterade aktier.",
+    "en": "Spanish securities account for one purchase lot of listed shares."
+  },
+  "country": "ES",
+  "category": "accounts",
+  "releases": [
+    "ae8ce58651f0f8bb5be048d5f8e6c7dff463ae7fd2c56a0e9736828099507bde",
+    "f41d97f2eb31bbc41d57883a9f355ca0d13ffd43f57f5f7f0fd1cceb0d5d0658"
+  ]
+}

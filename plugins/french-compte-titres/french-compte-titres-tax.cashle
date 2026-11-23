@@ -1,0 +1,35 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.InvestmentCarry
+import dev.cashle.tax.InvestmentRules.CostBasisMethod
+
+accountTaxPolicy('compte-titres') {
+    pluginId 'cashle.finance.fr-compte-titres.tax'
+    messages 'dev.cashle.accounts.fr_compte_titres.FrenchOrdinaryTaxPolicy'
+    country 'FR'
+    ruleYear 2025
+
+    retainedAccount true
+    costBasisMethod CostBasisMethod.HOMOGENEOUS_LOT
+    reinvestedDividendsIncreaseBasis true
+    dividendsTaxableOnReceipt true
+    internalSalesRealizeTax true
+    annualBases('investmentGains', 'investmentCapitalLoss', 'investmentDividends')
+
+    withdraw { request -> withdrawal(request, false, false, false) }
+
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        double gains = 0d
+        double losses = 0d
+        double dividends = 0d
+        def carries = new LinkedHashMap()
+        for (def account : accounts) {
+            gains += account.realizedGain()
+            losses += account.realizedLoss()
+            dividends += account.dividends()
+            carries.put(account.id(), new InvestmentCarry(0d, 0d, account.state()))
+        }
+        new InvestmentAnnualAssessment(
+            [investmentGains: gains, investmentCapitalLoss: losses, investmentDividends: dividends], 0d, carries)
+    }
+}

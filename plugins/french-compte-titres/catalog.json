@@ -1,0 +1,13 @@
+{
+  "name": "French compte-titres",
+  "description": {
+    "sv": "Fransk värdepappersdepå för en post med noterade aktier.",
+    "en": "French securities account for one lot of listed shares."
+  },
+  "country": "FR",
+  "category": "accounts",
+  "releases": [
+    "f0492458eca57a49be6425a667b27eb756cb6f43af82b049d987ac34bf03ecb6",
+    "d64683fc2ebdf53cded97d09418b494dc48eb43aa6537204ffb73e268880a146"
+  ]
+}

@@ -1,0 +1,31 @@
+// Two independent accounts share one owner allowance; synthetic annual regression, version 1.
+plugins {
+    id 'cashle.finance'
+    id 'cashle.tax'
+    id 'cashle.finance.isk' from '../swedish-isk.cashle'
+    id 'cashle.finance.isk.policy' from '../swedish-isk.cashle'
+}
+finance {
+    language 'en'
+    plan { from '2026-01-01'; until '2027-01-01'; currency 'SEK'; inflation 0d }
+    person('self') { name 'Synthetic investor'; birthYear 1980; birthMonth 1 }
+    tax {
+        country 'SE'
+        preliminaryRate 0d
+        options([ruleYear:2025, residentMonths:12, municipality:'0180', municipalRate:0.306d,
+                 burialFeeRate:0.0007d, communityMember:false, communityFeeRate:0d])
+    }
+    isk('first') {
+        name 'First ISK'
+        balance 200000d
+        settings([costBasis:200000d, initialYear:[openingValue:200000d,
+                  quarterOpeningValues:[200000d, null, null, null]]])
+    }
+    isk('second') {
+        name 'Second ISK'
+        balance 200000d
+        settings([costBasis:200000d, initialYear:[openingValue:200000d,
+                  quarterOpeningValues:[200000d, null, null, null]]])
+    }
+}
+collect { }

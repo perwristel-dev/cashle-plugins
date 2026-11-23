@@ -1,0 +1,219 @@
+import dev.cashle.tax.InvestmentAccountYear
+import dev.cashle.tax.PropertyAdvancePayment
+import dev.cashle.tax.PropertySaleAssessment
+import dev.cashle.tax.PropertyTaxCalendar
+import dev.cashle.tax.StatefulTaxAssessment
+import dev.cashle.tax.TaxAssessment
+import dev.cashle.tax.TaxMoneyBasis
+import dev.cashle.tax.TaxProfileContext
+import dev.cashle.tax.TaxStateField
+import dev.cashle.tax.support.DatedPropertyInputs
+import dev.cashle.tax.support.PropertyInputs
+import java.time.LocalDate
+
+import static dev.cashle.tax.support.DatedPropertyInputs.count
+import static dev.cashle.tax.support.DatedPropertyInputs.date
+import static dev.cashle.tax.support.DatedPropertyInputs.days
+import static dev.cashle.tax.support.DatedPropertyInputs.money
+import static dev.cashle.tax.support.DatedPropertyInputs.scope
+import static dev.cashle.tax.support.Inputs.bool
+import static dev.cashle.tax.support.Inputs.components
+import static dev.cashle.tax.support.Inputs.keys
+import static dev.cashle.tax.support.Inputs.number
+import static dev.cashle.tax.support.Inputs.require
+
+int referenceYear = 2026
+def publicBases = ['salary', 'capitalIncome', 'dividendIncome', 'capitalGains', 'investmentCapitalLoss'].asImmutable()
+def bases = (publicBases + ['capitalLossBroughtForward']).asImmutable()
+def monetary = (bases + ['personalAllowanceToSavings', 'personalAllowanceToDividends']).toSet().asImmutable()
+def allowed = (monetary + ['ruleYear', 'residency', 'birthYear', 'region', 'niCategory', 'noticeDatesByYear',
+    'noticeAmountsByYear', 'settlementCalendar']).asImmutable()
+def regions = ['england-wales-ni', 'scotland'].asImmutable()
+def insuranceCategories = ['A', 'C'].asImmutable()
+def ordinaryBoundaries = [37700d, 125140d].asImmutable()
+def ordinaryRates = [0.2d, 0.4d, 0.45d].asImmutable()
+def scottishBoundaries = [3967d, 16956d, 31092d, 62430d, 125140d].asImmutable()
+def scottishRates = [0.19d, 0.20d, 0.21d, 0.42d, 0.45d, 0.48d].asImmutable()
+def dividendRates = [0.1075d, 0.3575d, 0.3935d].asImmutable()
+
+def fiscalYear = { LocalDate day -> DatedPropertyInputs.taxYear(day, 4, 6) }
+def paymentDate = { int year -> LocalDate.of(year + 2, 1, 31) }
+
+def stackedTax = { double amount, double occupied, List boundaries, List rates ->
+    double result = 0d
+    double remaining = Math.max(0d, amount)
+    double cursor = occupied
+    for (int i = 0; i < rates.size() && remaining > 0d; i++) {
+        double room = i < boundaries.size() ? Math.max(0d, (double) boundaries[i] - cursor) : remaining
+        double taxable = Math.min(remaining, room)
+        result += taxable * (double) rates[i]
+        remaining -= taxable
+        cursor += taxable
+    }
+    result
+}
+
+def assessProperty = { input ->
+    scope(input, 'GBP')
+    require(bool(input, 'privateResidenceReliefConfirmed', false),
+        'Verify private residence relief facts, no exclusive business use and no claimed lettings/disabled/care-home extensions.')
+    require(input.containsKey('mainResidenceEver'), 'Declare whether this was ever a genuine main residence.')
+    LocalDate acquired = date(input, 'acquiredDate')
+    LocalDate completion = date(input, 'completionDate')
+    LocalDate contract = date(input, 'contractDate')
+    require(!completion.isBefore(contract), 'Completion must not precede disposal contract.')
+    long total = days(acquired, completion)
+    require(total > 0L, 'Ownership period must be positive.')
+    LocalDate finalPeriodStart = completion.minusMonths(9)
+    long finalDays = days(finalPeriodStart.isBefore(acquired) ? acquired : finalPeriodStart, completion)
+    double qualifying = count(input, 'qualifyingResidenceDaysExcludingFinalPeriod', total - finalDays)
+    boolean ever = bool(input, 'mainResidenceEver', false)
+    require(ever || qualifying == 0d, 'A property never used as main residence cannot have residence relief days.')
+    double exemptDays = ever ? Math.min(total, qualifying + finalDays) : 0d
+    double exemptFraction = exemptDays / total
+    double raw = PropertyInputs.gain(input)
+    double taxable = raw * (1d - exemptFraction)
+    def propertyBases = taxable >= 0d ? Map.of('capitalGains', taxable) : Map.of('investmentCapitalLoss', -taxable)
+    new PropertySaleAssessment(fiscalYear(contract), Math.max(0d, taxable), 0d, propertyBases,
+        components('gain', raw, 'privateResidenceExemptFraction', exemptFraction, 'finalPeriodDays', ever ? finalDays : 0L))
+}
+
+countryTaxPolicy('GB') {
+    pluginId 'cashle.tax.gb'
+    currency 'GBP'
+    ruleYear referenceYear
+    incomeBases bases
+    sourceBases publicBases
+    requiresTaxPlan true
+    messages 'dev.cashle.tax.britain.BritishTaxSource'
+
+    taxYearStart { int year -> LocalDate.of(year, 4, 6) }
+    taxYear { LocalDate day -> fiscalYear(day) }
+    settlementDate { int year, options -> paymentDate(year) }
+
+    validateProfile { options, TaxProfileContext context ->
+        def errors = []
+        def year = options.get('ruleYear')
+        if (!(year instanceof Number) || year.doubleValue() != referenceYear) errors.add('profile.ruleYear')
+        if (!'full-year'.equals(options.get('residency'))) errors.add('profile.residency')
+        def openingLoss = options.get('openingCapitalLoss')
+        if (!(openingLoss instanceof Number) || !Double.isFinite(openingLoss.doubleValue()) || openingLoss.doubleValue() < 0d)
+            errors.add('profile.openingCapitalLoss')
+        if (context.people().size() > 1 && openingLoss instanceof Number && openingLoss.doubleValue() > 0d)
+            errors.add('profile.personalCapitalLoss')
+        if (!regions.contains(options.get('region'))) errors.add('profile.region')
+        if (!insuranceCategories.contains(options.get('niCategory'))) errors.add('profile.niCategory')
+        errors
+    }
+
+    assessmentOptions { options ->
+        def result = options.findAll { key, value -> value != null && !''.equals(value) }
+        def loss = result.remove('openingCapitalLoss')
+        result.put('initialState', Map.of('capitalLossCarry', loss == null ? 0 : loss))
+        result
+    }
+
+    optionsInRuleMoney { options, prices -> prices.convertFields(options, monetary) }
+
+    stateFields([capitalLossCarry: new TaxStateField('Unused capital losses', true)])
+
+    assessAnnualStateful { options, int birthYear, int birthMonth, int year, amounts, state, assessAnnual ->
+        def inputs = new LinkedHashMap(options)
+        inputs.put('capitalLossBroughtForward',
+            number(inputs, 'capitalLossBroughtForward', 0d) + state.getOrDefault('capitalLossCarry', 0d))
+        def assessment = assessAnnual.assess(inputs, birthYear, birthMonth, year, amounts)
+        new StatefulTaxAssessment(assessment, Map.of('capitalLossCarry', assessment.components().get('investmentCapitalLossRemaining')))
+    }
+
+    assess { options ->
+        keys(options, allowed)
+        require(number(options, 'ruleYear', 0d) == referenceYear, 'Select explicit ruleYear:2026 (6 April 2026 to 5 April 2027).')
+        require('full-year'.equals(options.get('residency')), 'Only full-year UK residents are supported.')
+        double birth = number(options, 'birthYear', 0d)
+        require(birth == Math.rint(birth) && birth >= 1900d && birth <= 2008d, 'Provide an adult birthYear.')
+        require(regions.contains(options.get('region')), 'Choose England/Wales/Northern Ireland or Scotland explicitly.')
+        require(insuranceCategories.contains(options.get('niCategory')),
+            'Declare annualised employee NI category A, or verified state-pension-age category C.')
+        for (String key : monetary) require(number(options, key, 0d) >= 0d, "$key must be nonnegative.")
+        double salary = number(options, 'salary', 0d)
+        double savings = number(options, 'capitalIncome', 0d)
+        double dividends = number(options, 'dividendIncome', 0d)
+        require(salary == 0d || !'A'.equals(options.get('niCategory')) || birth >= 1962d,
+            'Older employees must verify pension-age NI category; category A supports birthYear from 1962.')
+        double allowance = Math.max(0d, 12570d - Math.max(0d, salary + savings + dividends - 100000d) / 2d)
+
+        // An entered allocation may place personal allowance in a different income class.
+        double paSavings = number(options, 'personalAllowanceToSavings', Math.min(savings, Math.max(0d, allowance - salary)))
+        double paDividends = number(options, 'personalAllowanceToDividends', Math.min(dividends, Math.max(0d, allowance - salary - paSavings)))
+        require(paSavings <= savings && paDividends <= dividends && paSavings + paDividends <= allowance,
+            'Personal allowance allocations exceed income or allowance.')
+        double nonSavings = Math.max(0d, salary - (allowance - paSavings - paDividends))
+        double taxSavings = Math.max(0d, savings - paSavings)
+        double taxDividends = Math.max(0d, dividends - paDividends)
+        double nonSavingsTax = 'scotland'.equals(options.get('region')) ?
+            stackedTax(nonSavings, 0d, scottishBoundaries, scottishRates) :
+            stackedTax(nonSavings, 0d, ordinaryBoundaries, ordinaryRates)
+        double totalTaxable = nonSavings + taxSavings + taxDividends
+        double personalSavings = totalTaxable > 125140d ? 0d : totalTaxable > 37700d ? 500d : 1000d
+        double savingsZero = Math.min(taxSavings, Math.max(0d, 5000d - nonSavings) + personalSavings)
+        double savingsTax = stackedTax(taxSavings - savingsZero, nonSavings + savingsZero, ordinaryBoundaries, ordinaryRates)
+        double dividendZero = Math.min(500d, taxDividends)
+        double dividendTax = stackedTax(taxDividends - dividendZero, nonSavings + taxSavings + dividendZero, ordinaryBoundaries, dividendRates)
+
+        double gain = number(options, 'capitalGains', 0d)
+        double loss = number(options, 'investmentCapitalLoss', 0d)
+        double brought = number(options, 'capitalLossBroughtForward', 0d)
+        double net = Math.max(0d, gain - loss)
+        double currentRemaining = Math.max(0d, loss - gain)
+        double carriedUsed = Math.min(brought, Math.max(0d, net - 3000d))
+        double taxableGain = Math.max(0d, net - carriedUsed - 3000d)
+        double lower = Math.min(taxableGain, Math.max(0d, 37700d - totalTaxable))
+        double cgt = lower * 0.18d + (taxableGain - lower) * 0.24d
+        double ni = 'C'.equals(options.get('niCategory')) ? 0d :
+            Math.max(0d, Math.min(salary, 50270d) - 12570d) * 0.08d + Math.max(0d, salary - 50270d) * 0.02d
+        new TaxAssessment(nonSavingsTax + savingsTax + dividendTax + cgt, ni,
+            components('nonSavingsTax', nonSavingsTax, 'savingsTax', savingsTax, 'dividendTax', dividendTax,
+                'capitalGainsTax', cgt, 'personalAllowance', allowance, 'taxableCapitalGain', taxableGain,
+                'investmentCapitalLossRemaining', currentRemaining + brought - carriedUsed))
+    }
+
+    foreignInvestmentBases { InvestmentAccountYear account, TaxMoneyBasis prices ->
+        Objects.requireNonNull(account)
+        Objects.requireNonNull(prices)
+        require(prices.ruleYear() == referenceYear, 'Foreign investment money basis must match the destination rule year.')
+        require(prices.nativePerPlanUnit() == 1d && (prices.planCurrency() == null || prices.planCurrency().equals(prices.taxCurrency())),
+            "Foreign investment facts must already be in the destination's native currency; use inflationOnly().")
+        require(prices.taxCurrency() == null || 'GBP'.equals(prices.taxCurrency()), 'Foreign investment currency must match the destination.')
+        def options = account.policyOptions()
+        require(!'fund'.equalsIgnoreCase(Objects.toString(options.get('securitiesClassification'), '')),
+            'Foreign fund taxation is unsupported; a fund cannot use ordinary listed-share rules.')
+        require('listed-shares'.equals(Objects.toString(options.get('foreignInvestmentAssetType'), 'listed-shares')),
+            'Foreign investment taxation supports ordinary listed shares only; funds, pensions and other asset classifications need separate rules.')
+        def amounts = Map.of('dividendIncome', account.dividends(), 'capitalGains', account.realizedGain(),
+            'investmentCapitalLoss', account.realizedLoss())
+        for (def entry : amounts.entrySet()) {
+            require(Double.isFinite(entry.value), "Foreign investment basis must remain finite: ${entry.key}")
+        }
+        amounts
+    }
+
+    propertySales {
+        overridesAnnualNotice false
+        inputsInRuleMoney { input, prices -> prices.convertFields(input, DatedPropertyInputs.MONEY) }
+        assess { input -> assessProperty(input) }
+        calendar { input ->
+            int year = fiscalYear(date(input, 'contractDate'))
+            LocalDate advance = date(input, 'completionDate').plusDays(60)
+            new PropertyTaxCalendar(year, Map.of('prepaymentDueDate', advance, 'reportDueDate', advance,
+                'paymentDueDate', paymentDate(year)), Set.of())
+        }
+        advancePayments { input, prices ->
+            def assessment = assessProperty(prices.convertFields(input, DatedPropertyInputs.MONEY))
+            if (assessment.taxableCapitalIncome() <= 0d) return List.of()
+            require(input.containsKey('advanceTaxPayment'),
+                'Provide actual/explicit estimated UK residential CGT payment due within 60 days; annual future income cannot be inferred from this sale alone.')
+            double amount = money(input, 'advanceTaxPayment', 0d)
+            List.of(new PropertyAdvancePayment(date(input, 'completionDate').plusDays(60), amount))
+        }
+    }
+}

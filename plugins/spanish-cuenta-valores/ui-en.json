@@ -1,0 +1,12 @@
+{
+  "label": "Cuenta de valores (listed shares)",
+  "sections.growth": "Growth and dividends",
+  "sections.trades": "Planned sales and repurchases",
+  "sections.tax": "Tax basis and closure",
+  "sections.liquidity": "Liquidity and withdrawals",
+  "sections.options": "More options",
+  "Spanien 2025: en homogen anskaffningspost noterade aktier. Uttag säljer proportionellt ur denna enda post och motsvarar FIFO för posten. Aktievinster och utdelning/ränta hanteras som separata sparbaskategorier med högst 25 % korskvittning och fyra års förlustöverföring. Återinvestering/traspasos uppskjuter inte skatt för ETF eller aktier; kvalificerade fondbyten ingår inte. Skatten räknas på ägarens samlade sparbas, inte som en platt kontoskatt.": "Spain 2025: one homogeneous acquisition lot of listed shares. Withdrawals sell proportionally from this single lot, equivalent to FIFO for the lot. Share gains and dividends/interest are separate savings-base categories with up to 25% cross-offset and four-year loss carryforward. Reinvestment/traspasos do not defer tax for ETFs or shares; qualifying fund switches are excluded. Tax is calculated on the owner’s total savings base, not as a flat account tax.",
+  "Faktisk anskaffningsdag / första insättningsdag": "Actual acquisition date / first deposit date",
+  "Förluster är avdragsgilla: verifierat inga återköp av samma slags noterade aktier inom två månader, eller leverantörens avdragsbesked": "Losses are deductible: verified no repurchase of the same listed shares within two months, or provider confirmation of deductibility",
+  "Ange faktisk anskaffningsdag för den enda aktieposten.": "Enter the actual acquisition date for the single share lot."
+}

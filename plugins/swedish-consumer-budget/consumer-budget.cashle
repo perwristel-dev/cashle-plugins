@@ -1,0 +1,417 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.i18n.Messages
+import java.time.DateTimeException
+import java.time.LocalDate
+import java.util.function.Supplier
+
+financeModule('cashlab.consumer-budget', 1) {
+    pluginId 'cashle.finance.budget.se'
+    dsl('consumerBudget') { id -> [name: id] }
+    messages BudgetPrices.CATALOG
+
+    calculation {
+        requireInput('error.swedishResidence') { BudgetHousehold.hasSwedishResidence(taxSettings, profile) }
+        def label = { String key -> text(key) }
+        def members = BudgetHousehold.members(profile, input, label)
+        def separated = BudgetHousehold.enteredDate(input.partnerSeparationDate)
+        boolean split = input.splitCategories == true
+        if (input.splitCategories != null && !(input.splitCategories instanceof Boolean)) {
+            throw new IllegalArgumentException(text('error.splitCategories'))
+        }
+        double deviation = input.extraPercent instanceof Number ? input.extraPercent.doubleValue() / 100d : 0d
+        if (!Double.isFinite(deviation) || deviation < -1d) throw new IllegalArgumentException(text('error.deviation'))
+        def included = BudgetPrices.CATEGORIES.keySet().findAll { category ->
+            def selection = input.get('include_' + category)
+            if (selection != null && !(selection instanceof Boolean)) {
+                throw new IllegalArgumentException(text('error.categorySelection'))
+            }
+            selection != false
+        }
+        boolean extraNecessary = input.extraNecessary == true
+        String budgetName = Objects.toString(input.name, text('budget.name'))
+        String citySize = input.citySize == null
+            ? BudgetPrices.cityForMunicipality(BudgetHousehold.object(BudgetHousehold.object(profile.tax).options).municipality)
+            : input.citySize.toString().toLowerCase(Locale.ROOT)
+        if (!(citySize in ['small', 'medium', 'large'])) throw new IllegalArgumentException(text('error.citySize'))
+        double currencyFactor = exchangeRate('SEK', Objects.toString(profile.currency, 'SEK'))
+        def adultLife = [:]
+        for (member in members.findAll { it.adult }) {
+            String key = member.id == 'self' ? 'selfDeathDate' : 'partnerDeathDate'
+            LocalDate entered = BudgetHousehold.enteredDate(input.get(key))
+            adultLife[member.id] = entered == null ? plannedDeathOf(member.id) : ({ -> entered } as Supplier)
+        }
+        LocalDate cachedDay = null
+        String cachedCity = null
+        List cachedMembers = []
+        Map cachedPrices = [:]
+        def residence = { String person, LocalDate day ->
+            def actual = residenceAt(person, day)
+            actual == null || actual.country() == 'SE'
+        }
+        def pricesAt = { LocalDate day ->
+            if (!residence('self', day)) return [:]
+            def present = members.findAll { member ->
+                LocalDate end = member.end
+                if (member.adult) {
+                    end = BudgetHousehold.earlier(end, adultLife[member.id].get())
+                    if (member.id == 'partner') end = BudgetHousehold.earlier(end, separated)
+                } else {
+                    def move = member.moveOut
+                    if (move && move.reference != 'never') {
+                        if (move.reference != 'milestone' || !(move.milestoneId instanceof String)) {
+                            throw new IllegalArgumentException(text('error.moveOutMilestone'))
+                        }
+                        def offset = move.offset == null ? 0 : move.offset
+                        if (!BudgetHousehold.wholeNumber(offset, -1200, 1200)) {
+                            throw new IllegalArgumentException(text('error.moveOutOffset'))
+                        }
+                        try {
+                            end = BudgetHousehold.earlier(end, milestone(move.milestoneId, offset.intValue()).get())
+                        } catch (NullPointerException missingMilestone) {
+                            throw new IllegalArgumentException(text('error.moveOutMilestoneMissing') + ' ' + move.milestoneId, missingMilestone)
+                        }
+                    }
+                }
+                return (end == null || day.isBefore(end)) &&
+                    (!member.adult || member.id != 'partner' || residence('partner', day)) &&
+                    (member.parentage != 'partner' || separated == null || day.isBefore(separated))
+            }
+            String city = citySize
+            LocalDate lastMove = null
+            for (change in residenceChanges) {
+                if (!(change.owner() in ['self', 'joint']) || change.country() != 'SE' || !change.active().getAsBoolean()) continue
+                LocalDate moved = change.date().get()
+                if (moved == null || moved.isAfter(day)) continue
+                String next = BudgetPrices.cityForMunicipality(change.options().municipality)
+                if (moved == lastMove && city != next) throw new IllegalArgumentException(text('error.cityConflict') + ' ' + moved)
+                if (lastMove == null || moved.isAfter(lastMove)) {
+                    lastMove = moved
+                    city = next
+                }
+            }
+            if (day != cachedDay || city != cachedCity || present != cachedMembers) {
+                cachedDay = day
+                cachedCity = city
+                cachedMembers = present
+                cachedPrices = BudgetPrices.monthly(day, present, city)
+            }
+            return cachedPrices
+        }
+        def nominal = { Collection<String> categories, double adjustment ->
+            LocalDate day = today
+            Map prices = pricesAt(day)
+            if (prices.isEmpty()) return 0d
+            double scale = currencyFactor * inflationFactor(BudgetPrices.REFERENCE_DATE, day)
+            double total = 0d
+            for (category in categories) total += prices[category] * scale * adjustment
+            total
+        }
+        double baseShare = Math.min(1d, 1d + deviation)
+        if (split) {
+            BudgetPrices.CATEGORIES.each { category, nature ->
+                def expense = household.account {
+                    name(budgetName + ' – ' + text('category.' + category))
+                    classify AccountKind.EXPENSE, BudgetPrices.expenseTag(nature)
+                }
+                boolean selected = included.contains(category)
+                requiredExpense(category) {
+                    on monthlyFromPlanStart
+                    destination expense
+                    amount { selected ? nominal([category], baseShare) : 0d }
+                    savings 'category_' + category
+                }
+            }
+        } else {
+            def expense = household.account {
+                name(budgetName)
+                classify AccountKind.EXPENSE, BudgetPrices.expenseTag('expense.consumption.consumer-budget')
+            }
+            requiredExpense('base') {
+                on monthlyFromPlanStart
+                destination expense
+                amount { nominal(included, baseShare) }
+                savings 'base'
+            }
+        }
+        if (deviation > 0d) {
+            def expense = household.account {
+                name(budgetName + ' – ' + text('budget.extra'))
+                classify AccountKind.EXPENSE, BudgetPrices.expenseTag('expense.other')
+            }
+            requiredExpense('extra') {
+                on monthlyFromPlanStart
+                destination expense
+                amount { nominal(included, deviation) }
+                necessaryShare extraNecessary ? 1d : 0d
+                savings 'extra'
+            }
+        }
+    }
+
+    query('reference') { input -> BudgetHousehold.reference(input) }
+}
+
+/** Monthly 2026 Consumer Agency reference prices in SEK. See doc/provenance.md. */
+class BudgetPrices {
+    static final LocalDate REFERENCE_DATE = LocalDate.of(2026, 1, 1)
+    static final String CATALOG = 'budget.messages'
+    static final Map<String, String> CATEGORIES = [
+        food: 'expense.consumption.food',
+        clothing: 'expense.consumption.clothing',
+        leisure: 'expense.consumption.leisure',
+        personal_hygiene: 'expense.healthcare',
+        mobile_phone: 'expense.other',
+        child_insurance: 'expense.insurance-premium',
+        child_equipment: 'expense.consumption.household-goods',
+        consumables: 'expense.consumption.household-goods',
+        home_equipment: 'expense.consumption.household-goods',
+        internet_subscription: 'expense.other',
+        media: 'expense.consumption.leisure',
+        electricity: 'expense.housing.utilities',
+        water_sewer: 'expense.housing.utilities',
+        home_insurance: 'expense.insurance-premium'
+    ].asImmutable()
+    private static final List<Integer> AGE_BANDS = [0, 1, 4, 7, 11, 15, 18, 25, 51, 71]
+    private static final List<Integer> MOBILE_AGE_BANDS = [8, 11, 15, 18, 25, 51, 71]
+    private static final List<Integer> FOOD = [710, 830, 1330, 1650, 2060, 2370, 2200, 2120, 1940, 1900]
+    private static final List<Integer> CLOTHING = [1070, 1050, 1160, 1130, 1000, 950, 870, 820, 790, 720]
+    private static final List<Integer> LEISURE = [120, 240, 420, 450, 410, 520, 630, 600, 590, 560]
+    private static final List<Integer> HYGIENE = [510, 660, 170, 180, 350, 560, 570, 590, 580, 550]
+    private static final List<Integer> MOBILE = [80, 80, 130, 130, 130, 110, 110]
+    private static final List<Integer> CHILD_EQUIPMENT = [990, 550, 20]
+    private static final List<Integer> HOME_INSURANCE = [150, 170, 200, 250, 300, 340, 350]
+    private static final Map<String, List<Integer>> HOUSEHOLD_PRICES = [
+        consumables: [200, 300, 460, 560, 690, 790, 890],
+        home_equipment: [920, 1030, 1310, 1560, 1790, 1950, 2060],
+        internet_subscription: [1000, 1230, 1460, 1690, 1920, 2150, 2380],
+        media: [640, 690, 720, 720, 720, 720, 840],
+        electricity: [400, 530, 700, 870, 1010, 1150, 1280],
+        water_sewer: [220, 440, 650, 880, 1080, 1310, 1530]
+    ].asImmutable()
+    private static final Map<String, List<Integer>> INSURANCE_2024 = [
+        small: [130, 140, 160, 200, 230, 270, 270],
+        medium: [140, 160, 200, 250, 290, 320, 330],
+        large: [200, 220, 270, 330, 360, 430, 440]
+    ].asImmutable()
+    private static final Properties POPULATION = loadPopulation()
+
+    static AccountTag expenseTag(String nature) {
+        new AccountTag('cashle.household.economic-nature', 1, nature, [AccountKind.EXPENSE] as Set)
+    }
+
+    static String cityForMunicipality(Object municipality) {
+        String population = POPULATION.getProperty(Objects.toString(municipality, ''))
+        if (population == null) return 'medium'
+        int count = Integer.parseInt(population)
+        count < 50000 ? 'small' : count > 200000 ? 'large' : 'medium'
+    }
+
+    private static Properties loadPopulation() {
+        def result = new Properties()
+        def source = BudgetPrices.classLoader.getResourceAsStream('budget/municipality-population-2025.properties')
+        if (source == null) throw new IllegalStateException('Missing budget municipality population data')
+        source.withCloseable { result.load(it) }
+        result
+    }
+
+    static Map<String, Double> monthly(LocalDate day, List<Map> people, String city) {
+        Map<String, Double> prices = CATEGORIES.keySet().collectEntries { [(it): 0d] }
+        double size = 0d
+        double youngChildShare = 0d
+        for (person in people) {
+            LocalDate birth = person.birth
+            double share = person.share
+            int age = day.year - birth.year - (day.monthValue < birth.monthValue ? 1 : 0)
+            if (age < 0 || share == 0d) continue
+            int band = ageBand(age, AGE_BANDS)
+            size += share
+            if (age < 8) youngChildShare = Math.max(youngChildShare, share)
+            int hygieneDiscount = age in [18, 19] ? 35 : age > 65 ? 25 : 0
+            prices.food += FOOD[band] * share
+            prices.clothing += CLOTHING[band] * share
+            prices.leisure += LEISURE[band] * share
+            prices.personal_hygiene += (HYGIENE[band] - hygieneDiscount) * share
+            if (age >= 8) prices.mobile_phone += MOBILE[ageBand(age, MOBILE_AGE_BANDS)] * share
+            if (age < 18) prices.child_insurance += 230 * share
+            if (age <= 10) prices.child_equipment += CHILD_EQUIPMENT[age == 0 ? 0 : age <= 3 ? 1 : 2] * share
+        }
+        if (size > 0d) {
+            HOUSEHOLD_PRICES.each { category, values -> prices[category] = household(values, size) }
+            prices.internet_subscription = Math.max(0d, prices.internet_subscription - 229 * youngChildShare)
+            prices.home_insurance = household(HOME_INSURANCE, size) * household(INSURANCE_2024[city], size) /
+                household(INSURANCE_2024.medium, size)
+        }
+        prices
+    }
+
+    private static int ageBand(int age, List<Integer> minimum) {
+        int index = 0
+        while (index + 1 < minimum.size() && age >= minimum[index + 1]) index++
+        index
+    }
+
+    /** Fractional household sizes interpolate between whole sizes. */
+    private static double household(List<Integer> values, double size) {
+        if (size <= 1d) return values[0] * size
+        int lower = (int) Math.floor(size)
+        double below = wholeHousehold(values, lower)
+        double above = wholeHousehold(values, lower + 1)
+        below + (size - lower) * (above - below)
+    }
+
+    private static double wholeHousehold(List<Integer> values, int size) {
+        int count = values.size()
+        if (size <= count) return values[size - 1]
+        values[count - 1] + (size - count) * (values[count - 1] - values[count - 2])
+    }
+}
+
+/** Both graph and reference amounts use these authored household and residency facts. */
+class BudgetHousehold {
+    private static final Set MODES = ['individual', 'couple', 'household'].toSet().asImmutable()
+
+    static Map object(Object value) {
+        value instanceof Map ? value : [:]
+    }
+
+    static boolean wholeNumber(Object value, int minimum, int maximum) {
+        if (!(value instanceof Number)) return false
+        double number = value.doubleValue()
+        Double.isFinite(number) && number == Math.rint(number) && minimum <= number && number <= maximum
+    }
+
+    static LocalDate earlier(LocalDate left, LocalDate right) {
+        if (left == null) return right
+        if (right == null) return left
+        left.isBefore(right) ? left : right
+    }
+
+    static LocalDate enteredDate(Object value) {
+        value instanceof String && !value.isBlank() ? LocalDate.parse(value) : null
+    }
+
+    static boolean hasSwedishResidence(Map tax, Map profile) {
+        if (tax.isEmpty()) return false
+        Map authored = tax.containsKey('country') || tax.containsKey('residences') ? tax : object(profile.tax)
+        authored.country == 'SE' || authored.residences instanceof List && authored.residences.any { object(it).country == 'SE' }
+    }
+
+    private static boolean hasPartner(String mode, Map household) {
+        mode == 'couple' || (mode == 'household' && household.hasPartner == true)
+    }
+
+    static List<Map> members(Map profile, Map data, Closure message) {
+        String mode = Objects.toString(profile.mode, 'individual')
+        if (!(mode in MODES)) throw new IllegalArgumentException(message('error.householdMode'))
+        Map household = object(profile.household)
+        boolean partner = hasPartner(mode, household)
+        List<Map> people = []
+        for (person in profile.people instanceof List ? profile.people : []) {
+            if (!(person instanceof Map) || !(person.id == 'self' || partner && person.id == 'partner')) continue
+            if (!(person.birthYear instanceof Number) || !(person.birthMonth instanceof Number)) {
+                throw new IllegalArgumentException(message('error.adultBirth'))
+            }
+            people.add([id: person.id, adult: true,
+                birth: LocalDate.of(person.birthYear.intValue(), person.birthMonth.intValue(), 1), share: 1d])
+        }
+        if (people.count { it.id == 'self' } != 1) throw new IllegalArgumentException(message('error.selfMissing'))
+        if (partner && people.count { it.id == 'partner' } != 1) throw new IllegalArgumentException(message('error.partnerMissing'))
+        Map childEvents = [:]
+        for (event in data.childEvents instanceof List ? data.childEvents : []) {
+            if (event instanceof Map && event.childId instanceof String) childEvents[event.childId] = event
+        }
+        if (mode == 'household' && !(household.children instanceof List)) throw new IllegalArgumentException(message('error.childrenMissing'))
+        Set<String> childIds = [] as Set
+        for (child in mode == 'household' ? household.children : []) {
+            if (!(child instanceof Map)) throw new IllegalArgumentException(message('error.childrenMissing'))
+            def year = child.birthYear
+            def month = child.birthMonth == null ? 1 : child.birthMonth
+            if (!wholeNumber(year, 1, 9999)) throw new IllegalArgumentException(message('error.childBirthYear'))
+            if (!wholeNumber(month, 1, 12)) throw new IllegalArgumentException(message('error.childBirthMonth'))
+            if (!(child.residence in ['full', 'half'])) throw new IllegalArgumentException(message('error.residenceShare'))
+            if (child.parentage != null && !(child.parentage in ['shared', 'mine', 'partner'])) {
+                throw new IllegalArgumentException(message('error.parentage'))
+            }
+            String id = Objects.toString(child.id, '')
+            if (id && !childIds.add(id)) throw new IllegalArgumentException(message('error.duplicateChildren'))
+            Map event = childEvents.getOrDefault(id, [:])
+            Map move = object(event.moveOut)
+            LocalDate moveDate = move.isEmpty() ? enteredDate(event.moveOutDate) : null
+            people.add([id: id, adult: false, birth: LocalDate.of(year.intValue(), month.intValue(), 1),
+                share: child.residence == 'half' ? 0.5d : 1d, parentage: Objects.toString(child.parentage, 'mine'),
+                end: earlier(moveDate, enteredDate(event.deathDate)), moveOut: move])
+        }
+        if (!childIds.containsAll(childEvents.keySet())) throw new IllegalArgumentException(message('error.childEvent'))
+        people
+    }
+
+    static Object reference(Map input) {
+        Map profile = object(input.profile)
+        LocalDate day = referenceDate(input.date)
+        if (day == null || !(profile.people instanceof List)) return null
+        List changes = input.residenceChanges instanceof List ? input.residenceChanges : []
+        Map selfResidence = residenceOn(profile, changes, 'self', day)
+        if (selfResidence?.country != 'SE') return null
+        String mode = Objects.toString(profile.mode, '')
+        if (!(mode in MODES)) return null
+        Map household = object(profile.household)
+        if (mode == 'household' && (!(household.hasPartner instanceof Boolean) || !(household.children instanceof List))) return null
+        List<Map> people = []
+        for (id in hasPartner(mode, household) ? ['self', 'partner'] : ['self']) {
+            Map person = object(profile.people.find { object(it).id == id })
+            LocalDate birth = referenceBirth(person, false)
+            if (birth == null || birth.isAfter(day)) return null
+            if (id == 'partner') {
+                Map partnerResidence = residenceOn(profile, changes, id, day)
+                if (partnerResidence == null) return null
+                if (partnerResidence.country != 'SE') continue
+            }
+            people.add([birth: birth, share: 1d])
+        }
+        for (row in mode == 'household' ? household.children : []) {
+            Map child = object(row)
+            LocalDate birth = referenceBirth(child, true)
+            if (birth == null || !(child.residence in ['full', 'half'])) return null
+            people.add([birth: birth, share: child.residence == 'half' ? 0.5d : 1d])
+        }
+        String city = BudgetPrices.cityForMunicipality(object(selfResidence.options).municipality)
+        Map<String, Double> categories = BudgetPrices.monthly(day, people, city)
+        def messages = new Messages(BudgetHousehold, BudgetPrices.CATALOG, Objects.toString(input.language, 'sv'))
+        [referenceYear: BudgetPrices.REFERENCE_DATE.year, householdAt: day.toString(), currency: 'SEK', period: 'month',
+            citySize: city, amount: categories.values().sum(0d), categories: categories, note: messages.text('reference.note')]
+    }
+
+    private static Map residenceOn(Map profile, List changes, String person, LocalDate day) {
+        Map current = object(profile.tax)
+        LocalDate latest = null
+        for (row in changes) {
+            Map change = object(row)
+            if (change.owner != null && !(change.owner in [person, 'joint'])) continue
+            LocalDate moved = referenceDate(change.date)
+            // An unresolved condition could precede the requested date.
+            if (moved == null) return null
+            if (!moved.isAfter(day) && (latest == null || !moved.isBefore(latest))) {
+                latest = moved
+                current = object(change.settings)
+            }
+        }
+        current
+    }
+
+    private static LocalDate referenceBirth(Map person, boolean januaryDefault) {
+        def year = person.birthYear
+        def month = person.birthMonth == null && januaryDefault ? 1 : person.birthMonth
+        if (!wholeNumber(year, 1, 9999) || !wholeNumber(month, 1, 12)) return null
+        LocalDate.of(year.intValue(), month.intValue(), 1)
+    }
+
+    private static LocalDate referenceDate(Object value) {
+        if (!(value instanceof String) || !(value ==~ /\d{4}-\d{2}-\d{2}/)) return null
+        try {
+            LocalDate.parse(value)
+        } catch (DateTimeException invalid) {
+            null
+        }
+    }
+}

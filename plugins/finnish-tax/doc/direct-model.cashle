@@ -1,0 +1,25 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.fi' from '../finnish-tax.cashle'
+}
+
+finance {
+    plan { from '2026-01-01'; until '2027-01-02'; currency 'EUR'; inflation 0d }
+    person('self') { name 'Example resident'; birthYear 1986; birthMonth 1 }
+    tax {
+        country 'FI'
+        preliminaryRate 0d
+        options([ruleYear: 2026, residency: 'full-year', territory: 'mainland', municipalRate: 0.053d, churchRate: 0.01d, children: 0, singleParent: false, productionExpenses: 0d])
+    }
+    salary('job') {
+        name 'Example salary'
+        owner 'self'
+        amount 50000d
+        frequency 'once'
+        taxTreatment 'taxable'
+    }
+}
+collect {}

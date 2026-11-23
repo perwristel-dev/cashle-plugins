@@ -1,0 +1,14 @@
+{
+  "id": "cashle.finance.vp",
+  "requires": ["cashle.finance", "cashle.account.support", "cashle.account.tax.support"],
+  "sources": [{
+    "path": "swedish-vp.cashle",
+    "providers": ["cashle.finance.vp", "cashle.finance.vp.policy"],
+    "resources": [
+      "dev/cashle/accounts/vp/VpPlugin_en.properties",
+      "dev/cashle/accounts/vp/VpPlugin_sv.properties"
+    ]
+  }],
+  "ui": "ui.js",
+  "uiTranslations": [{"locale": "en", "path": "ui-en.json"}, {"locale": "sv", "path": "ui-sv.json"}]
+}

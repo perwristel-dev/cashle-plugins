@@ -1,0 +1,617 @@
+package cashle.plugins.sweden.tax
+
+import groovy.transform.CompileStatic
+import dev.cashle.tax.*
+
+import java.io.*
+import java.nio.charset.StandardCharsets
+import java.time.*
+import java.util.*
+import static dev.cashle.tax.support.Inputs.*
+
+/** Resolved Swedish 2025 final assessment ported from DECCF; see SOURCES.md. */
+@CompileStatic
+final class SwedishIncomeTax {
+    static final int RULE_YEAR = 2025
+    static final Set<String> SOURCE_BASES = Set.of("salary", "pension", "capitalIncome", "interestExpenses", "businessIncome", "privateHomeGain")
+    static final Set<String> NON_MONETARY_BASES = Set.of("se.ink1.15.rental-housing-units")
+
+    static double paidInterestDeductibleFraction(String security) {
+        switch (security) {
+            case "secured": return 1d
+            case "unsecured": return 0.5d
+            default: throw new IllegalArgumentException("Select whether the loan meets the interest-deduction security requirements")
+        }
+    }
+
+    static boolean validDepartureOptions(Map<String,Object> options) {
+        Object rawRules = options.get("rules")
+        if (!(rawRules instanceof Map)) return false
+        Map<?,?> rules = (Map<?,?>) rawRules
+        return Set.of("rules").containsAll(options.keySet())
+            && Set.of("afterEmigrationLiability").containsAll(rules.keySet())
+            && Set.of("limited","unlimited").contains(rules.get("afterEmigrationLiability"))
+    }
+
+    static List<String> incomeBases() {
+        Set<String> bases = new LinkedHashSet<>(BASES)
+        bases.addAll(SOURCE_BASES)
+        bases.addAll(SOURCE_CAPITAL_BASES)
+        bases.add("privateHomeLoss")
+        return List.copyOf(bases)
+    }
+
+    static boolean supportsBasis(String basis) {
+        return basis != null && (BASES.contains(basis) || Set.of("salary", "capitalIncome", "interestExpenses", "businessIncome", "privateHomeGain", "privateHomeLoss").contains(basis) || SOURCE_CAPITAL_BASES.contains(basis))
+    }
+    static Set<String> accumulationBases(String basis) {
+        if(SOURCE_CAPITAL_BASES.contains(basis))return Set.of("capitalIncome")
+        if ("privateHomeGain".equals(basis)) return Set.of("privateHomeGain","privateHomeLoss")
+        require(supportsBasis(basis), "Unsupported tax basis: " + basis)
+        return Set.of(basis)
+    }
+    static Set<String> accumulationBases(String basis,Map<String,Object> sourceOptions) {
+        validateSourceOptions(sourceOptions)
+        return accumulationBases(basis)
+    }
+    static Map<String,Double> classifyMovement(String basis,double amount,Map<String,Object> sourceOptions) {
+        validateSourceOptions(sourceOptions)
+        return classifyMovement(basis,amount)
+    }
+    static Map<String,Double> classifyMovement(String basis,double amount) {
+        if(SOURCE_CAPITAL_BASES.contains(basis)) {
+            require(Double.isFinite(amount),"Capital income must be finite.")
+            return Map.of("capitalIncome",amount)
+        }
+        if("privateHomeGain".equals(basis)) {
+            require(Double.isFinite(amount),"Private-home gain must be finite.")
+            return amount>=0?Map.of("privateHomeGain",amount):Map.of("privateHomeLoss",-amount)
+        }
+        require(supportsBasis(basis), "Unsupported tax basis: " + basis)
+        require(Double.isFinite(amount), "Tax source movement must be finite.")
+        return Map.of(basis, amount)
+    }
+    static boolean retainsSourceInvestmentRegime(Map<String,Object> assessmentOptions) {
+        return unlimitedAfterEmigration(assessmentOptions)
+    }
+    static Map<String,Object> emigrationSourceOptions(Map<String,Object> countryOptions,Map<String,Object> inheritedOptions) {
+        def options=new LinkedHashMap<>(countryOptions)
+        options.putAll(inheritedOptions)
+        validateSourceOptions(options)
+        return Map.copyOf(options)
+    }
+    static Map<String,Object> investmentSourceOptions(String kind,Map<String,Object> sourceOptions) {
+        def options=new LinkedHashMap<>(sourceOptions)
+        options.keySet().removeIf(key->key.startsWith("foreign")||Set.of("noWashSaleConfirmed","noSuperficialLossConfirmed",
+            "spanishLossDeductibilityConfirmed","singleLotConfirmed").contains(key))
+        validateSourceOptions(options)
+        return Map.copyOf(options)
+    }
+    static Map<String,Object> residenceYearOptions(Map<String,Object> options,int residentMonths,String currentResidence) {
+        require(residentMonths>=0&&residentMonths<=12,"Calendar months of Swedish residence must be from zero through twelve.")
+        if("SE".equalsIgnoreCase(currentResidence))return options
+        boolean unlimited=unlimitedAfterEmigration(options)
+        def adjusted=new LinkedHashMap<>(options)
+        def rules=new LinkedHashMap<>(map(options,"rules"))
+        // The existing ordinary engine's valid range starts at one. With no
+        // ordinary earned income this proxy grants neither basic nor job credit.
+        rules.put("residentMonths",unlimited?12:Math.max(1,residentMonths))
+        adjusted.put("rules",rules)
+        if(!unlimited&&residentMonths==0&&options.containsKey("taxBases")) {
+            def bases=new LinkedHashMap<>(map(options,"taxBases"))
+            bases.keySet().removeIf(key->key.startsWith("se.tax.credit.")&&!key.equals("se.tax.credit.foreign-tax"))
+            adjusted.put("taxBases",bases)
+        }
+        return adjusted
+    }
+    static SourceAssessment classifySource(SourceContext context,String basis,double amount) {
+        validateSourceOptions(context.sourceOptions())
+        boolean departed=context.lastEmigrationDate()!=null&&!context.paymentDate().isBefore(context.lastEmigrationDate())
+        if(!departed||"SE".equals(context.residenceCountry())) {
+            if(!"SE".equals(context.residenceCountry()))return SourceAssessment.excluded()
+            return new SourceAssessment(classifyMovement(basis,amount),0,0)
+        }
+        boolean unlimited=unlimitedAfterEmigration(context.assessmentOptions())
+        if("capitalIncome".equals(basis)) {
+            String sourceKind=sourceOption(context.sourceOptions(),"sourceKind","unknown")
+            if(SOURCE_CAPITAL_BASES.contains(sourceKind))basis=sourceKind
+            else require(unlimited,"Select an explicit supported Swedish nonresident capital source kind; unknown asset gains cannot be treated as bank interest.")
+        }
+        if(Set.of("salary","employment","pension").contains(basis)) {
+            double allowance=SwedishEmigrationPolicy.publicPensionAllowance(context.paymentDate().getYear()).monthlySek()
+            if(context.paymentDate().getYear()>2026)allowance*=context.allowanceInflationFactor()
+            def assessed=SwedishEmigrationPolicy.assessIncome(context.paymentDate(),unlimited,basis,amount,
+                context.originCountry(),context.residenceCountry(),context.sourceOptions(),context.monthlyAllowanceUsedNative(),allowance)
+            def ordinary=assessed.ordinaryTaxableSek()==0?Map.<String,Double>of():classifyMovement(basis,assessed.ordinaryTaxableSek())
+            return new SourceAssessment(ordinary,assessed.definitiveTaxSek(),assessed.publicAllowanceUsedSek())
+        }
+        def kind = capitalKind(basis, amount)
+        if(kind==null) {
+            require(unlimited,"This source needs an explicit supported Swedish nonresident classification: "+basis)
+            return new SourceAssessment(classifyMovement(basis,amount),0,0)
+        }
+        def security = securitiesClassification(sourceOption(context.sourceOptions(), "securitiesClassification", "unknown"))
+        double rate=number(context.sourceOptions(),"treatyCouponRate",0.30d)
+        double classifiedAmount=kind==SwedishEmigrationPolicy.CapitalKind.PRIVATE_HOME_LOSS?Math.abs(amount):amount
+        def capital=SwedishEmigrationPolicy.assessCapital(context.paymentDate(),context.lastEmigrationDate(),
+            unlimited?SwedishEmigrationPolicy.Liability.UNLIMITED:SwedishEmigrationPolicy.Liability.LIMITED,
+            new SwedishEmigrationPolicy.CapitalIncome(classifiedAmount,context.originCountry(),kind,security,
+                sourceConfirmed(context.sourceOptions(),"securitiesTreatyExemptionConfirmed"),rate))
+        String ordinaryBasis=kind==SwedishEmigrationPolicy.CapitalKind.PRIVATE_HOME_LOSS?"privateHomeLoss":
+            kind==SwedishEmigrationPolicy.CapitalKind.PRIVATE_HOME_GAIN?"privateHomeGain":"capitalIncome"
+        return new SourceAssessment(capital.ordinaryTaxableSek()==0?Map.<String,Double>of():Map.of(ordinaryBasis,capital.ordinaryTaxableSek()),capital.definitiveTaxSek(),0)
+    }
+
+    private static SwedishEmigrationPolicy.CapitalKind capitalKind(String basis, double amount) {
+        switch (basis) {
+            case "capitalIncome":
+            case "bankInterest": return SwedishEmigrationPolicy.CapitalKind.BANK_INTEREST
+            case "dividendIncome": return SwedishEmigrationPolicy.CapitalKind.DIVIDEND
+            case "securitiesGains": return SwedishEmigrationPolicy.CapitalKind.SECURITY_GAIN
+            case "privateHomeGain": return amount >= 0 ? SwedishEmigrationPolicy.CapitalKind.PRIVATE_HOME_GAIN : SwedishEmigrationPolicy.CapitalKind.PRIVATE_HOME_LOSS
+            case "privateHomeLoss": return SwedishEmigrationPolicy.CapitalKind.PRIVATE_HOME_LOSS
+            case "propertyRentalIncome": return SwedishEmigrationPolicy.CapitalKind.PROPERTY_RENTAL
+            default: return null
+        }
+    }
+
+    private static SwedishEmigrationPolicy.SecuritiesClassification securitiesClassification(String selected) {
+        switch (selected) {
+            case "qualifying-shares": return SwedishEmigrationPolicy.SecuritiesClassification.QUALIFYING_SHARES
+            case "fund": return SwedishEmigrationPolicy.SecuritiesClassification.FUND
+            case "excluded": return SwedishEmigrationPolicy.SecuritiesClassification.EXCLUDED
+            case "unknown": return SwedishEmigrationPolicy.SecuritiesClassification.UNKNOWN
+            default: throw new IllegalArgumentException("Unsupported Swedish securities classification.")
+        }
+    }
+
+    private static final Set<String> SOURCE_CAPITAL_BASES=Set.of("bankInterest","dividendIncome","securitiesGains","propertyRentalIncome")
+    private static final Set<String> SOURCE_OPTIONS=Set.of("sourceKind","workCountry","pensionKind","employmentProfile","foreignEmploymentExemption",
+        "foreignEmploymentExemptionConfirmed","treatyCouponRate","securitiesClassification","securitiesTreatyExemptionConfirmed",
+        "preliminaryMethod","preliminaryRate","preliminaryPayer","preliminaryAnnualIncome")
+    private static void validateSourceOptions(Map<String,Object> options) {
+        keys(options,SOURCE_OPTIONS)
+        Object method=options.get("preliminaryMethod"), rate=options.get("preliminaryRate")
+        Object payer = options.get("preliminaryPayer"), amount = options.get("preliminaryAnnualIncome")
+        require(method==null || "combined".equals(method) || "percent".equals(method) || "table".equals(method) || "lump-table".equals(method),"Invalid preliminary withholding method")
+        require(rate==null || rate instanceof Number && Double.isFinite(((Number)rate).doubleValue()) && ((Number)rate).doubleValue()>=0d && ((Number)rate).doubleValue()<=1d,"Invalid preliminary withholding rate")
+        require(!"percent".equals(method) || rate!=null,"Percentage withholding requires an explicit rate")
+        require(!"table".equals(method) || payer instanceof String && !((String)payer).isBlank(),"Table withholding requires an explicit payer")
+        require(!"lump-table".equals(method) || amount instanceof Number && Double.isFinite(((Number)amount).doubleValue()) && ((Number)amount).doubleValue()>=0d,"Lump-sum withholding requires an estimated annual income")
+    }
+    private static boolean unlimitedAfterEmigration(Map<String,Object> options) {
+        String liability=sourceOption(map(options,"rules"),"afterEmigrationLiability","limited")
+        require("limited".equals(liability)||"unlimited".equals(liability),"Swedish after-emigration liability must be limited or unlimited.")
+        return "unlimited".equals(liability)
+    }
+    private static Map<String,Object> ordinaryOptions(Map<String,Object> options) {
+        unlimitedAfterEmigration(options)
+        if(!map(options,"rules").containsKey("afterEmigrationLiability"))return options
+        def ordinary=new LinkedHashMap<>(options)
+        def rules=new LinkedHashMap<>(map(options,"rules"))
+        rules.remove("afterEmigrationLiability")
+        ordinary.put("rules",rules)
+        return ordinary
+    }
+    static boolean isMonetaryBasis(String basis) { return !NON_MONETARY_BASES.contains(basis); }
+    static Map<String,Object> optionsInRuleMoney(Map<String,Object> options,TaxMoneyBasis prices) {
+        def converted=new LinkedHashMap<>(options)
+        if(options.containsKey("foreignTaxCredit")) {
+            def nativeFields=Set.of("paidAmount","attributableOrdinaryTax")
+            converted.put("foreignTaxCredit",prices.convertFields(map(options,"foreignTaxCredit"),nativeFields,nativeFields))
+        }
+        if(options.containsKey("taxBases")) {
+            def bases=map(options,"taxBases")
+            def monetary=new HashSet<>(bases.keySet())
+            monetary.removeIf(key->!isMonetaryBasis(key))
+            converted.put("taxBases",prices.convertFields(bases,monetary))
+        }
+        if(options.containsKey("propertyAssessments")) {
+            List<Map<String,Object>> homes=new ArrayList<>()
+            for(def home:properties(options))homes.add(prices.convertFields(home,Set.of("assessmentValue")))
+            converted.put("propertyAssessments",homes)
+        }
+        return converted
+    }
+    static TaxAssessment assessAnnual(Map<String,Object> options,int birthYear,int birthMonth,
+                                       int assessmentYear,Map<String,Double> bases) {
+        def ordinary=new LinkedHashMap<>(ordinaryOptions(options))
+        // The payment date belongs to the settlement calendar, not the assessment.
+        // Keep it in the original policy options for settlementDates().
+        ordinary.remove("settlementDate")
+        Map<String,Object> foreignCredit=map(ordinary,"foreignTaxCredit")
+        ordinary.remove("foreignTaxCredit")
+        def input=CountryTaxInputs.swedish(ordinary,birthYear,birthMonth,assessmentYear,bases)
+        if(!options.containsKey("foreignTaxCredit"))return assessResolved(input,assessmentYear)
+        keys(foreignCredit,Set.of("taxYear","paidAmount","attributableOrdinaryTax","entitlementConfirmed"))
+        double creditYear=number(foreignCredit,"taxYear",0)
+        require(creditYear==Math.floor(creditYear)&&creditYear>=2025&&creditYear<=9999,
+            "Foreign tax credit requires an explicit income taxYear from 2025 through 9999.")
+        double paid=number(foreignCredit,"paidAmount",0)
+        double attributable=number(foreignCredit,"attributableOrdinaryTax",0)
+        boolean confirmed=bool(foreignCredit,"entitlementConfirmed",false)
+        def taxBases=new LinkedHashMap<>(map(input,"taxBases"))
+        require(!taxBases.containsKey("se.tax.credit.foreign-tax"),
+            "Enter foreignTaxCredit inputs or the resolved se.tax.credit.foreign-tax amount, not both.")
+        double credit=SwedishEmigrationPolicy.creditForeignTax(paid,confirmed,attributable)
+        if(assessmentYear!=(int)creditYear)return assessResolved(input,assessmentYear)
+        def before=assessResolved(input,assessmentYear)
+        // Conservative remaining ordinary-tax ceiling: all existing credits
+        // reduce this ceiling before the new entered credit is applied. Fees,
+        // property taxes and definitive source withholding never increase it.
+        double remainingOrdinary=Math.max(0,before.components().getOrDefault("tax.municipal",0d)
+            +before.components().getOrDefault("tax.state",0d)+before.components().getOrDefault("tax.capital",0d)
+            -before.components().getOrDefault("tax.credits",0d))
+        taxBases.put("se.tax.credit.foreign-tax",Math.min(credit,remainingOrdinary))
+        input.put("taxBases",taxBases)
+        return assessResolved(input,assessmentYear)
+    }
+    private static final String[] GROUP_serviceOneOne = [
+        "employment", "se.ink1.1.1", "se.ink1.1.1.wage-benefits", "se.ink1.1.1.sickness-activity",
+        "se.ink1.1.1.parental-benefit", "se.ink1.1.1.unemployment-benefit",
+        "se.ink1.1.1.work-injury-annuity", "se.ink1.1.1.care-benefit", "se.ink1.1.1.other"
+    ] as String[]
+    private static final String[] GROUP_publicPension = [
+        "pension", "se.ink1.1.3", "se.ink1.1.3.sickness-activity"
+    ] as String[]
+    private static final String[] GROUP_fullWorkExpenses = [
+        "se.ink1.2.2", "se.ink1.2.3"
+    ] as String[]
+    private static final String[] GROUP_generalDeductions = [
+        "se.ink1.3.1", "se.ink1.14.1"
+    ] as String[]
+    private static final String[] GROUP_capitalIncome = [
+        "capital.income", "se.ink1.7.1", "se.ink1.7.2", "se.ink1.7.3", "se.ink1.7.4", "se.ink1.7.5",
+        "se.ink1.7.6", "se.ink1.7.7"
+    ] as String[]
+    private static final String[] GROUP_securedInterest = [
+        "interest.eligible", "se.ink1.8.1"
+    ] as String[]
+    private static final String[] GROUP_otherLosses = [
+        "se.ink1.8.3", "se.ink1.8.4", "se.ink1.8.6"
+    ] as String[]
+    private static final String[] GROUP_pensionWorkExpenses = [
+        "se.ink1.2.2", "se.ink1.2.4"
+    ] as String[]
+    private static final String[] GROUP_pensionEmploymentIncome = [
+        "employment", "se.ink1.1.1", "se.ink1.1.1.wage-benefits", "se.ink1.1.1.parental-benefit",
+        "se.ink1.1.1.unemployment-benefit", "se.ink1.1.1.care-benefit"
+    ] as String[]
+    private static final String[] GROUP_pensionBusinessIncome = [
+        "se.ink1.1.6", "se.ink1.10.1"
+    ] as String[]
+    private static final String[] GROUP_specialPayroll = [
+        "se.ink1.10.6.own", "se.ink1.10.6.employees"
+    ] as String[]
+    private static final String[] GROUP_jobCreditExcluded = [
+        "se.ink1.1.1.sickness-activity", "se.ink1.1.1.parental-benefit",
+        "se.ink1.1.1.unemployment-benefit", "se.ink1.1.1.work-injury-annuity", "se.ink1.1.1.care-benefit"
+    ] as String[]
+    private static final String[] GROUP_reimbursedCosts = [
+        "se.ink1.2.1", "se.ink1.2.2", "se.ink1.2.3", "se.ink1.2.4"
+    ] as String[]
+    private static final String[] GROUP_sicknessCredit = [
+        "se.ink1.1.1.sickness-activity", "se.ink1.1.3.sickness-activity"
+    ] as String[]
+    private static final Set<String> BASES = Set.of(
+        "employment", "pension", "capital.income", "interest.eligible", "se.ink1.1.1",
+        "se.ink1.1.1.wage-benefits", "se.ink1.1.1.sickness-activity", "se.ink1.1.1.parental-benefit",
+        "se.ink1.1.1.unemployment-benefit", "se.ink1.1.1.work-injury-annuity",
+        "se.ink1.1.1.care-benefit", "se.ink1.1.1.other", "se.ink1.1.2", "se.ink1.1.3",
+        "se.ink1.1.3.sickness-activity", "se.ink1.1.4", "se.ink1.1.5", "se.ink1.1.6",
+        "se.ink1.1.6.sickness-benefit", "se.ink1.1.7", "se.ink1.2.1", "se.ink1.2.2", "se.ink1.2.3",
+        "se.ink1.2.4", "se.ink1.3.1", "se.ink1.5.1", "se.ink1.6.1", "se.ink1.7.1", "se.ink1.7.2",
+        "se.ink1.7.3", "se.ink1.7.4", "se.ink1.7.5", "se.ink1.7.6", "se.ink1.7.7", "se.ink1.8.1",
+        "se.ink1.8.3", "se.ink1.8.4", "se.ink1.8.5", "se.ink1.8.6", "se.ink1.8.7", "se.ink1.8.8",
+        "se.ink1.9.1", "se.ink1.9.2", "se.ink1.10.1", "se.ink1.10.1.sickness-benefit", "se.ink1.10.3",
+        "se.ink1.10.6.own", "se.ink1.10.6.employees", "se.ink1.10.7", "se.ink1.11.1", "se.ink1.11.2",
+        "se.ink1.12.1", "se.ink1.12.2", "se.ink1.13.1", "se.ink1.14.1", "se.ink1.15.home-fee-base",
+        "se.ink1.15.rental-housing-fee-base", "se.ink1.15.rental-housing-units",
+        "se.ink1.16.home-tax-base", "se.ink1.16.rental-land-tax-base",
+        "se.ink1.16.rental-commercial-tax-base", "se.ink1.16.industrial-tax-base",
+        "se.ink1.16.hydropower-tax-base", "se.ink1.16.windpower-tax-base",
+        "se.tax.deduction.sea-income",
+        "se.tax.base.general-pension-fee", "se.tax.base.job-credit", "se.tax.liability.property-fee",
+        "se.tax.liability.self-employment", "se.tax.liability.special-payroll", "se.tax.liability.yield",
+        "se.tax.liability.expansion-fund", "se.tax.liability.other", "se.tax.credit.property-fee",
+        "se.tax.credit.seafarer", "se.tax.credit.northern-residence", "se.tax.credit.rot-rut",
+        "se.tax.credit.green-tech", "se.tax.credit.gift", "se.tax.credit.renewable-electricity",
+        "se.tax.credit.unemployment-fund", "se.tax.credit.foreign-tax"
+    )
+    private static final Set<String> RULES = Set.of("residentMonths", "municipalRate", "stateThreshold", "burialFeeRate", "communityMember", "communityFeeRate")
+    private static final Set<String> DERIVE = Set.of("pensionFee", "specialPayrollTax", "yieldTax", "expansionFundTax")
+    private static final List<Allowance> ALLOWANCES = loadAllowances()
+    private static final List<Allowance> YOUNGER_ALLOWANCES = ALLOWANCES.stream().filter(row -> !row.older).toList()
+    private static final List<Allowance> OLDER_ALLOWANCES = ALLOWANCES.stream().filter(Allowance::older).toList()
+    static TaxAssessment assess(Map<String,Object> options) {
+        return assessResolved(options,RULE_YEAR)
+    }
+    private static TaxAssessment assessResolved(Map<String,Object> options,int assessmentYear) {
+        keys(options, Set.of("taxBases", "dateOfBirth", "rules", "derive", "propertyAssessments", "preliminaryTableNumber"))
+        def taxBases = map(options,"taxBases")
+        keys(taxBases, BASES)
+        for (String key : taxBases.keySet()) number(taxBases,key,0)
+        def rules = map(options,"rules")
+        keys(rules, RULES)
+        validateRules(rules)
+        def derive = map(options,"derive")
+        keys(derive, DERIVE)
+        for (String key : derive.keySet()) bool(derive,key,true)
+        LocalDate birth
+        try {
+            Object raw = options.get("dateOfBirth")
+            if (!(raw instanceof String) || !((String)raw).matches("\\d{4}-\\d{2}-\\d{2}")) throw new DateTimeException("format")
+            birth = LocalDate.parse((String)raw)
+        } catch (DateTimeException e) { throw new IllegalArgumentException("dateOfBirth must be a valid YYYY-MM-DD date.", e); }
+        int birthYear = birth.getYear(), birthMonth = birth.getMonthValue(), birthDay = birth.getDayOfMonth()
+        List<Map<String,Object>> propertyAssessments = properties(options)
+        int residentMonths = (int) number(rules, "residentMonths", 12)
+        double municipalRate = number(rules, "municipalRate", 0.3241d)
+        boolean olderCohort = 2025 - birthYear >= 67
+
+        double serviceOneOne = sum(taxBases, GROUP_serviceOneOne)
+        double reimbursement = positive(amount(taxBases, "se.ink1.1.2"))
+        double publicPension = sum(taxBases, GROUP_publicPension)
+        double privatePension = positive(amount(taxBases, "se.ink1.1.4"))
+        double nonPensionableOther = positive(amount(taxBases, "se.ink1.1.5"))
+        double otherSelfEmployed = positive(amount(taxBases, "se.ink1.1.6"))
+        double closeCompanyEmployment = positive(amount(taxBases, "se.ink1.1.7"))
+        double activeBusiness = positive(amount(taxBases, "se.ink1.10.1"))
+        double passiveBusiness = positive(amount(taxBases, "se.ink1.10.3"))
+        double negativeInterestAllocation = positive(amount(taxBases, "se.ink1.11.2"))
+        double positiveInterestAllocation = positive(amount(taxBases, "se.ink1.11.1"))
+        double travelExpenses = Math.max(0, positive(amount(taxBases, "se.ink1.2.1")) - 11_000)
+        double otherWorkExpenses = Math.max(0, positive(amount(taxBases, "se.ink1.2.4")) - 5_000)
+        double fullWorkExpenses = sum(taxBases, GROUP_fullWorkExpenses)
+        double deductibleWorkExpenses = travelExpenses + otherWorkExpenses + fullWorkExpenses
+        double generalDeductions = sum(taxBases, GROUP_generalDeductions)
+        double serviceIncome = serviceOneOne + reimbursement + publicPension + privatePension + nonPensionableOther +
+          otherSelfEmployed + closeCompanyEmployment - deductibleWorkExpenses
+        double businessIncome = activeBusiness + passiveBusiness - negativeInterestAllocation
+        double fixedIncome = floorHundred(Math.max(0, serviceIncome + businessIncome - generalDeductions))
+        double tableAllowance = residentMonths == 12 ? basicAllowance2025(fixedIncome, olderCohort) : reducedAllowance((int) residentMonths)
+        double allowanceCeiling = Math.max(0, serviceIncome - closeCompanyEmployment + activeBusiness - generalDeductions)
+        double basic = Math.min(Math.min(tableAllowance, allowanceCeiling), fixedIncome)
+        double seaDeduction = floorHundred(positive(amount(taxBases, "se.tax.deduction.sea-income")))
+        double taxableEarned = floorHundred(Math.max(0, fixedIncome - basic - seaDeduction))
+        double municipal = Math.floor(taxableEarned * municipalRate)
+        double stateBase = Math.max(0, taxableEarned - (number(rules, "stateThreshold", 625_800)))
+        double state = taxableEarned < 200 ? 0 : Math.floor(stateBase * 0.2d)
+
+        double capitalIncome = sum(taxBases, GROUP_capitalIncome) + positiveInterestAllocation
+        double securedInterest = sum(taxBases, GROUP_securedInterest)
+        double otherLosses = sum(taxBases, GROUP_otherLosses) * 0.7d + positive(amount(taxBases, "se.ink1.8.5")) * 0.5d
+        double unsecuredInterest = positive(amount(taxBases, "se.ink1.8.8")) * 0.5d
+        double investorDeduction = positive(amount(taxBases, "se.ink1.8.7"))
+        double capitalNet = capitalIncome - securedInterest - otherLosses - unsecuredInterest - investorDeduction
+        double capitalTax = capitalNet < 200 ? 0 : Math.floor(capitalNet * 0.3d)
+        double deficit = Math.max(0, -capitalNet)
+        double excessDeficit = Math.max(0, deficit - 100_000)
+        double investorInExcess = Math.min(investorDeduction, excessDeficit)
+        double capitalCredit = Math.floor((deficit - excessDeficit + investorInExcess) * 0.3d +
+          (excessDeficit - investorInExcess) * 0.21d)
+        double propertyFee = calculatePropertyFee(taxBases, propertyAssessments, assessmentYear)
+        double propertyTax = Math.floor(positive(amount(taxBases, "se.ink1.6.1")) * 0.01d) +
+          Math.floor(positive(amount(taxBases, "se.ink1.16.home-tax-base")) * 0.01d) +
+          Math.floor(positive(amount(taxBases, "se.ink1.16.rental-land-tax-base")) * 0.004d) +
+          Math.floor(positive(amount(taxBases, "se.ink1.16.rental-commercial-tax-base")) * 0.01d) +
+          Math.floor(positive(amount(taxBases, "se.ink1.16.industrial-tax-base")) * 0.005d) +
+          Math.floor(positive(amount(taxBases, "se.ink1.16.hydropower-tax-base")) * 0.005d) +
+          Math.floor(positive(amount(taxBases, "se.ink1.16.windpower-tax-base")) * 0.002d)
+
+        // Expenses incurred in the work (business trips and other work costs) have
+        // their own allowance after reimbursements; commuting and living costs do not.
+        double pensionWorkExpenses = positive(sum(taxBases, GROUP_pensionWorkExpenses) - reimbursement - 5_000)
+        double pensionEmploymentIncome = sum(taxBases, GROUP_pensionEmploymentIncome)
+        double pensionBase = !bool(derive,"pensionFee",true)
+          ? positive(amount(taxBases, "se.tax.base.general-pension-fee"))
+          : positive(pensionEmploymentIncome - pensionWorkExpenses) + sum(taxBases, GROUP_pensionBusinessIncome)
+        double pensionFee = pensionBase < 24_873 || birthYear < 1938 ? 0
+          : roundHundredHalfDown(Math.min(floorHundred(pensionBase), 650_442) * 7 / 100)
+        double ageAtJanuaryOne = 2025 - birthYear - (birthMonth > 1 || (birthMonth == 1 && birthDay > 1) ? 1 : 0)
+        double serviceFee = ageAtJanuaryOne >= 18 ? Math.min(1_249, Math.floor(taxableEarned * 0.01d)) : 0
+        double burialFee = Math.floor(taxableEarned * (number(rules, "burialFeeRate", 0.00293d)))
+        double communityFee = bool(rules,"communityMember",false) ? Math.floor(taxableEarned * (number(rules, "communityFeeRate", 0))) : 0
+        double selfEmployment = Math.max(0, positive(amount(taxBases, "se.tax.liability.self-employment")) - positive(amount(taxBases, "se.ink1.13.1")))
+        double specialPayroll = !bool(derive,"specialPayrollTax",true)
+          ? positive(amount(taxBases, "se.tax.liability.special-payroll"))
+          : Math.floor(sum(taxBases, GROUP_specialPayroll) * 0.2426d)
+        double yieldTax = !bool(derive,"yieldTax",true)
+          ? positive(amount(taxBases, "se.tax.liability.yield"))
+          : Math.floor(floorHundred(positive(amount(taxBases, "se.ink1.9.1"))) * 0.30d) +
+            Math.floor(floorHundred(positive(amount(taxBases, "se.ink1.9.2"))) * 0.15d) +
+            Math.floor(floorHundred(positive(amount(taxBases, "se.ink1.10.7"))) * 0.15d)
+        double expansionUp = positive(amount(taxBases, "se.ink1.12.1"))
+        double expansionDown = positive(amount(taxBases, "se.ink1.12.2"))
+        double expansionTax = !bool(derive,"expansionFundTax",true)
+          ? positive(amount(taxBases, "se.tax.liability.expansion-fund"))
+          : (expansionUp >= 200 ? Math.floor(expansionUp * 0.206d) : 0) -
+            (expansionDown >= 200 ? Math.floor(expansionDown * 0.206d) : 0)
+        double otherTax = positive(amount(taxBases, "se.tax.liability.other"))
+        double beforeCredits = municipal + state + capitalTax + propertyFee + propertyTax + pensionFee + serviceFee + burialFee +
+          communityFee + selfEmployment + specialPayroll + yieldTax + expansionTax + otherTax
+        CreditScope credits = new CreditScope(municipal, municipal + state + capitalTax + propertyFee + propertyTax)
+        double propertyFeeCredit = credits.apply(Math.min(positive(amount(taxBases, "se.tax.credit.property-fee")), propertyFee), false)
+        double seafarerCredit = credits.apply(prorate(positive(amount(taxBases, "se.tax.credit.seafarer")), residentMonths), false)
+        double pensionFeeCredit = credits.apply(pensionFee, false)
+        double excluded = sum(taxBases, GROUP_jobCreditExcluded)
+        double reimbursedCosts = Math.min(reimbursement, sum(taxBases, GROUP_reimbursedCosts))
+        double jobIncome = !bool(derive,"jobCredit",true)
+          ? amount(taxBases, "se.tax.base.job-credit")
+          : Math.max(0, serviceOneOne - excluded - amount(taxBases, "se.ink1.1.1.other") + amount(taxBases, "se.ink1.1.5") + otherSelfEmployed -
+            amount(taxBases, "se.ink1.1.6.sickness-benefit") + reimbursedCosts - deductibleWorkExpenses + activeBusiness -
+            amount(taxBases, "se.ink1.10.1.sickness-benefit") - generalDeductions - seaDeduction)
+        double employmentCredit = credits.apply(jobCredit(floorHundred(jobIncome), basic, olderCohort, municipalRate, residentMonths), true)
+        double sicknessActivityCredit = credits.apply(sicknessCredit(sum(taxBases, GROUP_sicknessCredit), basic,
+          municipalRate, residentMonths), true)
+        double earnedIncomeCredit = credits.apply(prorate(Math.min(1_500, Math.floor(Math.max(0, taxableEarned - 40_000) * 0.0075d)), residentMonths), true)
+        double northernResidenceCredit = credits.apply(prorate(positive(amount(taxBases, "se.tax.credit.northern-residence")), residentMonths), true)
+        double capitalDeficitCredit = credits.apply(capitalCredit, false)
+        double rotRutCredit = credits.apply(positive(amount(taxBases, "se.tax.credit.rot-rut")), false)
+        double greenTechCredit = credits.apply(positive(amount(taxBases, "se.tax.credit.green-tech")), false)
+        double giftCredit = credits.apply(positive(amount(taxBases, "se.tax.credit.gift")), false)
+        double renewableElectricityCredit = credits.apply(positive(amount(taxBases, "se.tax.credit.renewable-electricity")), false)
+        double unemploymentFundCredit = credits.apply(positive(amount(taxBases, "se.tax.credit.unemployment-fund")), false)
+        double foreignTaxCredit = credits.apply(positive(amount(taxBases, "se.tax.credit.foreign-tax")), false)
+        double liability = Math.max(0, beforeCredits - credits.total)
+        return new TaxAssessment(liability, 0, components(
+            "tax.fixedEarnedIncome", fixedIncome,
+            "tax.basicAllowance", basic,
+            "tax.seaIncomeDeduction", seaDeduction,
+            "tax.taxableEarnedIncome", taxableEarned,
+            "tax.municipal", municipal,
+            "tax.state", state,
+            "tax.capitalNet", capitalNet,
+            "tax.capital", capitalTax,
+            "tax.capitalDeficitCredit", capitalCredit,
+            "tax.propertyFee", propertyFee,
+            "tax.propertyTax", propertyTax,
+            "tax.generalPensionFee", pensionFee,
+            "tax.publicServiceFee", serviceFee,
+            "tax.burialFee", burialFee,
+            "tax.communityFee", communityFee,
+            "tax.selfEmployment", selfEmployment,
+            "tax.specialPayroll", specialPayroll,
+            "tax.yield", yieldTax,
+            "tax.expansionFund", expansionTax,
+            "tax.beforeCredits", beforeCredits,
+            "tax.credits", credits.total,
+            "tax.localCreditRemaining", credits.localRemaining,
+            "tax.credit.se.tax.credit.property-fee", propertyFeeCredit,
+            "tax.credit.se.tax.credit.seafarer", seafarerCredit,
+            "tax.credit.general-pension-fee", pensionFeeCredit,
+            "tax.credit.employment", employmentCredit,
+            "tax.credit.sickness-activity", sicknessActivityCredit,
+            "tax.credit.earned-income", earnedIncomeCredit,
+            "tax.credit.se.tax.credit.northern-residence", northernResidenceCredit,
+            "tax.credit.capital-deficit", capitalDeficitCredit,
+            "tax.credit.se.tax.credit.rot-rut", rotRutCredit,
+            "tax.credit.se.tax.credit.green-tech", greenTechCredit,
+            "tax.credit.se.tax.credit.gift", giftCredit,
+            "tax.credit.se.tax.credit.renewable-electricity", renewableElectricityCredit,
+            "tax.credit.se.tax.credit.unemployment-fund", unemploymentFundCredit,
+            "tax.credit.se.tax.credit.foreign-tax", foreignTaxCredit))
+    }
+
+    private static double amount(Map<String,Object> bases, String key) { return number(bases,key,0); }
+    private static double positive(double value) { return Math.max(0,value); }
+    private static double floorHundred(double value) { return Math.floor(value/100)*100; }
+    private static double sum(Map<String,Object> bases, String[] keys) {
+        double total=0; for(String key:keys) total+=amount(bases,key); return total
+    }
+    private static double prorate(double value,int months) { return months>=12?value:Math.floor(value*months/12); }
+    private static double reducedAllowance(int months) { return [0d,1500d,2900d,4400d,5800d,7200d,8700d,10100d,11500d,13000d,14400d,15800d,17300d][months]; }
+    private static double roundHundredHalfDown(double value) {
+        double hundreds=value/100
+        return Math.floor(hundreds+(hundreds-Math.floor(hundreds)>0.5d?1:0))*100
+    }
+    private static double jobCredit(double income,double basic,boolean older,double rate,int months) {
+        double raw
+        if(older) raw=income<=102900?income*0.22d:Math.min(income*0.07d+15493.8d,37002)
+        else if(income<=53508) raw=Math.max(0,income-basic)*rate
+        else if(income<=190512) raw=Math.max(0,(income-53508)*0.3874d+53508-basic)*rate
+        else if(income<=475104) raw=Math.max(0,(income-190512)*0.199d+106604.4d-basic)*rate
+        else raw=Math.max(0,163228.8d-basic)*rate
+        return prorate(Math.floor(raw),months)
+    }
+    private static double sicknessCredit(double income,double allowance,double rate,int months) {
+        double raw=income<=53508?Math.max(0,income-allowance)*rate:income<=190512?Math.max(0,(income-53508)*0.3405d+53508-allowance)*rate:Math.max(0,(income-190512)*0.128d+100136.4d-allowance)*rate
+        return prorate(Math.floor(raw),months)
+    }
+    private static final class CreditScope {
+        double localRemaining,generalRemaining,total
+        CreditScope(double local,double general) { localRemaining=local;generalRemaining=general; }
+        double apply(double requested,boolean local) {
+            double limit=Math.max(0,generalRemaining)
+            double applied=local?Math.min(Math.min(Math.max(0,requested),limit),Math.max(0,localRemaining)):Math.min(Math.max(0,requested),limit)
+            total+=applied;generalRemaining=Math.max(0,generalRemaining-applied)
+            if(local)localRemaining=Math.max(0,localRemaining-applied)
+            return applied
+        }
+    }
+    private static final class Allowance {
+        final boolean older
+        final double low
+        final double high
+        final double amount
+
+        Allowance(boolean older, double low, double high, double amount) {
+            this.older = older
+            this.low = low
+            this.high = high
+            this.amount = amount
+        }
+
+        boolean older() { return older }
+        double low() { return low }
+        double high() { return high }
+        double amount() { return amount }
+    }
+    private static List<Allowance> loadAllowances() {
+        def rows=new ArrayList<Allowance>()
+        try (BufferedReader reader=new BufferedReader(new InputStreamReader(Objects.requireNonNull(SwedishIncomeTax.class.getResourceAsStream("basic-allowance-2025.tsv")),StandardCharsets.UTF_8))) {
+            String line
+            while((line=reader.readLine())!=null) {
+                if(line.startsWith("#")||line.isBlank())continue
+                String[] fields=line.split("\t")
+                rows.add(new Allowance(fields[0].equals("O"),Double.parseDouble(fields[1]),Double.parseDouble(fields[2]),Double.parseDouble(fields[3])))
+            }
+        } catch(IOException e) { throw new ExceptionInInitializerError(e); }
+        return List.copyOf(rows)
+    }
+    private static double basicAllowance2025(double income,boolean older) {
+        List<Allowance> rows = older ? OLDER_ALLOWANCES : YOUNGER_ALLOWANCES
+        int low = 0, high = rows.size() - 1
+        while (low <= high) {
+            int middle = (low + high) >>> 1
+            Allowance row = rows.get(middle)
+            if (income < row.low) high = middle - 1
+            else if (income > row.high) low = middle + 1
+            else return row.amount < 0 ? income : row.amount
+        }
+        return 17300
+    }
+    private static void validateRules(Map<String,Object> rules) {
+        double months=number(rules,"residentMonths",12),municipal=number(rules,"municipalRate",0.3241d),threshold=number(rules,"stateThreshold",625800),burial=number(rules,"burialFeeRate",0.00293d),community=number(rules,"communityFeeRate",0)
+        require(months==Math.floor(months)&&months>=1&&months<=12,"residentMonths must be an integer from 1 through 12.")
+        require(municipal>=0&&municipal<=1&&threshold>=0&&burial>=0&&community>=0&&community<=1,"Tax rates must be between 0 and 1 and the state threshold cannot be negative.")
+        bool(rules,"communityMember",false)
+    }
+    @SuppressWarnings("unchecked")
+    private static List<Map<String,Object>> properties(Map<String,Object> options) {
+        if(!options.containsKey("propertyAssessments"))return List.of()
+        Object raw = options.get("propertyAssessments")
+        if(!(raw instanceof List))throw new IllegalArgumentException("propertyAssessments must be a list.")
+        def result=new ArrayList<Map<String,Object>>()
+        for(Object value:(List<?>)raw) {
+            if(!(value instanceof Map)||((Map<?,?>)value).keySet().stream().anyMatch(k->!(k instanceof String)))throw new IllegalArgumentException("Invalid property assessment.")
+            def item=(Map<String,Object>)value
+            double assessment=number(item,"assessmentValue",Double.NaN),year=number(item,"buildingYear",Double.NaN),valueYear=number(item,"valueYear",year),share=number(item,"ownershipShare",1)
+            require(Double.isFinite(assessment)&&assessment>=0&&Double.isFinite(year)&&year==Math.floor(year)&&Double.isFinite(valueYear)&&valueYear==Math.floor(valueYear)&&share>=0&&share<=1,"Invalid property assessment data.")
+            result.add(item)
+        }
+        return List.copyOf(result)
+    }
+    private static double calculatePropertyFee(Map<String,Object> bases,List<Map<String,Object>> homes,int assessmentYear) {
+        double explicit=amount(bases,"se.tax.liability.property-fee")
+        if(explicit>0)return explicit
+        double total=0
+        if(homes.isEmpty())total+=Math.floor(Math.min(Math.max(0,amount(bases,"se.ink1.5.1")*0.0075d),10074))
+        double rental=amount(bases,"se.ink1.15.home-fee-base")+amount(bases,"se.ink1.15.rental-housing-fee-base"),units=amount(bases,"se.ink1.15.rental-housing-units")
+        if(rental>0)total+=Math.floor(Math.min(rental*0.003d,units>0?units*1724:Double.POSITIVE_INFINITY))
+        for(def home:homes) {
+            double year=number(home,"valueYear",number(home,"buildingYear",0))
+            if(year>=2012&&assessmentYear>year&&assessmentYear<=year+15)continue
+            total+=Math.floor(Math.min(number(home,"assessmentValue",0)*0.0075d,10074)*number(home,"ownershipShare",1))
+        }
+        return total
+    }
+    private static String sourceOption(Map<String,Object> options,String key,String fallback) {
+        if(!options.containsKey(key))return fallback
+        Object value=options.get(key);require(value instanceof String && !((String)value).isBlank(),"Swedish source option "+key+" must be a nonempty string.");return ((String)value).trim()
+    }
+    private static boolean sourceConfirmed(Map<String,Object> options,String key) {
+        if(!options.containsKey(key))return false
+        require(options.get(key) instanceof Boolean,"Swedish source option "+key+" must be boolean.");return Boolean.TRUE.equals(options.get(key))
+    }
+}

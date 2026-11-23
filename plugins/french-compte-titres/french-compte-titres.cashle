@@ -1,0 +1,10 @@
+investmentAccount('cashlab.fr-compte-titres', 1) {
+    pluginId 'cashle.finance.fr-compte-titres'
+    dsl 'frCompteTitres'
+    messages 'dev.cashle.accounts.fr_compte_titres.FrenchSecuritiesPlugin'
+    country 'FR'
+    kind 'FRcompteTitres'
+    taxPolicy 'compte-titres'
+    prepaidTax true
+    transfers false
+}

@@ -1,0 +1,23 @@
+{
+  "label": "VP, aktie/fond",
+  "Ange ett giltigt aktieinnehav.": "Ange ett giltigt aktieinnehav.",
+  "Ange aktiens identitet utan inledande eller avslutande blanksteg.": "Ange aktiens identitet utan inledande eller avslutande blanksteg.",
+  "Ange ett giltigt antal aktier; ett innehav med värde måste ha fler än noll aktier.": "Ange ett giltigt antal aktier; ett innehav med värde måste ha fler än noll aktier.",
+  "Ange en positiv nominell aktiekurs vid den framtida öppningen.": "Ange en positiv nominell aktiekurs vid den framtida öppningen.",
+  "En framtida VP-depå ska ha noll aktier vid kalkylstart.": "En framtida VP-depå ska ha noll aktier vid kalkylstart.",
+  "Ett tomt aktieinnehav kan inte ha omkostnadsbelopp.": "Ett tomt aktieinnehav kan inte ha omkostnadsbelopp.",
+  "Ange aktieslag även för ägarens övriga VP-depåer innan gemensamt omkostnadsbelopp kan beräknas.": "Ange aktieslag även för ägarens övriga VP-depåer innan gemensamt omkostnadsbelopp kan beräknas.",
+  "Samma aktie för samma ägare måste ha samma kurs och avkastningsantaganden i alla depåer.": "Samma aktie för samma ägare måste ha samma kurs och avkastningsantaganden i alla depåer.",
+  "Ange giltiga inställningar för svensk skatt efter utflyttning.": "Ange giltiga inställningar för svensk skatt efter utflyttning.",
+  "Kontots förval är vanliga aktier förvärvade före flytten. Ändra om detta inte stämmer.": "Kontots förval är vanliga aktier förvärvade före flytten. Ändra om detta inte stämmer.",
+  "Aktier som omfattas av tioårsregeln (förvalt)": "Aktier som omfattas av tioårsregeln (förvalt)",
+  "Fondandelar": "Fondandelar",
+  "Undantagna innehav": "Undantagna innehav",
+  "Okänd klassificering": "Okänd klassificering",
+  "Bekräftad avtalsbegränsning undantar värdepappersvinster från svensk skatt": "Bekräftad avtalsbegränsning undantar värdepappersvinster från svensk skatt",
+  "Bekräftad kupongskatt enligt avtal": "Bekräftad kupongskatt enligt avtal",
+  "Klassificering efter svensk utflyttning": "Klassificering efter svensk utflyttning",
+  "Svensk depå med aktier och fonder: vinster och förluster uppskattas från marknadsvärde och genomsnittligt omkostnadsbelopp. Nya köp ökar omkostnadsbeloppet; delförsäljningar minskar det proportionellt.": "Svensk depå med aktier och fonder: vinster och förluster uppskattas från marknadsvärde och genomsnittligt omkostnadsbelopp. Nya köp ökar omkostnadsbeloppet; delförsäljningar minskar det proportionellt.",
+  "30 % enligt nationella regler är förval. Skatteavtal kan begränsa svensk utdelningsskatt.": "30 % enligt nationella regler är förval. Skatteavtal kan begränsa svensk utdelningsskatt.",
+  "Svensk aktiedepå: vanliga aktier förvärvade före utflyttning antas omfattas av tioårsregeln. Bekräftade skatteavtalsbegränsningar kan ändra svensk skatt.": "Svensk aktiedepå: vanliga aktier förvärvade före utflyttning antas omfattas av tioårsregeln. Bekräftade skatteavtalsbegränsningar kan ändra svensk skatt."
+}

@@ -1,0 +1,13 @@
+{
+  "name": "Italian conto titoli ordinario",
+  "description": {
+    "sv": "Vanlig italiensk värdepappersdepå med beskattning enligt dichiarativo.",
+    "en": "Ordinary Italian securities account under the dichiarativo regime."
+  },
+  "country": "IT",
+  "category": "accounts",
+  "releases": [
+    "f8bd58f91f42370c0216db4b391d89d99463fd52f648e49389b581358ea78c02",
+    "62b83180aaab03b425623a5d93582f1792f906155b72199c75438940a18d2f72"
+  ]
+}

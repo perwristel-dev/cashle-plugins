@@ -1,0 +1,10 @@
+investmentAccount('cashlab.dk-ask', 1) {
+    pluginId 'cashle.finance.dk-ask'
+    dsl 'dkAsk'
+    country 'DK'
+    kind 'DKask'
+    taxPolicy 'ask'
+    messages 'dev.cashle.accounts.dk_ask.DanishAskPlugin'
+    supportsUnpaidBankTax true
+    transfers true
+}

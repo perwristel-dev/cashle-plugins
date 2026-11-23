@@ -1,0 +1,19 @@
+import dev.cashle.pension.agreement.PensionAgreement.ContributionInput
+import dev.cashle.pension.agreement.PensionAgreement.Kind
+
+import static Pa16AgreementRules.*
+import static SwedishAgreementRules.*
+
+def sectionI = localized('PA16-I', 63, 10, 1, 1, 1d, 'openingPendingPremium', true)
+pensionAgreement('PA16-I') {
+    pluginId 'cashle.pension.agreement.PA16-I'
+    kind Kind.DEFINED_CONTRIBUTION
+    metadata sectionI('sv')
+    localizedMetadata sectionI
+    eligible { ContributionInput input -> pa16IEligible(input) }
+    historicalContributionBreakpoints { ContributionInput input -> thresholds(input, 7.5d) }
+    contribution { ContributionInput input ->
+        if (!pa16IEligible(input)) return 0d
+        uncappedPremium(input, .025d, .20d) + uncappedPremium(input, .02d, .10d) + pa16IFlex(input)
+    }
+}

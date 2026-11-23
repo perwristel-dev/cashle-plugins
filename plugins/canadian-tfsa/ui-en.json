@@ -1,0 +1,8 @@
+{
+  "label": "Canadian TFSA",
+  "Kanada – TFSA": "Canadian TFSA",
+  "Kanada 2026: skattefri avkastning och uttag. Modellera personens samtliga TFSA som ett konto med verifierat kvarvarande bidragsutrymme vid prognosstart; inkludera årets redan tilldelade 7 000 CAD. Insättningar förbrukar utrymmet. Uttag återställs först den 1 januari följande år, tillsammans med nästa års schablonmässiga 7 000 CAD i regelårets penningvärde. Värdeförlust skapar inget nytt utrymme. Inga icke-kvalificerade placeringar eller överinsättningar stöds.": "Canada 2026: tax-free returns and withdrawals. Model all of a person’s TFSAs as one account with verified remaining contribution room at projection start, including the CAD 7,000 already granted for the year. Contributions use that room. Withdrawals are restored on January 1 of the following year along with the next year’s assumed CAD 7,000 in rule-year money. Losses do not create new room. Non-qualified investments and excess contributions are unsupported.",
+  "Verifierat kvarvarande personligt TFSA-utrymme (CAD)": "Verified remaining personal TFSA room (CAD)",
+  "Totalt kvarvarande utrymme nu, inklusive årets gräns och tidigare outnyttjat utrymme. Uttag under innevarande år får inte läggas tillbaka ännu.": "Total remaining room now, including this year’s limit and previous unused room. Withdrawals during the current year must not yet be added back.",
+  "Den nya TFSA-insättningen vid start överstiger verifierat bidragsutrymme.": "The new TFSA contribution at the start exceeds the verified contribution room."
+}

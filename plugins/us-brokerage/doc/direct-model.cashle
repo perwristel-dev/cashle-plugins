@@ -1,0 +1,31 @@
+// Owned us-brokerage DSL calculation regression; synthetic values, version 1.
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.us' from '../../us-tax/us-tax.cashle'
+    id 'cashle.finance.us-brokerage' from '../us-brokerage.cashle'
+    id 'cashle.finance.us-brokerage.tax' from '../us-brokerage-tax.cashle'
+}
+finance {
+    language 'en'
+    plan { from '2026-01-01'; until '2027-06-01'; currency 'USD'; inflation 0d }
+    person('self') { name 'Synthetic US investor'; birthYear 1980; birthMonth 1 }
+    tax {
+        country 'US'
+        preliminaryRate 0d
+        options([ruleYear:2026, residency:'full-year', state:'TX', filingStatus:'single',
+                 stateTaxMethod:'verified', openingShortTermCapitalLoss:0d, openingLongTermCapitalLoss:0d,
+                 seniorDeductionEligible:true, januaryFirstBirthday:false])
+    }
+    salary('salary') { name 'Salary'; amount 66500d; frequency 'once'; taxTreatment 'taxable'; taxBasis 'salary' }
+    usBrokerage('portfolio') {
+        name 'US portfolio'
+        balance 15000d
+        settings([costBasis:10000d, closeEnabled:true, closeDate:'2026-06-01',
+                  policyOptions:[acquiredDate:'2020-01-01', dividendTreatment:'ordinary', noWashSaleConfirmed:true],
+                  initialYear:[quarterOpeningValues:[null, null, null, null]]])
+    }
+}
+collect { }

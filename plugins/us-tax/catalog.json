@@ -1,0 +1,13 @@
+{
+  "name": "US tax",
+  "description": {
+    "sv": "Amerikansk federal inkomstskatt, FICA för anställda och regler för privatbostadsförsäljning.",
+    "en": "US federal income tax, employee FICA and private-home sale rules."
+  },
+  "country": "US",
+  "category": "tax",
+  "releases": [
+    "6fc9ad5540df9bbb4974622ce489ea59ae42395e987f4aae8942ef176a265d41",
+    "e1563821f746e9230e8d0eb2d588e6d6ffdd8bcb0d616f22120fe6694c78c0b1"
+  ]
+}

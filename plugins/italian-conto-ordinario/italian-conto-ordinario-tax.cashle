@@ -1,0 +1,70 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.InvestmentCarry
+import dev.cashle.tax.InvestmentRules.CostBasisMethod
+import dev.cashle.tax.TaxPolicyField
+import java.time.LocalDate
+import java.time.Year
+
+accountTaxPolicy('conto-ordinario') {
+    pluginId 'cashle.finance.it-conto-ordinario.tax'
+    messages 'dev.cashle.accounts.it_conto_ordinario.ItalianOrdinaryTaxPolicy'
+    country 'IT'
+    ruleYear 2025
+
+    retainedAccount true
+    costBasisMethod CostBasisMethod.HOMOGENEOUS_LOT
+    reinvestedDividendsIncreaseBasis true
+    dividendsTaxableOnReceipt true
+    internalSalesRealizeTax true
+    annualBases 'investmentGains', 'investmentCapitalLoss', 'investmentDividends'
+    annualTaxCollectedImmediately true
+    bankTaxFromExternalCash true
+    bankCollectedTax true
+    collectBankTaxOnClosure true
+    bankTaxCollectionDate { year -> LocalDate.of(year, 12, 31) }
+
+    policyFields([
+        stampTaxableValue: new TaxPolicyField('Financial-provider statement value subject to 0.2% stamp duty', 'number'),
+        stampHoldingDays: new TaxPolicyField('Actual provider statement holding days (1–365)', 'number'),
+        taxRegime: new TaxPolicyField('Annual declarative regime', 'select', ['dichiarativo'])
+    ])
+    def requireAnnualStatement = { options, checks ->
+        checks.require('dichiarativo'.equals(options.get('taxRegime')),
+            'Italian ordinary account supports annual regime dichiarativo; amministrato chronological loss-use is unsupported.')
+        checks.require('annual'.equals(options.get('statementFrequency')),
+            'Applicable stamp duty requires a confirmed annual provider statement; quarterly/monthly statements need separate assessment calendars.')
+    }
+
+    maximumDeposit { deposit ->
+        requireAnnualStatement(deposit.policyOptions(), delegate)
+        Double.POSITIVE_INFINITY
+    }
+    withdraw { request ->
+        requireAnnualStatement(request.policyOptions(), delegate)
+        withdrawal(request, false, false, false)
+    }
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        def bases = [investmentGains: 0d, investmentCapitalLoss: 0d, investmentDividends: 0d]
+        def stamp = 0d
+        def carries = new LinkedHashMap()
+        def bankTaxes = new LinkedHashMap()
+        int yearDays = Year.of(money.assessmentYear()).length()
+        accounts.each { account ->
+            def policyOptions = account.policyOptions()
+            requireAnnualStatement(policyOptions, delegate)
+            bases.investmentGains += account.realizedGain()
+            bases.investmentCapitalLoss += account.realizedLoss()
+            bases.investmentDividends += account.dividends()
+            double value = requiredAmount(policyOptions, 'stampTaxableValue')
+            double days = number(policyOptions, 'stampHoldingDays', yearDays)
+            require(days >= 1 && days <= yearDays && days == Math.rint(days),
+                'stampHoldingDays must be actual integer days within the statement year.')
+            double duty = value * 0.002d * days / yearDays
+            stamp += duty
+            bankTaxes.put(account.id(), duty)
+            carries.put(account.id(), new InvestmentCarry(0d, 0d, account.state()))
+        }
+        new InvestmentAnnualAssessment(bases, stamp, carries, bankTaxes)
+    }
+}

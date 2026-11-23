@@ -1,0 +1,33 @@
+// Owned it-pir DSL calculation regression; synthetic values, version 1.
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.it-pir' from '../italian-pir.cashle'
+    id 'cashle.finance.it-pir.tax' from '../italian-pir-tax.cashle'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.it' from '../../italian-tax/italian-tax.cashle'
+}
+finance {
+    language 'en'
+    plan { from '2025-01-01'; until '2026-10-01'; currency 'EUR'; inflation 0d }
+    person('self') { name 'Synthetic Italian investor'; birthYear 1980; birthMonth 1 }
+    tax {
+        country 'IT'
+        preliminaryRate 0d
+        options([ruleYear:2025, residency:'full-year', initialState:[:], region:'Synthetic flat profile',
+                 municipality:'Fixture', localTaxMethod:'flat', regionalRate:0.0123d, municipalRate:0.008d,
+                 municipalExemption:0d, flatLocalRatesConfirmed:true, regionalSchedule:[], municipalSchedule:[],
+                 localSchedulesConfirmed:false, employmentProfile:'resolved-inps', employmentContract:'indefinite',
+                 employeeSocialContributions:0d, employmentDays:365, payrollSupplementResolved:true,
+                 settlementCalendar:[month:9, day:30, yearOffset:1, confirmed:true]])
+    }
+    itPir('sheltered') {
+        name 'PIR'
+        balance 15000d
+        settings([costBasis:10000d, closeEnabled:true, closeDate:'2025-06-01',
+                  policyOptions:[acquiredDate:'2019-01-01', pirEligibilityConfirmed:true, pirAllWithdrawnLotsFiveYears:true],
+                  openingState:[cumulativeContributions:10000d, yearContributions:0d, recaptureTax:0d],
+                  initialYear:[quarterOpeningValues:[null, null, null, null]]])
+    }
+}
+collect { }

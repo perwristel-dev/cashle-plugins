@@ -1,0 +1,53 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.InvestmentCarry
+import dev.cashle.tax.InvestmentRules.CostBasisMethod
+import dev.cashle.tax.TaxPolicyField
+
+def confirmationKey = 'spanishLossDeductibilityConfirmed'
+
+accountTaxPolicy('cuenta-valores') {
+    pluginId 'cashle.finance.es-cuenta-valores.tax'
+    messages 'dev.cashle.accounts.es_cuenta_valores.SpanishOrdinaryTaxPolicy'
+    country 'ES'
+    ruleYear 2025
+
+    retainedAccount true
+    costBasisMethod CostBasisMethod.HOMOGENEOUS_LOT
+    reinvestedDividendsIncreaseBasis true
+    dividendsTaxableOnReceipt true
+    internalSalesRealizeTax true
+    annualBases 'investmentGains', 'investmentCapitalLoss', 'investmentDividends'
+
+    policyFields([
+        (confirmationKey): new TaxPolicyField(
+            'No same-class listed-share repurchases in the statutory two-month window, or provider confirms currently deductible loss',
+            'boolean'
+        )
+    ])
+
+    withdraw { request ->
+        def position = request.position()
+        if (position.marketValue() < position.costBasis()) {
+            require(bool(request.policyOptions(), confirmationKey, false),
+                'Spanish listed-share loss needs owner-wide confirmation of the two-month repurchase restriction or provider-resolved currently deductible loss.')
+        }
+        withdrawal(request, false, false, false)
+    }
+
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        def bases = [investmentGains: 0d, investmentCapitalLoss: 0d, investmentDividends: 0d]
+        def carries = new LinkedHashMap()
+        for (def account : accounts) {
+            if (account.realizedLoss() > 0d) {
+                require(bool(account.policyOptions(), confirmationKey, false),
+                    'Confirm Spanish owner-wide two-month repurchase restriction before deducting a listed-share loss.')
+            }
+            bases.investmentGains += account.realizedGain()
+            bases.investmentCapitalLoss += account.realizedLoss()
+            bases.investmentDividends += account.dividends()
+            carries.put(account.id(), new InvestmentCarry(0d, 0d, account.state()))
+        }
+        new InvestmentAnnualAssessment(bases, 0d, carries, Map.of())
+    }
+}

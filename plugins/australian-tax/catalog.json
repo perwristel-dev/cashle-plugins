@@ -1,0 +1,13 @@
+{
+  "name": "Australian tax",
+  "description": {
+    "sv": "Australisk inkomstskatt och fastighetsbeskattning för bosatta.",
+    "en": "Australian income and property tax for residents."
+  },
+  "country": "AU",
+  "category": "tax",
+  "releases": [
+    "772d9dccd89a25f35e5e623a983b6255b012eb31251bddc13ac94a69b26fd778",
+    "99e109ae8d493afc3b69cac4e79beaefcb12f6ce6188d8e907e4efdabcb11a37"
+  ]
+}

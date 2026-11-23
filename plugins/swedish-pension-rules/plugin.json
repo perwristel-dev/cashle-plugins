@@ -1,0 +1,8 @@
+{
+  "id": "cashle.finance.pension.rules",
+  "sourceExports": ["swedish-pension-common.cashle"],
+  "sources": [{
+    "path": "swedish-pension-common.cashle",
+    "resources": ["swedish/pension/common_en.properties", "swedish/pension/common_sv.properties"]
+  }]
+}

@@ -1,0 +1,25 @@
+import cashle.plugins.sweden.account.PhysicalAccount
+
+taxAccountLifecycle('SE-physical-tax-account') {
+    pluginId 'cashle.tax.se.runtime'
+    lifecycle { host, rules ->
+        def account = new PhysicalAccount(host)
+        rules.account { account.account }
+        rules.configureInputs { input -> account.configureInputs(input) }
+        rules.configureNotices { physical, entered, historical, forecasts, refundDates, refundPolicy ->
+            account.configureNotices(physical, entered, historical, forecasts, refundDates, refundPolicy)
+        }
+        rules.fundingRequests { account.fundingRequests() }
+        rules.observeFunding { flows -> account.observeFunding(flows) }
+        rules.validateOpening { opening -> account.validateOpening(opening) }
+        rules.forecast { physical, year, decision, posting, settlement, active ->
+            account.forecast(physical, year, decision, posting, settlement, active)
+        }
+        rules.allowSettlement { year, date -> account.allowSettlement(year, date) }
+        rules.applySettlement { date, scheduled -> account.applySettlement(date, scheduled) }
+        rules.validatePropertyAdvance { preliminary, settled -> account.validatePropertyAdvance(preliminary, settled) }
+        rules.settlementEvents { account.settlementEvents() }
+        rules.afterFunding { account.afterFunding() }
+        rules.fundingReconciled { selectedLateSettlement -> account.fundingReconciled(selectedLateSettlement) }
+    }
+}

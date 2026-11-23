@@ -1,0 +1,13 @@
+{
+  "name": "PA16 II Elective Pension",
+  "description": {
+    "sv": "Premier till den valbara delen enligt PA16 avdelning II.",
+    "en": "Contributions to the elective pension under PA16 Section II."
+  },
+  "country": "SE",
+  "category": "income",
+  "releases": [
+    "82faac59d376a5fea09d33a94668ec6c6ba714f4ab2accdf2beda6e190dc3e6d",
+    "f22f36026027381daa84da78733299cb777a4df5e7cb38192ade971889342bbd"
+  ]
+}

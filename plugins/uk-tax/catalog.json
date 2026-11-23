@@ -1,0 +1,13 @@
+{
+  "name": "UK tax",
+  "description": {
+    "sv": "Brittisk inkomstskatt och skatteinställningar för privatbostad.",
+    "en": "UK income tax and private-property tax settings."
+  },
+  "country": "GB",
+  "category": "tax",
+  "releases": [
+    "76fa43986b403af9f1b4fc2f4b0e82efda11f7c54db7366a95894e3e2d609c33",
+    "e6f7b6ecfab847706f8d0e392a4287850df2caf7e8af52163843e3884ccd6823"
+  ]
+}

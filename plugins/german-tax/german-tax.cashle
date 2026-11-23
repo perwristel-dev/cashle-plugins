@@ -1,0 +1,237 @@
+import dev.cashle.tax.InvestmentAccountYear
+import dev.cashle.tax.PropertySaleAssessment
+import dev.cashle.tax.PropertyTaxCalendar
+import dev.cashle.tax.StatefulTaxAssessment
+import dev.cashle.tax.TaxAssessment
+import dev.cashle.tax.TaxMoneyBasis
+import dev.cashle.tax.TaxStateField
+import dev.cashle.tax.support.PropertyInputs
+import java.time.LocalDate
+
+import static dev.cashle.tax.support.Inputs.*
+import static dev.cashle.tax.support.PropertyInputs.MONEY
+import static dev.cashle.tax.support.PropertyInputs.base
+import static dev.cashle.tax.support.PropertyInputs.date
+import static dev.cashle.tax.support.PropertyInputs.gain
+import static dev.cashle.tax.support.PropertyInputs.noReplacementRollover
+import static dev.cashle.tax.support.PropertyInputs.requiredBool
+import static dev.cashle.tax.support.PropertyInputs.scope
+
+int referenceYear = 2026
+def bases = ['salary', 'capitalIncome', 'shareIncome', 'privatePropertyIncome'].asImmutable()
+def nativeMoney = ['employmentExpenses', 'churchTaxPaid'].asImmutable()
+def lossFields = [
+    shareLossCarry: new TaxStateField('Share sale losses (EUR)', true),
+    otherCapitalLossCarry: new TaxStateField('Other capital losses (EUR)', true),
+    privatePropertyLossCarry: new TaxStateField('Private §23 losses (EUR)', true)
+].asImmutable()
+def moneyOptions = (nativeMoney + lossFields.keySet()).toSet().asImmutable()
+def allowed = (bases + moneyOptions + ['ruleYear', 'residency', 'birthYear', 'profile', 'churchRate',
+    'healthAdditionalRate', 'saxony', 'settlementDate', 'noticeDatesByYear', 'noticeAmountsByYear',
+    'settlementCalendar', 'initialState']).toSet().asImmutable()
+def finite = { value -> value instanceof Number && Double.isFinite(value.doubleValue()) }
+def equalNumber = { value, double target -> value instanceof Number && value.doubleValue() == target }
+def nonnegative = { options, String key ->
+    double value = number(options, key, 0d)
+    require(value >= 0d, "${key} must be nonnegative.")
+    value
+}
+def tariff = { double income ->
+    double whole = Math.floor(Math.max(0d, income))
+    if (whole <= 12348d) return 0d
+    if (whole <= 17799d) {
+        double excess = (whole - 12348d) / 10000d
+        return Math.floor((914.51d * excess + 1400d) * excess)
+    }
+    if (whole <= 69878d) {
+        double excess = (whole - 17799d) / 10000d
+        return Math.floor((173.10d * excess + 2397d) * excess + 1034.87d)
+    }
+    Math.floor(whole <= 277825d ? 0.42d * whole - 11135.63d : 0.45d * whole - 19470.38d)
+}
+def solidarity = { double tax ->
+    Math.floor(Math.max(0d, Math.min(tax * 0.055d, (tax - 20350d) * 0.119d)) * 100d + 1e-8d) / 100d
+}
+
+countryTaxPolicy('DE') {
+    pluginId 'cashle.tax.de'
+    currency 'EUR'
+    ruleYear referenceYear
+    incomeBases bases
+    requiresTaxPlan true
+    messages 'dev.cashle.tax.germany.GermanTaxSource'
+    nativeMonetaryOptions nativeMoney
+    stateFields lossFields
+
+    validateProfile { options, context ->
+        def errors = []
+        if (!equalNumber(options.ruleYear, referenceYear) || !'full-year'.equals(options.residency)) {
+            errors.add('profile.ruleYearResidency')
+        }
+        if (context.people().any { person ->
+            def birth = person.get('birthYear')
+            finite(birth) && birth.doubleValue() == Math.rint(birth.doubleValue()) &&
+                (birth.intValue() < 1962 || birth.intValue() > 2002)
+        }) errors.add('profile.birthYear')
+        def settlement = options.get('settlementDate')
+        def notices = options.get('noticeDatesByYear')
+        def calendar = options.get('settlementCalendar')
+        boolean dateEntered = settlement instanceof String && settlement.matches('\\d{4}-\\d{2}-\\d{2}')
+        boolean noticesEntered = notices instanceof Map && !notices.isEmpty()
+        boolean calendarConfirmed = calendar instanceof Map && Boolean.TRUE.equals(calendar.get('confirmed'))
+        if (!dateEntered && !noticesEntered && !calendarConfirmed) errors.add('profile.settlementDate')
+        if (!'single-childless-statutory'.equals(options.profile)) errors.add('profile.conditions')
+        if (![0d, 0.08d, 0.09d].any { rate -> equalNumber(options.churchRate, rate) }) errors.add('profile.churchRate')
+        if (!finite(options.healthAdditionalRate) || options.healthAdditionalRate < 0d || options.healthAdditionalRate > 0.1d) {
+            errors.add('profile.healthAdditionalRate')
+        }
+        if (!(options.saxony instanceof Boolean)) errors.add('profile.saxony')
+        for (String key : nativeMoney) {
+            if (!finite(options.get(key)) || options.get(key) < 0d) errors.add('profile.deductions')
+        }
+        errors
+    }
+
+    assessmentOptions { options ->
+        options.findAll { key, value -> value != null && !''.equals(value) && !(value instanceof Map && value.isEmpty()) }
+    }
+    optionsInRuleMoney { options, prices ->
+        prices.convertFields(prices.convertFields(options, bases.toSet()), moneyOptions, nativeMoney.toSet())
+    }
+    settlementDate { int year, options ->
+        require(options.containsKey('settlementDate'),
+            'Germany needs an explicit annual payment date from the assessment notice (settlementDate); no fixed May calendar applies.')
+        LocalDate.parse(options.get('settlementDate').toString())
+    }
+    assessAnnualStateful { options, int birthYear, int birthMonth, int year, annualBases, state, annual ->
+        def merged = new LinkedHashMap(options)
+        merged.putAll(state)
+        def assessment = annual.assess(merged, birthYear, birthMonth, year, annualBases)
+        new StatefulTaxAssessment(assessment, [
+            shareLossCarry: assessment.components().get('shareLossRemaining'),
+            otherCapitalLossCarry: assessment.components().get('otherCapitalLossRemaining'),
+            privatePropertyLossCarry: assessment.components().get('privatePropertyLossRemaining')
+        ])
+    }
+
+    assess { options ->
+        keys(options, allowed)
+        require(number(options, 'ruleYear', 0d) == referenceYear, 'Select explicit ruleYear:2026.')
+        require('full-year'.equals(options.residency), 'Only full-year German residence is supported.')
+        require('single-childless-statutory'.equals(options.profile),
+            'Confirm individual assessment, no child tax benefits, and ordinary statutory employee insurance. Joint assessment and pension-age profiles are unsupported.')
+        double birth = number(options, 'birthYear', 0d)
+        require(birth == Math.rint(birth) && birth >= 1962d && birth <= 2002d,
+            'German profile supports adults aged 24–64 in the assessment year.')
+        double salary = nonnegative(options, 'salary')
+        require(salary == 0d || salary > 24000d,
+            'Mini/midi-job and partial-year employment insurance are unsupported; full-year ordinary salary must exceed EUR 24,000.')
+        double church = number(options, 'churchRate', Double.NaN)
+        double extra = number(options, 'healthAdditionalRate', Double.NaN)
+        require(church == 0d || church == 0.08d || church == 0.09d,
+            'Provide churchRate 0, .08 (Bavaria/Baden-Württemberg), or .09 (other states).')
+        require(extra >= 0d && extra <= 0.1d, "Provide the actual insurer's additional health contribution rate.")
+        require(options.containsKey('saxony'), 'Confirm Saxony residence explicitly.')
+
+        double pension = Math.min(salary, 101400d) * 0.093d
+        double unemployment = Math.min(salary, 101400d) * 0.013d
+        double health = Math.min(salary, 69750d) * (0.073d + extra / 2d)
+        double care = Math.min(salary, 69750d) * (bool(options, 'saxony', false) ? 0.029d : 0.024d)
+        double basicHealth = health * 0.96d
+        double insuranceDeduction = pension + basicHealth + care +
+            Math.min(unemployment, Math.max(0d, 1900d - basicHealth - care))
+        double work = Math.min(salary, Math.max(1230d, nonnegative(options, 'employmentExpenses')))
+
+        double propertyCurrent = number(options, 'privatePropertyIncome', 0d)
+        double property = (propertyCurrent > 0d && propertyCurrent < 1000d ? 0d : propertyCurrent) -
+            nonnegative(options, 'privatePropertyLossCarry')
+        double taxable = Math.max(0d, salary - work - insuranceDeduction -
+            Math.max(36d, nonnegative(options, 'churchTaxPaid')) + Math.max(0d, property))
+        double ordinary = tariff(taxable)
+        double soli = solidarity(ordinary)
+        double churchOrdinary = ordinary * church
+
+        double shares = number(options, 'shareIncome', 0d) - nonnegative(options, 'shareLossCarry')
+        double shareRemaining = Math.max(0d, -shares)
+        double other = number(options, 'capitalIncome', 0d) - nonnegative(options, 'otherCapitalLossCarry')
+        double total = Math.max(0d, shares) + other
+        double otherRemaining = Math.max(0d, -total)
+        double capitalTaxable = Math.max(0d, total - 1000d)
+        // §32d(1): church tax is deductible from its own capital-income tax base.
+        double capital = capitalTaxable / (4d + church)
+        double capitalSoli = capital * 0.055d
+        double capitalChurch = capital * church
+
+        new TaxAssessment(ordinary + soli + churchOrdinary + capital + capitalSoli + capitalChurch,
+            pension + unemployment + health + care,
+            components('ordinaryIncomeTax', ordinary, 'ordinarySolidarity', soli,
+                'ordinaryChurchTax', churchOrdinary, 'taxableOrdinaryIncome', taxable,
+                'employeePension', pension, 'employeeUnemployment', unemployment,
+                'employeeHealth', health, 'employeeCare', care, 'insuranceDeduction', insuranceDeduction,
+                'employmentDeduction', work, 'taxableCapitalIncome', capitalTaxable, 'capitalIncomeTax', capital,
+                'capitalSolidarity', capitalSoli, 'capitalChurchTax', capitalChurch,
+                'shareLossRemaining', shareRemaining, 'otherCapitalLossRemaining', otherRemaining,
+                'privatePropertyLossRemaining', Math.max(0d, -property)))
+    }
+
+    foreignInvestmentBases { InvestmentAccountYear account, TaxMoneyBasis prices ->
+        Objects.requireNonNull(account)
+        Objects.requireNonNull(prices)
+        require(prices.ruleYear() == referenceYear, 'Foreign investment money basis must match the destination rule year.')
+        require(prices.nativePerPlanUnit() == 1d &&
+            (prices.planCurrency() == null || prices.planCurrency().equals(prices.taxCurrency())),
+            "Foreign investment facts must already be in the destination's native currency; use inflationOnly().")
+        require(prices.taxCurrency() == null || 'EUR'.equals(prices.taxCurrency()), 'Foreign investment currency must match the destination.')
+        def options = account.policyOptions()
+        require(!'fund'.equalsIgnoreCase(Objects.toString(options.get('securitiesClassification'), '')),
+            'Foreign fund taxation is unsupported; a fund cannot use ordinary listed-share rules.')
+        require('listed-shares'.equals(Objects.toString(options.get('foreignInvestmentAssetType'), 'listed-shares')),
+            'Foreign investment taxation supports ordinary listed shares only; funds, pensions and other asset classifications need separate rules.')
+        double shares = account.realizedGain() - account.realizedLoss()
+        require(Double.isFinite(account.dividends()), 'Foreign investment basis must remain finite: capitalIncome')
+        require(Double.isFinite(shares), 'Foreign investment basis must remain finite: shareIncome')
+        Map.of('capitalIncome', account.dividends(), 'shareIncome', shares)
+    }
+
+    propertySales {
+        overridesAnnualNotice false
+        inputsInRuleMoney { inputs, prices -> prices.convertFields(inputs, MONEY) }
+
+        assess { inputs ->
+            scope(inputs, 'EUR')
+            noReplacementRollover(inputs)
+            LocalDate acquired = date(inputs, 'acquiredDate')
+            LocalDate contract = date(inputs, 'contractDate')
+            LocalDate settled = date(inputs, 'settlementDate')
+            require(!settled.isBefore(contract),
+                'settlementDate must not precede contractDate; installments and advance proceeds are unsupported.')
+            boolean throughout = requiredBool(inputs, 'ownUseThroughout')
+            boolean three = requiredBool(inputs, 'ownUseThreeCalendarYears')
+            if (inputs.containsKey('ownUseFrom') || inputs.containsKey('ownUseUntil')) {
+                LocalDate from = date(inputs, 'ownUseFrom')
+                LocalDate until = date(inputs, 'ownUseUntil')
+                require(!from.isBefore(acquired) && !until.isAfter(contract) && !until.isBefore(from),
+                    'Own-use dates must lie within the ownership period.')
+                three = from.year <= contract.year - 2 && until.year == contract.year
+                throughout = from.equals(acquired) && until.equals(contract)
+            }
+            boolean exempt = throughout || three || contract.isAfter(acquired.plusYears(10))
+            double gainAmount = gain(inputs)
+            double taxable = exempt ? 0d : gainAmount
+            // The person's annual §23 total determines whether the exemption threshold applies.
+            new PropertySaleAssessment(settled.year, 0d, 0d, base('privatePropertyIncome', taxable),
+                components('gain', gainAmount, 'exempt', exempt ? 1 : 0,
+                    'privatePropertyIncome', taxable, 'annualThresholdAppliedByTaxPlugin', 1))
+        }
+
+        calendar { inputs ->
+            def copy = new LinkedHashMap(inputs)
+            LocalDate recognition = date(inputs, 'settlementDate')
+            copy.put('taxYear', recognition.year)
+            def notice = PropertyInputs.calendar(copy)
+            def dates = new LinkedHashMap(notice.dates())
+            dates.put('taxRecognitionDate', recognition)
+            new PropertyTaxCalendar(notice.taxYear(), dates, notice.requiredInputs())
+        }
+    }
+}

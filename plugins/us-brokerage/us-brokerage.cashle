@@ -1,0 +1,25 @@
+investmentAccount('cashlab.us-brokerage', 1) {
+    pluginId 'cashle.finance.us-brokerage'
+    dsl 'usBrokerage'
+    messages 'dev.cashle.accounts.us_brokerage.UsBrokeragePlugin'
+
+    country 'US'
+    kind 'USbrokerage'
+    taxPolicy 'brokerage'
+    prepaidTax true
+    transfers false
+
+    taxInput { entered, active, messages ->
+        def initial = entered.get('initialYear') instanceof Map ? entered.get('initialYear') : [:]
+        if (Boolean.TRUE.equals(initial.get('newAccountAtStart'))) return entered
+
+        def state = entered.get('openingState') instanceof Map ? entered.get('openingState') : [:]
+        def amount = { key -> state.get(key) instanceof Number ? state.get(key).doubleValue() : 0d }
+        def history = new LinkedHashMap(initial)
+        history.put('realizedGain', amount('realizedShortTermGain') + amount('realizedLongTermGain'))
+        history.put('realizedLoss', amount('realizedShortTermLoss') + amount('realizedLongTermLoss'))
+        def result = new LinkedHashMap(entered)
+        result.put('initialYear', Collections.unmodifiableMap(history))
+        Collections.unmodifiableMap(result)
+    }
+}

@@ -1,0 +1,19 @@
+import dev.cashle.pension.agreement.PensionAgreement.ContributionInput
+import dev.cashle.pension.agreement.PensionAgreement.Kind
+
+import static SwedishAgreementRules.*
+
+def safLo = localized('SAF-LO', 55, 5)
+pensionAgreement('SAF-LO') {
+    pluginId 'cashle.pension.agreement.SAF-LO'
+    kind Kind.DEFINED_CONTRIBUTION
+    metadata safLo('sv')
+    localizedMetadata safLo
+    eligible { ContributionInput input -> safLoEligible(input) }
+    historicalContributionBreakpoints { ContributionInput input -> thresholds(input, 7.5d) }
+    contribution { ContributionInput input -> safLoEligible(input) ? uncappedPremium(input, .045d, .30d) : 0d }
+}
+
+static boolean safLoEligible(ContributionInput input) {
+    age(input) >= 22d && age(input) < 65d
+}

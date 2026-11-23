@@ -1,0 +1,689 @@
+import dev.cashle.sdk.pension.PensionBasisProvider.ReturnBasis
+import dev.cashle.sdk.pension.PensionModuleProvider.Balance
+import dev.cashle.core.Frequency
+import dev.cashle.core.i18n.Messages
+import dev.cashle.sdk.model.Variable
+import dev.cashle.sdk.pension.PensionCalendar
+import dev.cashle.sdk.pension.PensionContext
+import dev.cashle.sdk.pension.PensionModuleProvider.Input
+import groovy.transform.CompileStatic
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
+
+@CompileStatic
+final class PayoutChange {
+  private final LocalDate day
+  private final double share
+  PayoutChange(LocalDate date, double fraction) { this.day = date; this.share = fraction }
+  LocalDate date() { return day }
+  double fraction() { return share }
+}
+
+@CompileStatic
+final class PayoutPeriod {
+  private final int length
+  private final double share
+  PayoutPeriod(int years, double fraction) { this.length = years; this.share = fraction }
+  int years() { return length }
+  double fraction() { return share }
+}
+
+@CompileStatic
+final class OpeningRight {
+  private final int earningYear
+  private final double incomeRight, premiumRight
+  private final boolean included
+  OpeningRight(int year, double income, double premium, boolean premiumCredited) {
+    earningYear = year; incomeRight = income; premiumRight = premium; included = premiumCredited
+  }
+  int year() { return earningYear }
+  double income() { return incomeRight }
+  double premium() { return premiumRight }
+  boolean premiumCredited() { return included }
+}
+
+/** Public-pension cohort law and the five supported withdrawal shares belong to this plugin. */
+@CompileStatic
+final class PublicPensionPolicy implements PensionPayoutPolicy {
+  final List<PayoutChange> payoutChanges;
+  final List<PayoutPeriod> payoutPeriods;
+  private final Map<?,?> input;
+  private final LocalDate birth;
+  private final Messages messages;
+
+  PublicPensionPolicy(PensionContext request) {
+    input=request.input();
+    messages = SwedishPensions.messages(input, "public");
+    birth = SwedishPensions.birth(request.person());
+    payoutChanges=parsePayoutChanges(input.get("payoutChanges"));
+    payoutPeriods=parsePayoutPeriods(input.get("payoutPeriods"));
+    if (!payoutPeriods.isEmpty() && !payoutChanges.isEmpty())
+      throw new IllegalArgumentException(messages.text("payout.periodsExclusive"));
+  }
+
+  public LocalDate resolve(LocalDate date, boolean relative, LocalDate available) {
+    if (date == null) return null;
+    int year=birth.getYear();
+    int minimum=year<=1958 ? 61 : year<=1960 ? 62 : year<=1962 ? 63 : year<=1969 ? 64 : year<=1984 ? 65 : year<=2000 ? 66 : 67;
+    LocalDate earliest=birth.plusYears(minimum), latest=birth.plusYears(101).minusDays(1);
+    if (!payoutChanges.isEmpty() && payoutChanges.get(0).date().minusDays(1).isBefore(latest))
+      latest=payoutChanges.get(0).date().minusDays(1);
+    if (relative) {
+      if (available != null && available.isAfter(earliest)) earliest=available;
+      if (earliest.isAfter(latest)) throw new IllegalArgumentException(messages.text("payout.allowedStartMissing"));
+      if (date.isBefore(earliest)) date=earliest;
+      else if (date.isAfter(latest)) date=latest;
+    }
+    if (date.isBefore(birth.plusYears(minimum)) || !date.isBefore(birth.plusYears(101)))
+      throw new IllegalArgumentException(messages.text("payout.ageRange"));
+    if (!payoutChanges.isEmpty() && !payoutChanges.get(0).date().isAfter(date))
+      throw new IllegalArgumentException(messages.text("payout.stepsAfterStart"));
+    return date;
+  }
+
+  private List<PayoutChange> parsePayoutChanges(Object value) {
+    if(value==null)return List.of();
+    if (!(value instanceof List)) throw new IllegalArgumentException(messages.text("payout.stepsOrder"))
+    List<PayoutChange> result = new ArrayList<>()
+    Object start = input.get('payoutStart')
+    Object ageAtStart = start instanceof Map ? ((Map) start).get('age') : input.get('payoutAge')
+    int previous = (int) SwedishPensions.number(ageAtStart, 0d)
+    for (Object raw : (List) value) {
+      if (!(raw instanceof Map)) throw new IllegalArgumentException(messages.text('payout.stepsRequired'))
+      Map row = (Map) raw
+      Object ageValue = row.get('age'), fractionValue = row.get('fraction')
+      if (!(ageValue instanceof Number) || !(fractionValue instanceof Number))
+        throw new IllegalArgumentException(messages.text('payout.stepsRequired'))
+      double age = ((Number) ageValue).doubleValue(), fraction = ((Number) fractionValue).doubleValue()
+      if(!Double.isFinite(age) || age!=Math.rint(age) || age<=previous || age>100 || !(fraction==0d || fraction==25d || fraction==50d || fraction==75d || fraction==100d))
+        throw new IllegalArgumentException(messages.text("payout.stepsInvalid"));
+      result.add(new PayoutChange(birth.plusYears((int)age),fraction));previous=(int)age;
+    }
+    return List.copyOf(result);
+  }
+
+  private List<PayoutPeriod> parsePayoutPeriods(Object value) {
+    if (value == null) return List.of();
+    if (!(value instanceof List)) throw new IllegalArgumentException(messages.text('payout.periodsInvalid'))
+    List<PayoutPeriod> result = new ArrayList<>()
+    for (Object raw : (List) value) {
+      if (!(raw instanceof Map)) throw new IllegalArgumentException(messages.text('payout.periodsInvalid'))
+      Map row = (Map) raw
+      double years = SwedishPensions.number(row.get('years'), Double.NaN)
+      double fraction = SwedishPensions.number(row.get('fraction'), Double.NaN)
+      if (years != Math.rint(years) || years < 1d || years > 100d || ![0d, 25d, 50d, 75d, 100d].contains(fraction))
+        throw new IllegalArgumentException(messages.text('payout.periodsInvalid'))
+      result.add(new PayoutPeriod((int) years, fraction))
+    }
+    return List.copyOf(result);
+  }
+
+}
+
+/** The public PGI bands use the 2026 rules from DECCF a5413773, pension/sweden/rules-2026.js,
+ * indexed by the entered base-growth assumption. */
+@CompileStatic
+final class PublicPensionRules {
+  static double ibb(int year, double growth) { return 83400d * Math.pow(1d + growth / 100d, year - 2026) }
+  public static double publicContribution(
+    double gross,
+    int year,
+    double growth,
+    double rate
+  ) {
+    double threshold = minimumPensionableGross(year,growth);
+    return gross < threshold
+      ? 0
+      : Math.min(gross * 0.93d, 7.5d * ibb(year, growth)) * rate;
+  }
+
+  static double minimumPensionableGross(int year,double growth) {
+    return 25042d * Math.pow(1 + growth / 100d, year - 2026);
+  }
+
+}
+
+/** Type-owned accrual and payout algorithm; common support owns checkpoint/replay mechanics. */
+@CompileStatic
+final class PublicPensionLedger extends PensionLedger {
+ private final dev.cashle.core.i18n.Messages pluginMessages;
+ private final List<PayoutChange> payoutChanges;
+ private final List<PayoutPeriod> payoutPeriods;
+ private LocalDate periodStart;
+ private List<PayoutChange> periodChanges = List.of();
+ private List<LocalDate> periodDates = List.of();
+  private final Variable claimedFirst, claimedSecond, currentFraction;
+  private final Variable through;
+  private final Variable suspendedFraction, suspendedAnnualFirst, suspendedAnnualSecond, suspendedClaimedFirst, suspendedClaimedSecond;
+  private final Variable suspendedEarnedFirst, suspendedEarnedSecond;
+  private final boolean ongoingPublicStatement;
+  // Earnings are provisional until their income year has been assessed; the
+  // rights enter the payout basis in January of the year after assessment.
+  private final Variable[] pendingYear, pendingFirst, pendingSecond, pendingPremiumCredited;
+  private final List<OpeningRight> openingRights;
+ public PublicPensionLedger(PensionContext request) { this(request, false); }
+ PublicPensionLedger(PensionContext request, boolean eventDriven) {
+  this(request, new PublicPensionPolicy(request), eventDriven);
+ }
+ private PublicPensionLedger(PensionContext request,PublicPensionPolicy policy,boolean eventDriven) {
+  super(request,policy);
+  pluginMessages=SwedishPensions.messages(input, "public");
+  payoutChanges=policy.payoutChanges;
+  payoutPeriods=policy.payoutPeriods;
+  through=eventDriven ? context.variable(planStart.minusDays(1).toEpochDay()) : null;
+  ongoingPublicStatement=is("inputMode","statement") && valuation.isAfter(payoutStart());
+  if(input.get("premiumDivisionYears")!=null && !SwedishPensions.nonnegative(input.get("premiumDivisionYears")))
+    throw new IllegalArgumentException(pluginMessages.text("premium.divisorNonnegative"));
+  openingRights=parseOpeningRights();
+  if(ongoingPublicStatement) {
+    for(String field:List.of("ongoingIncomeMonthly","ongoingPremiumMonthly","unclaimedPremiumCapital"))
+      if(!SwedishPensions.nonnegative(input.get(field)))
+        throw new IllegalArgumentException(pluginMessages.text("payout.currentPublicRequired"));
+    if(n("unclaimedPremiumCapital")>n("premiumCapital")) throw new IllegalArgumentException(pluginMessages.text("premium.unclaimedExceedsCapital"));
+    if(n("ongoingPremiumMonthly")>0d && n("unclaimedPremiumCapital")>=n("premiumCapital"))
+      throw new IllegalArgumentException(pluginMessages.text("premium.claimedPositive"));
+    if(n("ongoingPremiumMonthly")>0d && (!SwedishPensions.nonnegative(input.get("premiumDivisionYears")) || n("premiumDivisionYears") <= 0d))
+      throw new IllegalArgumentException(pluginMessages.text("premium.divisorRequired"));
+  }
+  validateAccrualChoices();
+  claimedFirst=context.variable(0d); claimedSecond=context.variable(0d); currentFraction=context.variable(-1d);
+  boolean suspended=ongoingPublicStatement && hasPayoutStages();
+  suspendedFraction=suspended?context.variable(0d):null;
+  suspendedAnnualFirst=suspended?context.variable(0d):null; suspendedAnnualSecond=suspended?context.variable(0d):null;
+  suspendedClaimedFirst=suspended?context.variable(0d):null; suspendedClaimedSecond=suspended?context.variable(0d):null;
+  suspendedEarnedFirst=suspended?context.variable(0d):null; suspendedEarnedSecond=suspended?context.variable(0d):null;
+  pendingYear=new Variable[2];pendingFirst=new Variable[2];pendingSecond=new Variable[2];pendingPremiumCredited=new Variable[2];
+  for(int i=0;i<2;i++){pendingYear[i]=context.variable(-1d);pendingFirst[i]=context.variable(0d);pendingSecond[i]=context.variable(0d);pendingPremiumCredited[i]=context.variable(0d);}
+ }
+
+  @Override public PensionCalendar calculations() {
+   Optional<PensionCalendar> wageEvents = context.model().wageEvents()
+   return wageEvents.isPresent() ? eventSchedule(wageEvents.get(), payments()) : super.calculations()
+ }
+
+ PensionCalendar eventSchedule(PensionCalendar wages, PensionCalendar payments) {
+    List<PensionCalendar> events = new ArrayList<>(List.of(wages, payments, fixedDate(planStart),
+            every(Frequency.YEAR, LocalDate.of(1,1,1)),
+            every(Frequency.YEAR, LocalDate.of(1,12,31))));
+    for (PayoutChange change : payoutChanges) events.add(fixedDate(change.date()));
+    if (!payoutPeriods.isEmpty()) events.add(PensionCalendar.dates(() -> {
+      payoutStages();
+      return periodDates;
+    }));
+    return new PensionCalendar.Union(events);
+  }
+
+  @Override public double getPayment() {
+    if (through != null && through.getValue() != clock.getDate().toEpochDay()) return 0d;
+    return super.getPayment();
+  }
+
+  @Override public double getFirstBalance() { return projected(first, false); }
+  @Override public double getSecondBalance() { return projected(second, true); }
+
+  private double projected(Variable capital, boolean premium) {
+    if (through == null || capital.getValue() == 0d) return capital.getValue();
+    LocalDate today = clock.getDate();
+    LocalDate firstDay = LocalDate.ofEpochDay((long) through.getValue()).plusDays(1);
+    return capital.getValue() * growth(firstDay, today, premium);
+  }
+
+  /** Market arithmetic over an interval. Only a varying return needs individual rate samples. */
+  private double growth(LocalDate from, LocalDate to, boolean premium) {
+    double factor = 1d;
+    if (premium && context.model().hasYield() && !context.model().constantYield()) {
+      for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1))
+        factor *= Math.pow(1d + context.annualYield().applyAsDouble(date), 1d / date.lengthOfYear());
+      return factor;
+    }
+    while (!from.isAfter(to)) {
+      LocalDate end = LocalDate.of(from.getYear(), 12, 31);
+      if (to.isBefore(end)) end = to;
+      double rate = premium ? (!context.model().hasYield() ? n("growthRate") / 100d : context.annualYield().applyAsDouble(from))
+              : n("incomeIndex") / 100d;
+      factor *= Math.pow(1d + rate, (ChronoUnit.DAYS.between(from, end) + 1d) / from.lengthOfYear());
+      from = end.plusDays(1);
+    }
+    return factor;
+  }
+
+  @Override protected void step(
+    LocalDate date,
+    double annualSalary,
+    boolean recordPayment
+  ) {
+    LocalDate growthFrom = through != null && recordPayment ? LocalDate.ofEpochDay((long) through.getValue()).plusDays(1) : date;
+    applyStep(growthFrom,date,Math.max(0d,annualSalary)/date.lengthOfYear(),recordPayment,Double.NaN);
+  }
+
+  @Override protected void replayEstimatedHistory(LocalDate from, LocalDate until, double annualSalary) {
+    if(!from.isBefore(until))return;
+    // Public rights are assessed on cumulative income within a calendar year.
+    // Only credits, payment dates and changes to the payout can affect balances within the interval.
+    SortedSet<LocalDate> events=new TreeSet<>(List.of(from,until.minusDays(1)));
+    for(int year=from.getYear();year<=until.getYear();year++) {
+      addHistoricalEvent(events,LocalDate.of(year,1,1),from,until);
+      addHistoricalEvent(events,LocalDate.of(year,12,31),from,until);
+    }
+    addHistoricalEvent(events,payoutStart(),from,until);
+    for(PayoutChange change:payoutStages())addHistoricalEvent(events,change.date(),from,until);
+    for(LocalDate paid=historicalPaymentCalendar.nextAfter(from.minusDays(1));paid!=null && paid.isBefore(until);paid=historicalPaymentCalendar.nextAfter(paid))
+      events.add(paid);
+    LocalDate cursor=from;
+    for(LocalDate date:events) {
+      double dailySalary=Math.max(0d,annualSalary)/date.lengthOfYear();
+      double salaryForInterval=dailySalary*(ChronoUnit.DAYS.between(cursor,date)+1);
+      double assessed=(periodKey.getValue()==date.getYear()?periodSalary.getValue():0d)+salaryForInterval;
+      double threshold=PublicPensionRules.minimumPensionableGross(date.getYear(),n("baseGrowth"));
+      // Preserve the prior threshold decision if rounding the cumulative income can change eligibility.
+      if(Math.abs(assessed-threshold)<=Math.ulp(threshold)*date.lengthOfYear()) {
+        LocalDate yearStart=LocalDate.of(date.getYear(),1,1);
+        int elapsed=Math.toIntExact(ChronoUnit.DAYS.between(from.isAfter(yearStart)?from:yearStart,date)+1);
+        assessed=0d;
+        for(int day=0;day<elapsed;day++)assessed+=dailySalary;
+      }
+      applyStep(cursor,date,salaryForInterval,false,assessed);
+      cursor=date.plusDays(1);
+    }
+  }
+
+  private static void addHistoricalEvent(Set<LocalDate> events, LocalDate date, LocalDate from, LocalDate until) {
+    if(!date.isBefore(from) && date.isBefore(until))events.add(date);
+  }
+
+  private void applyStep(LocalDate growthFrom, LocalDate date, double addition, boolean recordPayment,double assessedSalary) {
+    double one = first.getValue(),
+      two = second.getValue(),
+      pay = 0;
+
+    boolean paymentDue=(recordPayment ? paymentCalendar : historicalPaymentCalendar).due(date)
+      && (recordPayment || date.getYear()!=planStart.getYear() || date.getMonthValue()!=planStart.getMonthValue());
+      double firstGrowth=growth(growthFrom,date,false);
+      double secondGrowth=growth(growthFrom,date,true);
+      if (through != null && recordPayment) through.setValue(date.toEpochDay());
+      one*=firstGrowth;two*=secondGrowth;
+      if(currentFraction!=null && currentFraction.getValue()>=0d) {
+        claimedFirst.setValue(claimedFirst.getValue()*firstGrowth);
+        claimedSecond.setValue(claimedSecond.getValue()*secondGrowth);
+        if(suspendedFraction!=null) {
+          suspendedClaimedFirst.setValue(suspendedClaimedFirst.getValue()*firstGrowth);
+          suspendedClaimedSecond.setValue(suspendedClaimedSecond.getValue()*secondGrowth);
+          suspendedEarnedFirst.setValue(suspendedEarnedFirst.getValue()*firstGrowth);
+          suspendedEarnedSecond.setValue(suspendedEarnedSecond.getValue()*secondGrowth);
+        }
+      }
+      // The authority credits last year's premium rights during December. Use
+      // month-end as an explicit approximation when no individual date exists;
+      // the payout basis is still recalculated in January, not on credit day.
+      double premiumAwaitingPayoutRecalculation=0d;
+      if(date.getMonthValue()==12 && date.getDayOfMonth()==31) {
+        int earnedYear=date.getYear()-1,index=Math.floorMod(earnedYear,2);
+        if(pendingYear[index].getValue()==earnedYear) {
+          premiumAwaitingPayoutRecalculation=pendingPremiumCredited[index].getValue()>0d?0d:pendingSecond[index].getValue();
+          two+=premiumAwaitingPayoutRecalculation;
+        }
+      }
+      if(date.getMonthValue()==1 && date.getDayOfMonth()==1) {
+        boolean recalculate=annualFirst.getValue()>=0d && date.isAfter(payoutStart()) && (!ongoingPublicStatement || date.getYear()>valuation.getYear());
+        if(recalculate) {
+          double adjustment=(1d+n("incomeIndex")/100d)/1.016d;
+          annualFirst.setValue(annualFirst.getValue()*adjustment);
+          annualSecond.setValue(claimedSecond.getValue()/premiumDivisor());
+          if(suspendedFraction!=null) {
+            suspendedAnnualFirst.setValue(suspendedAnnualFirst.getValue()*adjustment);
+            suspendedAnnualSecond.setValue(suspendedClaimedSecond.getValue()/premiumDivisor());
+          }
+        }
+        int creditedYear=date.getYear()-2,index=Math.floorMod(creditedYear,2);
+        if(pendingYear[index].getValue()==creditedYear) {
+          double earned1=pendingFirst[index].getValue(),earned2=pendingSecond[index].getValue();
+          boolean premiumInCapital=pendingPremiumCredited[index].getValue()>0d;
+          one+=earned1;
+          if(annualFirst.getValue()>=0d) {
+            double fraction=(currentFraction==null ? n("payoutFraction") : currentFraction.getValue())/100d;
+            annualFirst.setValue(annualFirst.getValue()+earned1/n("divisor")*fraction);
+            if(!premiumInCapital || !recalculate)annualSecond.setValue(annualSecond.getValue()+earned2/premiumDivisor()*fraction);
+            if(currentFraction!=null) {
+              claimedFirst.setValue(claimedFirst.getValue()+earned1*fraction);
+              if(!premiumInCapital)claimedSecond.setValue(claimedSecond.getValue()+earned2*fraction);
+              if(suspendedFraction!=null) {
+                double paused=suspendedFraction.getValue()/100d;
+                suspendedEarnedFirst.setValue(suspendedEarnedFirst.getValue()+earned1*paused);
+                if(!premiumInCapital)suspendedEarnedSecond.setValue(suspendedEarnedSecond.getValue()+earned2*paused);
+              }
+            }
+          }
+          pendingYear[index].setValue(-1d);pendingFirst[index].setValue(0d);pendingSecond[index].setValue(0d);pendingPremiumCredited[index].setValue(0d);
+        }
+      }
+      int key = assessmentKey(date);
+      if (periodKey.getValue() != key) {
+        periodKey.setValue(key);
+        periodSalary.setValue(0);
+      }
+      double previous = periodSalary.getValue();
+      double total=Double.isNaN(assessedSalary)?previous+addition:assessedSalary;
+      periodSalary.setValue(total);
+
+        if (addition != 0d) {
+        double earned1 =
+          PublicPensionRules.publicContribution(
+            total,
+            date.getYear(),
+            n("baseGrowth"),
+            .16
+          ) -
+          PublicPensionRules.publicContribution(
+            previous,
+            date.getYear(),
+            n("baseGrowth"),
+            .16
+          );
+        double earned2 =
+          PublicPensionRules.publicContribution(
+            total,
+            date.getYear(),
+            n("baseGrowth"),
+            .025
+          ) -
+          PublicPensionRules.publicContribution(
+            previous,
+            date.getYear(),
+            n("baseGrowth"),
+            .025
+          );
+        if(earned1!=0d || earned2!=0d) {
+          int index=Math.floorMod(date.getYear(),2);
+          if(pendingYear[index].getValue()!=date.getYear()) {
+            if(pendingYear[index].getValue()!=-1d) throw new IllegalStateException(pluginMessages.text("rights.accrualFailed"));
+            pendingYear[index].setValue(date.getYear());
+            pendingPremiumCredited[index].setValue(0d);
+          }
+          pendingFirst[index].setValue(pendingFirst[index].getValue()+earned1);
+          pendingSecond[index].setValue(pendingSecond[index].getValue()+earned2);
+        }
+        }
+
+      if (!date.isBefore(payoutStart())) {
+        if(currentFraction!=null) {
+          double fraction=fractionAt(date),previousFraction=currentFraction.getValue();
+          if(previousFraction<0d) {
+            claimedFirst.setValue(one*fraction/100d);claimedSecond.setValue(Math.max(0d,two-premiumAwaitingPayoutRecalculation)*fraction/100d);
+            annualFirst.setValue(claimedFirst.getValue()/n("divisor"));annualSecond.setValue(claimedSecond.getValue()/premiumDivisor());
+          } else if(suspendedFraction!=null && fraction!=previousFraction) {
+            applyOngoingFractionChange(fraction,previousFraction,one,Math.max(0d,two-premiumAwaitingPayoutRecalculation));
+          } else if(fraction>previousFraction) {
+            double share=(fraction-previousFraction)/(100d-previousFraction);
+            double firstAdded=Math.max(0d,one-claimedFirst.getValue())*share,secondAdded=Math.max(0d,two-premiumAwaitingPayoutRecalculation-claimedSecond.getValue())*share;
+            claimedFirst.setValue(claimedFirst.getValue()+firstAdded);claimedSecond.setValue(claimedSecond.getValue()+secondAdded);
+            annualFirst.setValue(annualFirst.getValue()+firstAdded/n("divisor"));annualSecond.setValue(annualSecond.getValue()+secondAdded/premiumDivisor());
+          } else if(fraction<previousFraction) {
+            double share=fraction/previousFraction;
+            claimedFirst.setValue(claimedFirst.getValue()*share);claimedSecond.setValue(claimedSecond.getValue()*share);
+            annualFirst.setValue(annualFirst.getValue()*share);annualSecond.setValue(annualSecond.getValue()*share);
+          }
+          currentFraction.setValue(fraction);
+        }
+        if (annualFirst.getValue() < 0) {
+          double duration = n("duration") == 0 ? n("divisor") : n("duration");
+          annualFirst.setValue(((one / duration) * n("payoutFraction")) / 100);
+          annualSecond.setValue(((Math.max(0d,two-premiumAwaitingPayoutRecalculation) / duration) * n("payoutFraction")) / 100);
+        }
+        boolean active =
+          n("duration") == 0 ||
+          date.isBefore(payoutStart().plusYears((int) n("duration")));
+        if (active && paymentDue) {
+          double p1 = annualFirst.getValue() / 12d,
+            p2 = annualSecond.getValue() / 12d;
+          if (n("duration") > 0) {
+            LocalDate last=payoutStart().plusYears((int)n("duration")).minusDays(1);
+            long remaining=ChronoUnit.MONTHS.between(date.withDayOfMonth(1),last.withDayOfMonth(1))+1;
+            p1 = one / remaining;
+            p2 = Math.max(0d,two-premiumAwaitingPayoutRecalculation) / remaining;
+          }
+          if(currentFraction!=null) {
+            double firstUnclaimed=Math.max(0d,one-claimedFirst.getValue()),secondUnclaimed=Math.max(0d,two-claimedSecond.getValue());
+            claimedFirst.setValue(Math.max(0d,claimedFirst.getValue()-p1));claimedSecond.setValue(Math.max(0d,claimedSecond.getValue()-p2));
+            one=firstUnclaimed+claimedFirst.getValue();two=secondUnclaimed+claimedSecond.getValue();
+          } else {
+            one = Math.max(0, one - p1);
+            two = Math.max(0, two - p2);
+          }
+          pay = p1 + p2;
+        }
+      }
+
+    first.setValue(one);
+    second.setValue(two);
+    if (recordPayment) paymentValue.setValue(paymentDue ? scenarioPayment(date, pay) : 0d);
+  }
+
+  @Override protected void initializeStatement() {
+        first.setValue(n("incomeCapital"));
+        second.setValue(n("premiumCapital"));
+
+        for(OpeningRight right:openingRights) {
+          int slot=Math.floorMod(right.year(),2);pendingYear[slot].setValue(right.year());pendingFirst[slot].setValue(right.income());
+          pendingSecond[slot].setValue(right.premium());pendingPremiumCredited[slot].setValue(right.premiumCredited()?1d:0d);
+        }
+        if(ongoingPublicStatement) {
+          // Income capital denotes rights not yet converted into the current
+          // annuity; the disclosed ongoing payment is not a fictional asset.
+          annualFirst.setValue(n("ongoingIncomeMonthly")*12d);
+          annualSecond.setValue(n("ongoingPremiumMonthly")*12d);
+          claimedFirst.setValue(0d);
+          claimedSecond.setValue(n("premiumCapital")-n("unclaimedPremiumCapital"));
+          currentFraction.setValue(fractionAt(valuation));
+        }
+
+  }
+  @Override protected int assessmentKey(LocalDate date) {
+    return date.getYear();
+  }
+
+  protected double initialHistoricalSalary() {
+    if (!input.containsKey("historicalFallbackAllowed")) return historicalSalary;
+    if (!Boolean.TRUE.equals(input.get("historicalFallbackAllowed"))) return 0;
+    double sum = 0;
+    if (input.get("replayWages") instanceof List) for (Object item : (List) input.get("replayWages")) {
+      Map<?, ?> wage = (Map<?, ?>) item;
+      if (inactiveWage(wage) || Boolean.FALSE.equals(wage.get("historicalEligible"))) continue;
+      if (wage.get("start") instanceof String && planStart.isBefore(LocalDate.parse((String) wage.get("start")))) continue;
+      if (wage.get("end") instanceof String && !planStart.isBefore(LocalDate.parse((String) wage.get("end")))) continue;
+      sum += ((Number) wage.get("annual")).doubleValue();
+    }
+    return sum > 0 ? sum : Boolean.TRUE.equals(input.get("historicalFallbackAllowed"))
+      ? PublicPensionRules.ibb(planStart.getYear(), n("baseGrowth")) * n("historicalIncomeBaseAmounts") : 0;
+  }
+
+  protected void applyOngoingFractionChange(double fraction,double previous,double firstCapital,double secondCapital) {
+    if(fraction<previous) {
+      double share=(previous-fraction)/previous;
+      suspendedFraction.setValue(suspendedFraction.getValue()+previous-fraction);
+      double firstAnnual=annualFirst.getValue()*share,secondAnnual=annualSecond.getValue()*share;
+      double firstClaim=claimedFirst.getValue()*share,secondClaim=claimedSecond.getValue()*share;
+      suspendedAnnualFirst.setValue(suspendedAnnualFirst.getValue()+firstAnnual);
+      suspendedAnnualSecond.setValue(suspendedAnnualSecond.getValue()+secondAnnual);
+      suspendedClaimedFirst.setValue(suspendedClaimedFirst.getValue()+firstClaim);
+      suspendedClaimedSecond.setValue(suspendedClaimedSecond.getValue()+secondClaim);
+      annualFirst.setValue(annualFirst.getValue()-firstAnnual);annualSecond.setValue(annualSecond.getValue()-secondAnnual);
+      claimedFirst.setValue(claimedFirst.getValue()-firstClaim);claimedSecond.setValue(claimedSecond.getValue()-secondClaim);
+      return;
+    }
+    double added=fraction-previous,suspended=suspendedFraction.getValue();
+    double resumed=Math.min(added,suspended);
+    if(resumed>0d) {
+      double share=resumed/suspended;
+      double firstAnnual=suspendedAnnualFirst.getValue()*share,secondAnnual=suspendedAnnualSecond.getValue()*share;
+      double firstClaim=suspendedClaimedFirst.getValue()*share,secondClaim=suspendedClaimedSecond.getValue()*share;
+      double firstEarned=suspendedEarnedFirst.getValue()*share,secondEarned=suspendedEarnedSecond.getValue()*share;
+      firstAnnual+=firstEarned/n("divisor");secondAnnual+=secondEarned/premiumDivisor();
+      firstClaim+=firstEarned;secondClaim+=secondEarned;
+      annualFirst.setValue(annualFirst.getValue()+firstAnnual);annualSecond.setValue(annualSecond.getValue()+secondAnnual);
+      claimedFirst.setValue(claimedFirst.getValue()+firstClaim);claimedSecond.setValue(claimedSecond.getValue()+secondClaim);
+      suspendedAnnualFirst.setValue(suspendedAnnualFirst.getValue()-(firstAnnual-firstEarned/n("divisor")));suspendedAnnualSecond.setValue(suspendedAnnualSecond.getValue()-(secondAnnual-secondEarned/premiumDivisor()));
+      suspendedClaimedFirst.setValue(suspendedClaimedFirst.getValue()-(firstClaim-firstEarned));suspendedClaimedSecond.setValue(suspendedClaimedSecond.getValue()-(secondClaim-secondEarned));
+      suspendedEarnedFirst.setValue(suspendedEarnedFirst.getValue()-firstEarned);suspendedEarnedSecond.setValue(suspendedEarnedSecond.getValue()-secondEarned);
+      suspendedFraction.setValue(suspended-resumed);
+    }
+    double fresh=added-resumed,available=100d-previous-suspended;
+    if(fresh>0d && available>0d) {
+      double share=fresh/available;
+      double firstAdded=Math.max(0d,firstCapital-claimedFirst.getValue()-suspendedClaimedFirst.getValue())*share;
+      double secondAdded=Math.max(0d,secondCapital-claimedSecond.getValue()-suspendedClaimedSecond.getValue())*share;
+      claimedFirst.setValue(claimedFirst.getValue()+firstAdded);claimedSecond.setValue(claimedSecond.getValue()+secondAdded);
+      annualFirst.setValue(annualFirst.getValue()+firstAdded/n("divisor"));annualSecond.setValue(annualSecond.getValue()+secondAdded/premiumDivisor());
+    }
+  }
+
+  @Override protected double replayScale(LocalDate date) { return date.lengthOfYear(); }
+  private List<OpeningRight> parseOpeningRights() {
+    List<OpeningRight> result=new ArrayList<>();double credited=0d;
+    for(int row=1;row<=2;row++) {
+      Object year=input.get("openingPendingYear"+row),first=input.get("openingPendingIncome"+row),second=input.get("openingPendingPremium"+row),flag=input.get("openingPendingPremiumCredited"+row);
+      double income=first==null?0d:SwedishPensions.number(first, Double.NaN);
+      double premium=second==null?0d:SwedishPensions.number(second, Double.NaN);
+      if(!Double.isFinite(income)||income<0d||!Double.isFinite(premium)||premium<0d||flag!=null && !(flag instanceof Boolean))
+        throw new IllegalArgumentException(pluginMessages.text("rights.invalid"));
+      if((year==null || SwedishPensions.number(year, Double.NaN)==0d) && income==0d && premium==0d && !Boolean.TRUE.equals(flag))continue;
+      double earningYear = SwedishPensions.number(year, Double.NaN)
+      if(!is("inputMode","statement") || earningYear != Math.rint(earningYear) || earningYear < 1800d || earningYear > valuation.getYear())
+        throw new IllegalArgumentException(pluginMessages.text("rights.yearRequired"));
+      int earned = (int) earningYear;LocalDate payoutDate=LocalDate.of(earned+2,1,1),premiumDate=LocalDate.of(earned+1,12,31);
+      boolean included=Boolean.TRUE.equals(flag);
+      if(payoutDate.isBefore(valuation) || premium>0d && (included && valuation.isBefore(premiumDate) || !included && valuation.isAfter(premiumDate)))
+        throw new IllegalArgumentException(pluginMessages.text("rights.dateMismatch"));
+      if(result.stream().anyMatch(right->right.year()==earned || Math.floorMod(right.year(),2)==Math.floorMod(earned,2)))
+        throw new IllegalArgumentException(pluginMessages.text("rights.overlap"));
+      if(included)credited+=premium;
+      result.add(new OpeningRight(earned,income,premium,included));
+    }
+    if(credited>0d && (!(input.get("premiumCapital") instanceof Number) || credited>n("premiumCapital")+1e-7))
+      throw new IllegalArgumentException(pluginMessages.text("rights.creditExceedsCapital"));
+    return List.copyOf(result);
+  }
+
+
+  private double fractionAt(LocalDate date) {
+    double fraction=n("payoutFraction");
+    for(PayoutChange change:payoutStages()) { if(date.isBefore(change.date()))break; fraction=change.fraction(); }
+    return fraction;
+  }
+
+  private boolean hasPayoutStages() { return !payoutChanges.isEmpty() || !payoutPeriods.isEmpty(); }
+
+  private List<PayoutChange> payoutStages() {
+    if (payoutPeriods.isEmpty()) return payoutChanges;
+    LocalDate start = payoutStartDate.get();
+    if (Objects.equals(start, periodStart)) return periodChanges;
+    List<PayoutChange> changes = new ArrayList<PayoutChange>();
+    if (start != null) {
+      LocalDate date = start;
+      for (PayoutPeriod period : payoutPeriods) {
+        changes.add(new PayoutChange(date, period.fraction()));
+        date = date.plusYears(period.years());
+      }
+      changes.add(new PayoutChange(date, n("payoutFraction")));
+    }
+    periodStart = start;
+    periodChanges = List.copyOf(changes);
+    periodDates = changes.collect { PayoutChange change -> change.date() };
+    return periodChanges;
+  }
+
+  private double premiumDivisor() {
+    double own = SwedishPensions.number(input.get("premiumDivisionYears"), 0d)
+    return own > 0d ? own : n("divisor");
+  }
+
+
+  @Override protected void captureAdditionalReplayVariables(List<Variable> values) {
+    if(through!=null)values.add(through);
+    for(Variable value:([claimedFirst,claimedSecond,currentFraction,
+        suspendedFraction,suspendedAnnualFirst,suspendedAnnualSecond,suspendedClaimedFirst,suspendedClaimedSecond,
+        suspendedEarnedFirst,suspendedEarnedSecond] as Variable[])) if(value!=null)values.add(value);
+    for(Variable[] group:([pendingYear,pendingFirst,pendingSecond,pendingPremiumCredited] as Variable[][]))
+      Collections.addAll(values,group);
+  }
+
+  @Override protected LocalDate entitledPaymentDate(LocalDate next) {
+    boolean hasEntitlement = first.getValue()>0d || second.getValue()>0d
+      || (n("duration")==0d && (annualFirst.getValue()>0d || annualSecond.getValue()>0d
+        || (suspendedAnnualFirst!=null && (suspendedAnnualFirst.getValue()>0d || suspendedAnnualSecond.getValue()>0d))
+        || (ongoingPublicStatement && initialized.getValue()==0d && (n("ongoingIncomeMonthly")>0d || n("ongoingPremiumMonthly")>0d))));
+    if(!hasEntitlement) {
+      LocalDate earliest=null;
+      if(pendingYear!=null) for(int i=0;i<pendingYear.length;i++) if(pendingYear[i].getValue()>=0d && (pendingFirst[i].getValue()>0d || pendingSecond[i].getValue()>0d)) {
+        LocalDate credit=LocalDate.of((int)pendingYear[i].getValue()+2,1,1);
+        LocalDate searchAfter=credit.minusDays(1);
+        if(searchAfter.isBefore(clock.getDate())) searchAfter=clock.getDate();
+        LocalDate candidate=paymentCalendar.nextAfter(searchAfter);
+        if(candidate!=null && (earliest==null || candidate.isBefore(earliest)))earliest=candidate;
+      }
+      if(earliest==null)return null;
+      next=earliest;
+    }
+    if(hasPayoutStages() && fractionAt(next)==0d) {
+      LocalDate resume=null;
+      for(PayoutChange change:payoutStages()) if(change.date().isAfter(next) && change.fraction()>0d){resume=change.date();break;}
+      next=resume==null?null:paymentCalendar.nextAfter(resume.minusDays(1));
+      if(next==null)return null;
+    }
+    if(!hasPayoutStages() && !(n("payoutFraction")>0d)) return null;
+    return next;
+  }
+
+  private void validateAccrualChoices() {
+    Object premiums=input.get("continuePremiums");
+    if(premiums!=null && !(premiums instanceof Boolean))throw new IllegalArgumentException(pluginMessages.text("accrual.choiceRequired"));
+    if(Boolean.TRUE.equals(premiums))throw new IllegalArgumentException(pluginMessages.text("accrual.dcRequired"));
+    Object after=input.get("continueAfterPayout");
+    if(after!=null && !(after instanceof Boolean))throw new IllegalArgumentException(pluginMessages.text("accrual.afterPayoutChoice"));
+    if(Boolean.TRUE.equals(after))throw new IllegalArgumentException(pluginMessages.text("accrual.afterPayoutRequirements"));
+    Object later=input.get("continueAfter69");
+    if(later!=null && !(later instanceof Boolean))throw new IllegalArgumentException(pluginMessages.text("accrual.after69Choice"));
+    if(Boolean.TRUE.equals(later))throw new IllegalArgumentException(pluginMessages.text("accrual.after69Unsupported"));
+  }
+}
+
+@CompileStatic
+final class PublicPensionInputs {
+  static ReturnBasis premiumReturn(Map<String, Object> data, String language) {
+    Object entered = data.get('premiumYield')
+    Map<String, Object> curve
+    if (entered instanceof Map) curve = (Map<String, Object>) entered
+    else {
+      Object growth = data.get('growthRate')
+      if (!(growth instanceof Number))
+        throw new IllegalArgumentException(new Messages(SwedishPensions, 'swedish.pension.public', language).text('premium.returnMissing'))
+      curve = [mode: 'fixed', rate: growth, basis: 'nominal', points: []] as Map<String, Object>
+    }
+    return new ReturnBasis(curve, 'retirement:' + data.get('owner'))
+  }
+
+  static List<Balance> publicBalances(Map<String, Object> data) {
+    Messages text = SwedishPensions.messages(data, 'public')
+    String name = (String) data.get('name')
+    return [new Balance(Balance.Role.FIRST, name + text.text('account.incomeSuffix'), Boolean.TRUE.equals(data.get('includeIncomePensionInNetWorth')), false),
+            new Balance(Balance.Role.SECOND, name + text.text('account.premiumSuffix'), !Boolean.FALSE.equals(data.get('includePremiumPensionInNetWorth')), false)]
+  }
+}
+
+pensionType('cashlab.swedish-public-pension', 1) {
+    pluginId 'cashle.finance.pension.public'
+    kind 'public'
+    standaloneRuntime true
+    dsl 'publicPension'
+    dsl 'pension'
+    defaults { String id -> SwedishPensions.defaults(id, 'public', 'ITP1') }
+    prepare { Input module -> SwedishPensions.prepare(module, 'public') }
+    wageBasis {
+        selectsEmployment false
+        historicalFallback true
+        includesWage { String country, String basis -> country == 'SE' && basis in ['salary', 'employment', 'businessIncome'] }
+        returnBasis { Map data, String language -> PublicPensionInputs.premiumReturn(data, language) }
+    }
+    balances { Map data -> PublicPensionInputs.publicBalances(data) }
+    receipt { Map data -> SwedishPensions.receipt(data, 'public', 'income.pension.public') }
+    runtime { PensionContext context -> new PublicPensionLedger(context, context.model().wageEvents().isPresent()) }
+}

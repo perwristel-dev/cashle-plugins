@@ -1,0 +1,445 @@
+import dev.cashle.core.i18n.Messages
+import dev.cashle.tax.DeferralReinstatement
+import dev.cashle.tax.InvestmentAccountYear
+import dev.cashle.tax.PropertySaleAssessment
+import dev.cashle.tax.PropertyTaxCalendar
+import dev.cashle.tax.StatefulTaxAssessment
+import dev.cashle.tax.TaxAssessment
+import dev.cashle.tax.TaxMoneyBasis
+import dev.cashle.tax.TaxProfileContext
+import dev.cashle.tax.TaxStateField
+import dev.cashle.tax.support.PropertyInputs
+
+import java.time.LocalDate
+import java.time.Period
+
+import static dev.cashle.tax.support.Inputs.*
+import static dev.cashle.tax.support.PropertyInputs.base
+import static dev.cashle.tax.support.PropertyInputs.date
+import static dev.cashle.tax.support.PropertyInputs.gain
+import static dev.cashle.tax.support.PropertyInputs.integer
+import static dev.cashle.tax.support.PropertyInputs.money
+import static dev.cashle.tax.support.PropertyInputs.requiredBool
+
+// Common-territory IRPF 2025 and ordinary private-home sales.
+int referenceYear = 2025
+double nationalMinimum = 5550d
+double crossOffsetRate = 0.25d
+def assessableBases = ['salary', 'capitalIncome', 'investmentGains', 'investmentLosses',
+    'investmentCapitalLoss', 'investmentDividends', 'savingsIncomeLosses', 'savingsIncomeLossBroughtForward'].asImmutable()
+def monetaryFields = Set.of('salary', 'capitalIncome', 'investmentGains', 'investmentLosses', 'investmentCapitalLoss',
+    'investmentDividends', 'propertyTaxDue', 'savingsIncomeLosses', 'savingsIncomeLossBroughtForward',
+    'referenceIncome', 'propertyReferenceIncome', 'employeeSocialContributions', 'employmentSocialContributions',
+    'investmentCapitalLossBroughtForward', 'deductibleEmployeeContributions', 'payrollTaxableAdditions')
+def nativeFields = Set.of('employeeSocialContributions')
+def allowedOptions = Set.of('ruleYear', 'residency', 'birthYear', 'salary', 'capitalIncome',
+    'investmentGains', 'investmentLosses', 'investmentCapitalLoss', 'investmentDividends',
+    'investmentCapitalLossBroughtForward', 'propertyTaxDue', 'settlementDate', 'noticeDatesByYear',
+    'noticeAmountsByYear', 'settlementCalendar', 'autonomousCommunity', 'regionalSchedule', 'regionalMinimum',
+    'employeeSocialContributions', 'savingsIncomeLosses', 'savingsIncomeLossBroughtForward')
+def propertyMoney = Set.of('salePrice', 'saleExpenses', 'purchasePrice', 'purchaseCosts', 'improvements',
+    'replacementBasis', 'previousDeferral', 'requestedReinstatement', 'mortgageOutstanding', 'propertyLossBroughtForward')
+def lossLabels = ['capitalLossYear': 'Capital loss', 'savingsIncomeLossYear': 'Savings income loss'].asImmutable()
+int lossYears = 4
+
+def amount = { Map input, String key ->
+    double value = number(input, key, 0d)
+    require(value >= 0d, "$key must be nonnegative.")
+    value
+}
+def requiredAmount = { Map input, String key ->
+    require(input.containsKey(key), "Provide actual $key.")
+    amount(input, key)
+}
+def finite = { value -> value instanceof Number && Double.isFinite(value.doubleValue()) }
+def nonnegative = { value -> finite(value) && value.doubleValue() >= 0d }
+def noticeProvided = { value ->
+    (value instanceof Map || value instanceof List || value instanceof String) && !value.isEmpty()
+}
+def confirmed = { value ->
+    value != null && !Boolean.FALSE.equals(value) &&
+        !(value instanceof Number && (value.doubleValue() == 0d || Double.isNaN(value.doubleValue()))) &&
+        !(value instanceof String && value.isEmpty())
+}
+def validRegionalSchedule = { raw ->
+    if (!(raw instanceof List) || raw.isEmpty()) return false
+    double lower = 0d
+    for (int index = 0; index < raw.size(); index++) {
+        def row = raw[index]
+        if (!(row instanceof Map) || !finite(row.get('rate')) || row.get('rate') < 0d || row.get('rate') > 1d)
+            return false
+        if (index + 1 == raw.size()) return !row.containsKey('upTo')
+        def upper = row.get('upTo')
+        if (!finite(upper) || upper.doubleValue() <= lower) return false
+        lower = upper.doubleValue()
+    }
+    true
+}
+
+def nationalBands = [[12450d, 0.095d], [20200d, 0.12d], [35200d, 0.15d], [60000d, 0.185d],
+    [300000d, 0.225d], [Double.POSITIVE_INFINITY, 0.245d]].collect { it.asImmutable() }.asImmutable()
+def savingsBands = [[6000d, 0.19d], [50000d, 0.21d], [200000d, 0.23d], [300000d, 0.27d],
+    [Double.POSITIVE_INFINITY, 0.30d]].collect { it.asImmutable() }.asImmutable()
+
+def progressive = { double basis, List bands ->
+    double tax = 0d
+    double lower = 0d
+    for (def band : bands) {
+        double upper = band[0]
+        double rate = band[1]
+        tax += Math.max(0d, Math.min(basis, upper) - lower) * rate
+        lower = upper
+    }
+    tax
+}
+def regionalTax = { double basis, raw ->
+    require(raw instanceof List && !raw.isEmpty(),
+        'Provide the actual regionalSchedule as progressive {upTo,rate} rows, final row rate only.')
+    double tax = 0d
+    double lower = 0d
+    for (int index = 0; index < raw.size(); index++) {
+        def row = raw[index]
+        require(row instanceof Map, 'regionalSchedule rows must be maps.')
+        keys(row, Set.of('upTo', 'rate'))
+        double rate = requiredAmount(row, 'rate')
+        require(rate <= 1d, 'rate must be a decimal rate.')
+        boolean finalBand = index + 1 == raw.size()
+        double upper = finalBand ? Double.POSITIVE_INFINITY : number(row, 'upTo', Double.NaN)
+        require(!finalBand || !row.containsKey('upTo'), 'The last regionalSchedule row must be unbounded.')
+        require(upper > lower, 'Regional thresholds must strictly increase.')
+        tax += Math.max(0d, Math.min(basis, upper) - lower) * rate
+        lower = upper
+    }
+    tax
+}
+
+def lossStock = { Map state, String prefix ->
+    double total = 0d
+    for (int year = 1; year <= lossYears; year++) {
+        double value = state.getOrDefault(prefix + year, 0d)
+        require(Double.isFinite(value) && value >= 0d, 'Loss state must be nonnegative finite money.')
+        total += value
+    }
+    total
+}
+def rollLoss = { Map state, String prefix, double current, double remaining ->
+    double used = Math.max(0d, lossStock(state, prefix) + current - remaining)
+    double currentUsed = Math.min(current, used)
+    used -= currentUsed
+    def next = new LinkedHashMap()
+    for (int year = 1; year <= lossYears; year++) {
+        double bucket = state.getOrDefault(prefix + year, 0d)
+        double consume = Math.min(bucket, used)
+        used -= consume
+        if (year > 1) next.put(prefix + (year - 1), bucket - consume)
+    }
+    next.put(prefix + lossYears, Math.max(0d, current - currentUsed))
+    next
+}
+
+countryTaxPolicy('ES') {
+    pluginId 'cashle.tax.es'
+    currency 'EUR'
+    ruleYear referenceYear
+    incomeBases assessableBases
+    sourceBases(['salary', 'capitalIncome'])
+    requiresTaxPlan true
+    nativeMonetaryOptions(['employeeSocialContributions'])
+    messages 'dev.cashle.tax.spain.SpanishTaxSource'
+
+    assessmentOptions { Map options ->
+        options.findAll { key, value -> value != null && !''.equals(value) }
+    }
+    validateProfile { Map options, TaxProfileContext context, Messages catalogue ->
+        def errors = []
+        if (options.containsKey('initialState')) {
+            def state = options.get('initialState')
+            def allowed = new HashSet()
+            int years = options.containsKey('salaryDefinition') ? 10 : lossYears
+            for (int year = 1; year <= years; year++) allowed.add('capitalLossYear' + year)
+            if (options.containsKey('autonomousCommunity')) {
+                for (int year = 1; year <= lossYears; year++) allowed.add('savingsIncomeLossYear' + year)
+            }
+            if (!(state instanceof Map) || state.any { key, value -> !allowed.contains(key) || !nonnegative(value) })
+                errors.add(catalogue.text('profile.initialState'))
+        }
+        def year = options.get('ruleYear')
+        if (!(year instanceof Number) || year.doubleValue() != referenceYear || !'full-year'.equals(options.get('residency')))
+            errors.add(catalogue.text('profile.ruleYearResidency'))
+        def settlement = options.get('settlementDate')
+        def calendar = options.get('settlementCalendar')
+        if (!(settlement instanceof String && settlement ==~ /\d{4}-\d{2}-\d{2}/) &&
+            !noticeProvided(options.get('noticeDatesByYear')) &&
+            !confirmed(calendar instanceof Map ? calendar.get('confirmed') : null))
+            errors.add(catalogue.text('profile.settlementDate'))
+        def community = options.get('autonomousCommunity')
+        if (!(community instanceof String) || community.trim().isEmpty() || (community =~ /(?i)navarr|basque|vasco/).find())
+            errors.add(catalogue.text('profile.autonomousCommunity'))
+        if (!validRegionalSchedule(options.get('regionalSchedule')))
+            errors.add(catalogue.text('profile.regionalSchedule'))
+        for (String key : ['regionalMinimum', 'employeeSocialContributions']) {
+            if (!nonnegative(options.get(key)))
+                errors.add(catalogue.text('profile.actualNonnegative').replace('{field}', key))
+        }
+        if (context.people().any { person ->
+            def birthYear = person.get('birthYear')
+            birthYear instanceof Number && (birthYear.doubleValue() < 1961d || birthYear.doubleValue() > 2007d)
+        }) errors.add(catalogue.text('profile.birthYear'))
+        errors
+    }
+    optionsInRuleMoney { Map options, TaxMoneyBasis prices ->
+        prices.convertFields(options, monetaryFields, nativeFields)
+    }
+
+    settlementDate { int year, Map options ->
+        require(options.containsKey('settlementDate'),
+            'Provide the actual assessment/payment settlementDate; a filing deadline is not a tax notice date.')
+        LocalDate settlement = date(options, 'settlementDate')
+        require(settlement.year >= year, 'settlementDate cannot precede the income year.')
+        settlement
+    }
+
+    accumulationBases { String basis ->
+        require(assessableBases.contains(basis), "Unsupported tax basis: $basis")
+        basis == 'capitalIncome' ? Set.of('capitalIncome', 'savingsIncomeLosses') : Set.of(basis)
+    }
+    classifyMovement { String basis, double value ->
+        require(assessableBases.contains(basis), "Unsupported tax basis: $basis")
+        if (basis == 'capitalIncome') {
+            require(Double.isFinite(value), 'Savings income movement must be finite.')
+            return value >= 0d ? Map.of('capitalIncome', value) : Map.of('savingsIncomeLosses', -value)
+        }
+        require(Double.isFinite(value), 'Tax source movement must be finite.')
+        Map.of(basis, value)
+    }
+
+    annualInputs { Map options, int birth, int month, int year, Map bases ->
+        def input = new LinkedHashMap(options)
+        input.put('ruleYear', referenceYear)
+        input.put('birthYear', birth - year + referenceYear)
+        for (def entry : bases.entrySet()) {
+            require(assessableBases.contains(entry.key), "Unsupported tax basis: ${entry.key}")
+            input.put(entry.key, number(input, entry.key, 0d) + entry.value)
+        }
+        input
+    }
+    stateFields(lossLabels.collectEntries { prefix, label ->
+        (1..lossYears).collectEntries { years ->
+            [(prefix + years): new TaxStateField(label + ', ' + years + ' subsequent years remaining', true)]
+        }
+    })
+    advanceAnnualState { Map state, int unassessedYears ->
+        require(unassessedYears >= 0, 'Unassessed tax years must be nonnegative.')
+        def next = new LinkedHashMap(state)
+        for (String prefix : lossLabels.keySet()) {
+            lossStock(state, prefix)
+            for (int year = 1; year <= lossYears; year++) {
+                next.put(prefix + year, unassessedYears <= lossYears - year ?
+                    state.getOrDefault(prefix + (year + unassessedYears), 0d) : 0d)
+            }
+        }
+        Map.copyOf(next)
+    }
+    assessAnnualStateful { Map options, int birth, int month, int year, Map bases, Map state, assessAnnual ->
+        require(amount(options, 'investmentCapitalLossBroughtForward') == 0d,
+            'Stateful capital losses require dated openingState buckets, not a repeated annual option.')
+        require(amount(options, 'savingsIncomeLossBroughtForward') == 0d,
+            'Stateful savings-income losses require dated openingState buckets.')
+        def input = new LinkedHashMap(options)
+        input.put('investmentCapitalLossBroughtForward', lossStock(state, 'capitalLossYear'))
+        input.put('savingsIncomeLossBroughtForward', lossStock(state, 'savingsIncomeLossYear'))
+        def assessment = assessAnnual.assess(input, birth, month, year, bases)
+        double currentGainLoss = bases.getOrDefault('investmentCapitalLoss', 0d) + bases.getOrDefault('investmentLosses', 0d) +
+            amount(options, 'investmentCapitalLoss') + amount(options, 'investmentLosses')
+        double currentIncomeLoss = bases.getOrDefault('savingsIncomeLosses', 0d) + amount(options, 'savingsIncomeLosses')
+        def next = rollLoss(state, 'capitalLossYear', currentGainLoss,
+            assessment.components().getOrDefault('investmentCapitalLossRemaining', 0d))
+        next.putAll(rollLoss(state, 'savingsIncomeLossYear', currentIncomeLoss,
+            assessment.components().getOrDefault('savingsIncomeLossRemaining', 0d)))
+        new StatefulTaxAssessment(assessment, next)
+    }
+
+    assess { Map input ->
+        keys(input, allowedOptions)
+        require(number(input, 'ruleYear', 0d) == referenceYear,
+            'Select ruleYear:2025, the Spanish IRPF income-year edition.')
+        require('full-year'.equals(input.get('residency')), 'Only full-year domestic residence is supported.')
+        String region = Objects.toString(input.get('autonomousCommunity'), '')
+        require(!region.isBlank() && !Set.of('navarra', 'navarre', 'pais vasco', 'basque', 'basque country')
+            .contains(region.toLowerCase(Locale.ROOT)),
+            'Provide a verified common-territory autonomousCommunity; Navarra/Basque regimes are unsupported.')
+        double age = referenceYear - number(input, 'birthYear', 1990d)
+        require(age >= 18d && age < 65d, 'This Spanish profile supports ordinary adults under 65 without dependent/disability supplements.')
+        double salary = amount(input, 'salary')
+        double social = requiredAmount(input, 'employeeSocialContributions')
+        require(social <= salary, 'Social contributions cannot exceed gross salary.')
+        require(salary == 0d || salary > 18276d,
+            'Spanish 2025 low-salary deduction requires a separate resolved profile; gross employment must exceed EUR18,276.')
+
+        double reductionIncome = Math.max(0d, salary - social)
+        double netWages = Math.max(0d, reductionIncome - 2000d)
+        double otherIncome = amount(input, 'capitalIncome') + amount(input, 'investmentDividends')
+        double realizedGains = amount(input, 'investmentGains')
+        double realizedLosses = amount(input, 'investmentLosses')
+        double capitalLosses = amount(input, 'investmentCapitalLoss')
+        double incomeLosses = amount(input, 'savingsIncomeLosses')
+        double currentGain = realizedGains - realizedLosses - capitalLosses
+        double currentIncome = otherIncome - incomeLosses
+        double workReduction = 0d
+        if (otherIncome + realizedGains - realizedLosses - capitalLosses - incomeLosses <= 6500d) {
+            if (reductionIncome <= 14852d) workReduction = 7302d
+            else if (reductionIncome <= 17673.52d) workReduction = 7302d - 1.75d * (reductionIncome - 14852d)
+            else if (reductionIncome < 19747.5d) workReduction = 2364.34d - 1.14d * (reductionIncome - 17673.52d)
+        }
+        double generalBasis = Math.max(0d, netWages - workReduction)
+        double regionalMinimum = requiredAmount(input, 'regionalMinimum')
+        def schedule = input.get('regionalSchedule')
+        double state = Math.max(0d, progressive(generalBasis, nationalBands) -
+            progressive(Math.min(generalBasis, nationalMinimum), nationalBands))
+        double regional = Math.max(0d, regionalTax(generalBasis, schedule) -
+            regionalTax(Math.min(generalBasis, regionalMinimum), schedule))
+
+        // Current-year losses use the cross-offset cap before losses carried from prior years.
+        double originalGain = Math.max(0d, currentGain)
+        double originalIncome = Math.max(0d, currentIncome)
+        double currentGainCross = 0d
+        double currentIncomeCross = 0d
+        if (currentGain < 0d && currentIncome > 0d) {
+            currentGainCross = Math.min(-currentGain, currentIncome * crossOffsetRate)
+            currentGain += currentGainCross
+            currentIncome -= currentGainCross
+        } else if (currentIncome < 0d && currentGain > 0d) {
+            currentIncomeCross = Math.min(-currentIncome, currentGain * crossOffsetRate)
+            currentIncome += currentIncomeCross
+            currentGain -= currentIncomeCross
+        }
+        double currentGainLoss = Math.max(0d, -currentGain)
+        double currentIncomeLoss = Math.max(0d, -currentIncome)
+        double priorGainLoss = amount(input, 'investmentCapitalLossBroughtForward')
+        double priorIncomeLoss = amount(input, 'savingsIncomeLossBroughtForward')
+        double gains = Math.max(0d, currentGain)
+        double income = Math.max(0d, currentIncome)
+        double sameGain = Math.min(gains, priorGainLoss)
+        gains -= sameGain
+        priorGainLoss -= sameGain
+        double sameIncome = Math.min(income, priorIncomeLoss)
+        income -= sameIncome
+        priorIncomeLoss -= sameIncome
+        double priorGainCross = Math.min(priorGainLoss,
+            Math.min(income * crossOffsetRate, Math.max(0d, originalIncome * crossOffsetRate - currentGainCross)))
+        income -= priorGainCross
+        priorGainLoss -= priorGainCross
+        double priorIncomeCross = Math.min(priorIncomeLoss,
+            Math.min(gains * crossOffsetRate, Math.max(0d, originalGain * crossOffsetRate - currentIncomeCross)))
+        gains -= priorIncomeCross
+        priorIncomeLoss -= priorIncomeCross
+
+        double savingsBasis = Math.max(0d, gains) + Math.max(0d, income)
+        double savingsTax = Math.max(0d, progressive(savingsBasis, savingsBands) -
+            0.5d * progressive(Math.min(savingsBasis, Math.max(0d, nationalMinimum - generalBasis)), savingsBands) -
+            0.5d * progressive(Math.min(savingsBasis, Math.max(0d, regionalMinimum - generalBasis)), savingsBands))
+        new TaxAssessment(state + regional + savingsTax, social, components(
+            'tax.generalBase', generalBasis, 'tax.workReduction', workReduction, 'tax.state', state,
+            'tax.regional', regional, 'tax.savingsBase', savingsBasis, 'tax.savings', savingsTax,
+            'investmentCapitalLossRemaining', currentGainLoss + priorGainLoss, 'savingsIncomeLossRemaining', currentIncomeLoss + priorIncomeLoss))
+    }
+
+    foreignInvestmentBases { InvestmentAccountYear account, TaxMoneyBasis prices ->
+        Objects.requireNonNull(account)
+        Objects.requireNonNull(prices)
+        require(prices.ruleYear() == referenceYear, 'Foreign investment money basis must match the destination rule year.')
+        require(prices.nativePerPlanUnit() == 1d && (prices.planCurrency() == null || prices.planCurrency().equals(prices.taxCurrency())),
+            "Foreign investment facts must already be in the destination's native currency; use inflationOnly().")
+        require(prices.taxCurrency() == null || 'EUR'.equals(prices.taxCurrency()), 'Foreign investment currency must match the destination.')
+        def options = account.policyOptions()
+        require(!'fund'.equalsIgnoreCase(Objects.toString(options.get('securitiesClassification'), '')),
+            'Foreign fund taxation is unsupported; a fund cannot use ordinary listed-share rules.')
+        require('listed-shares'.equals(Objects.toString(options.get('foreignInvestmentAssetType'), 'listed-shares')),
+            'Foreign investment taxation supports ordinary listed shares only; funds, pensions and other asset classifications need separate rules.')
+        boolean allowed = bool(options, 'foreignLossReliefConfirmed', false) || bool(options, 'spanishLossDeductibilityConfirmed', false)
+        Map.of('investmentGains', account.realizedGain(), 'investmentCapitalLoss', allowed ? account.realizedLoss() : 0d,
+            'investmentDividends', account.dividends())
+    }
+
+    propertySales {
+        overridesAnnualNotice false
+        inputsInRuleMoney { Map inputs, TaxMoneyBasis prices -> prices.convertFields(inputs, propertyMoney) }
+
+        assess { Map input ->
+            require(input != null, 'Provide property facts.')
+            require(Set.of('detachedHome', 'residentialHome').contains(input.get('propertyType')),
+                'Only ordinary private residential property is supported.')
+            require(!input.containsKey('currency') || 'EUR'.equals(input.get('currency')), 'Property currency must be EUR.')
+            for (String key : ['businessUse', 'commercialDealing', 'foreignProperty', 'depreciated', 'gifted']) {
+                require(!bool(input, key, false), "$key needs a separate property profile.")
+            }
+            LocalDate contract = date(input, 'contractDate')
+            LocalDate acquired = date(input, 'acquiredDate')
+            require(!contract.isBefore(acquired), 'Sale cannot precede acquisition.')
+            if (input.containsKey('settlementDate'))
+                require(!date(input, 'settlementDate').isBefore(contract), 'Notary settlement cannot precede the binding sale contract.')
+            double share = number(input, 'ownershipShare', 1d)
+            require(share > 0d && share <= 1d, 'Ownership share must be in (0,1].')
+            require(!acquired.isBefore(LocalDate.of(1994, 12, 31)),
+                'Spanish pre-31-December-1994 acquisitions require transitional abatement and lifetime-disposal-limit rules, unsupported in this profile.')
+            require(!bool(input, 'inherited', false), 'Inherited Spanish property requires estate basis rules, unsupported here.')
+
+            double gainAmount = gain(input)
+            double positive = Math.max(0d, gainAmount)
+            boolean principal = requiredBool(input, 'principalResidence')
+            LocalDate transfer = date(input, 'transferDate')
+            require(!transfer.isBefore(contract), 'Actual ownership transfer cannot precede the binding contract.')
+            int year = transfer.year
+            double age
+            if (input.containsKey('dateOfBirth')) {
+                age = Period.between(date(input, 'dateOfBirth'), transfer).years
+            } else {
+                age = year - number(input, 'birthYear', Double.NaN)
+                require(!principal || age < 65d,
+                    'Age-65 habitual-home exemption requires actual dateOfBirth; birth year alone cannot establish age on transfer date.')
+            }
+            require(Double.isFinite(age) && age >= 18d, 'Provide actual dateOfBirth (or birthYear for non-exempt sales).')
+            require(!principal || bool(input, 'mainHomeEligibilityConfirmed', false),
+                'Confirm habitual-home three-year residence/qualifying circumstances and sale within two years after leaving.')
+            double exempt = principal && age >= 65d ? positive : 0d
+            if (bool(input, 'requestDeferral', false)) {
+                require(principal && bool(input, 'mainHomeEligibilityConfirmed', false),
+                    'Reinvestment requires verified habitual-home eligibility.')
+                LocalDate purchase = date(input, 'replacementAcquiredDate')
+                require(!purchase.isBefore(transfer.minusYears(2)) && !purchase.isAfter(transfer.plusYears(2)),
+                    'Replacement acquisition must be within two years before or after sale.')
+                require(bool(input, 'replacementHomeEligibilityConfirmed', false),
+                    'Confirm replacement habitual-home and occupancy requirements; provisional intent alone is unsupported.')
+                double proceeds = Math.max(0d, money(input, 'salePrice', Double.NaN) - money(input, 'saleExpenses', 0d) -
+                    money(input, 'mortgageOutstanding', 0d))
+                double reinvested = money(input, 'replacementBasis', Double.NaN)
+                exempt = positive * (proceeds == 0d ? 1d : Math.min(1d, reinvested / proceeds))
+            }
+            require(money(input, 'previousDeferral', 0d) == 0d,
+                'Spanish completed reinvestment exemption is not a replacement-home basis carry; use explicit correction to original-year IRPF if conditions fail.')
+            double taxable = positive - exempt
+            def bases = new LinkedHashMap()
+            if (taxable > 0d) bases.put('investmentGains', taxable)
+            if (gainAmount < 0d) bases.put('investmentCapitalLoss', -gainAmount)
+            new PropertySaleAssessment(year, taxable, 0d, bases,
+                components('gain', gainAmount, 'reinvestmentExempt', exempt, 'taxableGain', taxable))
+        }
+
+        // Actual corrections belong to the original sale-year IRPF. Late-payment interest is external.
+        reinstate { Map input ->
+            require(bool(input, 'failedReinvestmentConfirmed', false), 'Confirm actual failure of reinvestment conditions.')
+            int original = integer(input, 'originalSaleYear')
+            double restored = money(input, 'exemptGainToRecapture', Double.NaN)
+            new DeferralReinstatement(original, restored, 0d, restored, base('investmentGains', restored))
+        }
+        calendar { Map input ->
+            def options = new LinkedHashMap(input)
+            LocalDate transfer = date(input, 'transferDate')
+            options.put('taxYear', transfer.year)
+            def recorded = PropertyInputs.calendar(options)
+            def dates = new LinkedHashMap(recorded.dates())
+            dates.put('taxRecognitionDate', transfer)
+            new PropertyTaxCalendar(transfer.year, dates, recorded.requiredInputs())
+        }
+    }
+}

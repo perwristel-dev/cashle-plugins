@@ -1,0 +1,20 @@
+// Personal allowance and basic-rate band, with class A employee National Insurance.
+// TaxPlugin is a pure country API. The authored model books its returned amounts once on the selected annual date.
+plugins {
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.gb' from '../uk-tax.cashle'
+}
+timeline { from '2026-12-30'; until '2027-01-02' }
+def nationalTax = dev.cashle.tax.TaxRegistry.discover(classLoader()).require('GB')
+Map<String, Object> resolvedInput = ['ruleYear':2026, 'residency':'full-year', 'birthYear':1990, 'region':'england-wales-ni', 'niCategory':'A', 'salary':50270]
+def taxpayer = entity()
+def cash = taxpayer.account(); cash.setName('Cash'); cash.setKind(dev.cashle.core.AccountKind.ASSET)
+def equity = taxpayer.account(); equity.setKind(dev.cashle.core.AccountKind.EQUITY)
+def incomeTax = taxpayer.account(); incomeTax.setName('Income tax'); incomeTax.setKind(dev.cashle.core.AccountKind.EXPENSE)
+def social = taxpayer.account(); social.setName('Social contributions'); social.setKind(dev.cashle.core.AccountKind.EXPENSE)
+def opening = schedule() on '2026-12-30'
+def annual = schedule() on '2026-12-31'
+flow { on opening; debit cash; credit equity; amount { 10000000d } }
+flow { on annual; debit incomeTax; credit cash; amount { nationalTax.assess(resolvedInput).liability() } }
+flow { on annual; debit social; credit cash; amount { nationalTax.assess(resolvedInput).socialContributions() } }
+collect { }

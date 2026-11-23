@@ -1,0 +1,13 @@
+{
+  "name": "Konsumentverket household budget",
+  "description": {
+    "sv": "Konsumentverkets referensbelopp för en månadsbudget för hushållet.",
+    "en": "Swedish Consumer Agency reference costs for a monthly household budget."
+  },
+  "country": "SE",
+  "category": "expenses",
+  "releases": [
+    "abc366569301e3a6fc7ab0082d8f1e93bd3e0541e371afbc6d56b5f716144f46",
+    "adbe2e6b5e363959aa2eabf99bfed7b7e78f8aae29ad84edf32ad4d13c8b54af"
+  ]
+}

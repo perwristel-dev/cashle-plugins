@@ -1,0 +1,20 @@
+{
+  "id": "cashle.pension.agreement.ITP2",
+  "sources": [
+    {
+      "path": "itp2.cashle",
+      "providers": [
+        "cashle.pension.agreement.ITP2"
+      ],
+      "imports": {
+        "cashle.pension.agreement.rules": [
+          "SwedishAgreementRules.groovy"
+        ]
+      }
+    }
+  ],
+  "ui": "agreement-entry.js",
+  "requires": [
+    "cashle.pension.agreement.rules"
+  ]
+}

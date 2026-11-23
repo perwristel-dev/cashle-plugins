@@ -1,0 +1,19 @@
+{
+  "USA – aktiedepå (ett anskaffningstillfälle)": "USA – aktiedepå (ett anskaffningstillfälle)",
+  "USA 2026: en homogen post börsnoterade aktier med samma historiska anskaffningsdatum. Uttag säljer samma andel av denna post. Inga ytterligare köp, återinvesteringar eller försäljningar med återköp; nya poster kräver separata konton och kontroll av wash sale. Utdelning betalas till hushållets kontanter. Kort/lång vinst bestäms av faktisk ägartid; qualified gäller bara efter verifierat bolags- och innehavsvillkor. Historisk realisation måste delas i fyra kort/lång-vinst/förlustposter i ingående tillstånd.": "USA 2026: en homogen post börsnoterade aktier med samma historiska anskaffningsdatum. Uttag säljer samma andel av denna post. Inga ytterligare köp, återinvesteringar eller försäljningar med återköp; nya poster kräver separata konton och kontroll av wash sale. Utdelning betalas till hushållets kontanter. Kort/lång vinst bestäms av faktisk ägartid; qualified gäller bara efter verifierat bolags- och innehavsvillkor. Historisk realisation måste delas i fyra kort/lång-vinst/förlustposter i ingående tillstånd.",
+  "Postens verkliga anskaffningsdatum": "Postens verkliga anskaffningsdatum",
+  "Verifierad utdelningsklass": "Verifierad utdelningsklass",
+  "Välj": "Välj",
+  "Ordinary dividends": "Ordinary dividends",
+  "Qualified dividends – verifierade villkor": "Qualified dividends – verifierade villkor",
+  "Inga wash sale-köp av väsentligen identiska värdepapper inom 30 dagar före/efter förlustförsäljningar (verifierat)": "Inga wash sale-köp av väsentligen identiska värdepapper inom 30 dagar före/efter förlustförsäljningar (verifierat)",
+  "Tidigare kortfristig realiserad vinst": "Tidigare kortfristig realiserad vinst",
+  "Tidigare kortfristig realiserad förlust": "Tidigare kortfristig realiserad förlust",
+  "Tidigare långfristig realiserad vinst": "Tidigare långfristig realiserad vinst",
+  "Tidigare långfristig realiserad förlust": "Tidigare långfristig realiserad förlust",
+  "Posten måste ha förvärvats senast vid prognosstart.": "Posten måste ha förvärvats senast vid prognosstart.",
+  "En ny post vid prognosstart måste ha samma anskaffningsdatum som prognosstarten.": "En ny post vid prognosstart måste ha samma anskaffningsdatum som prognosstarten.",
+  "En ny post kan inte ha realiserad historik före starten.": "En ny post kan inte ha realiserad historik före starten.",
+  "USA-posten tillåter inte återinvesterad utdelning.": "USA-posten tillåter inte återinvesterad utdelning.",
+  "label": "USA – aktiedepå (ett anskaffningstillfälle)"
+}

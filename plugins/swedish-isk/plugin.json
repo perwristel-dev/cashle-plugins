@@ -1,0 +1,16 @@
+{
+  "id": "cashle.finance.isk",
+  "requires": ["cashle.finance", "cashle.account.support", "cashle.account.tax.support"],
+  "sources": [{
+    "path": "swedish-isk.cashle",
+    "providers": ["cashle.finance.isk", "cashle.finance.isk.policy"],
+    "resources": [
+      "dev/cashle/accounts/isk/IskPlugin_en.properties",
+      "dev/cashle/accounts/isk/IskPlugin_sv.properties",
+      "dev/cashle/accounts/isk/IskTaxPolicy_en.properties",
+      "dev/cashle/accounts/isk/IskTaxPolicy_sv.properties"
+    ]
+  }],
+  "ui": "ui.js",
+  "uiTranslations": [{"locale": "en", "path": "ui-en.json"}, {"locale": "sv", "path": "ui-sv.json"}]
+}

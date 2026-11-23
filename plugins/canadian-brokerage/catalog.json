@@ -1,0 +1,13 @@
+{
+  "name": "Canadian brokerage",
+  "description": {
+    "sv": "Kanadensisk värdepappersdepå med genomsnittligt anskaffningsvärde för identiska aktier.",
+    "en": "Canadian brokerage account with average cost for identical shares."
+  },
+  "country": "CA",
+  "category": "accounts",
+  "releases": [
+    "7d4c079823a57ee17c86cf0f3704164fcc97d794444215c562ce4243219cac86",
+    "72dad23a994cf094cb96ec88d3570d848f9fa8a2ed5b3d652dc65dcaa0aafc56"
+  ]
+}

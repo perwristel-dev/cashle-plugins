@@ -1,0 +1,60 @@
+{
+  "upstream": "DECCF",
+  "commit": "a5413773d9389d1ae4e4bca5a1076b474025ee70",
+  "portDate": "2026-10-30",
+  "propertyPolicies": {
+    "SE": {
+      "reviewedOn": "2026-10-30",
+      "arithmeticSource": "DECCF domainpacks/swedish-property-sale-tax/calculation.js",
+      "commit": "a5413773d9389d1ae4e4bca5a1076b474025ee70",
+      "primarySources": [
+        "https://www.skatteverket.se/privat/fastigheterochbostad/forsaljningavbostad/raknautvinstforlustochskatt",
+        "https://www.skatteverket.se/privat/fastigheterochbostad/forsaljningavbostad/uppskov/forutsattningarforuppskov.4.233f91f71260075abe8800030623.html",
+        "https://www.skatteverket.se/privat/fastigheterochbostad/forsaljningavbostad/uppskov/slutligtuppskov.4.5c281c7015abecc2e2018bd.html",
+        "https://www.skatteverket.se/privat/fastigheterochbostad/forsaljningavbostad/uppskov/preliminartuppskov.4.5c281c7015abecc2e201786.html"
+      ]
+    },
+    "NO": {
+      "reviewedOn": "2026-10-30",
+      "primarySources": [
+        "https://www.skatteetaten.no/en/person/taxes/get-the-taxes-right/property-and-belongings/houses-property-and-plots-of-land/sale2/",
+        "https://www.skatteetaten.no/rettskilder/type/handboker/skatte-abc/gjeldende/e-1-eierbegrepet/E-1.013/E-1.014/",
+        "https://www.skatteetaten.no/person/skatt/skatteoppgjor/restskatt/"
+      ]
+    },
+    "DK": {
+      "reviewedOn": "2026-10-30",
+      "primarySources": [
+        "https://skat.dk/borger/bolig-og-ejendomme/salg-af-bolig/salg-af-ejerbolig",
+        "https://info.skat.dk/data.aspx?oid=1948642",
+        "https://skat.dk/borger/aarsopgoerelse/betal-restskat/betal-restskat"
+      ]
+    },
+    "FI": {
+      "reviewedOn": "2026-10-30",
+      "primarySources": [
+        "https://www.vero.fi/en/individuals/property/selling-your-home/selling-your-home/",
+        "https://vero.fi/en/individuals/property/selling-your-home/taxable-sale-of-a-residential-property/",
+        "https://www.vero.fi/en/individuals/payments/back-taxes/payment-instructions/"
+      ]
+    },
+    "IS": {
+      "reviewedOn": "2026-10-30",
+      "primarySources": [
+        "https://www.skatturinn.is/einstaklingar/fjarmagnstekjur/soluhagnadur/",
+        "https://www.althingi.is/lagas/nuna/2003090.html",
+        "https://www.skatturinn.is/einstaklingar/framtal-og-alagning/alagningarsedill-og-forsendur/2026"
+      ]
+    }
+  },
+  "country": {
+    "country": "SE",
+    "currency": "SEK",
+    "ruleYear": 2025,
+    "assessmentSource": "domainpacks/swedish-income-tax/calculation.js",
+    "allowanceSource": "SKV 425 utg\u00e5va 32, income year 2025, printed pages 52\u201367",
+    "allowanceFile": "basic-allowance-2025.tsv",
+    "reviewScope": "Ported exactly from upstream; no new legislative review claimed.",
+    "allowanceSha256": "0f9daef5db102e356235f3e1a011ab0118e427c161068c8c78b730dd4a969aa4"
+  }
+}

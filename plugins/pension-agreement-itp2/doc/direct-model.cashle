@@ -1,0 +1,31 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.tax'
+    id 'cashle.pension.types'
+    id 'cashle.finance.pension.db'
+    id 'cashle.pension.agreement.ITP2'
+}
+finance {
+    plan {
+        from '2026-01-01'
+        until '2027-03-01'
+        inflation 0d
+        settings([generalAssumptions:['swedish-pension':[baseAmountIncrease:0d, lifelongDivisionYears:20d]]])
+    }
+    person('self') { birthYear 1962; birthMonth 1 }
+    tax {
+        country 'SE'
+        preliminaryRate 0d
+        options([ruleYear:2025, residentMonths:12, municipality:'0180', municipalRate:0.306d,
+                 burialFeeRate:0.00293d, communityMember:false])
+    }
+    salary('Salary') {
+        amount 50000d; frequency 'monthly'; taxTreatment 'taxable'; taxBasis 'salary'; end '2027-01-01'
+    }
+    dbPension('Pension') {
+        settings([inputMode:'statement', scheme:'ITP2', salaryId:'Salary', annualBenefit:58000d, serviceYears:29d,
+                  payoutAge:65, payoutStart:[reference:'age', age:65, offset:0, personId:'self'], duration:0d])
+    }
+}
+collect {}

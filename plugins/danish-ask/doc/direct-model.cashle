@@ -1,0 +1,27 @@
+// Owned dk-ask DSL calculation regression; synthetic values, version 1.
+plugins {
+    id 'cashle.finance'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.dk' from '../../danish-tax/danish-tax.cashle'
+    id 'cashle.finance.dk-ask' from '../dk-ask.cashle'
+    id 'cashle.finance.dk-ask.tax' from '../dk-ask-tax.cashle'
+}
+finance {
+    language 'en'
+    plan { from '2026-07-01'; until '2027-06-01'; currency 'DKK'; inflation 0d }
+    person('self') { name 'Synthetic Danish investor'; birthYear 1980; birthMonth 1 }
+    tax {
+        country 'DK'
+        preliminaryRate 0d
+        options([ruleYear:2026, residency:'full-year', municipalRate:0.25d, churchRate:0d,
+                 civilStatus:'single', seniorSupplement:false, singleParentSupplement:false])
+    }
+    dkAsk('portfolio') {
+        name 'ASK'
+        balance 15000d
+        settings([costBasis:10000d, priorYearEndValue:10000d, closeEnabled:true, closeDate:'2026-09-01',
+                  initialYear:[openingValue:10000d, quarterOpeningValues:[null, null, null, null]]])
+    }
+}
+collect { }

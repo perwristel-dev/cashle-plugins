@@ -1,0 +1,32 @@
+// Owned fr-compte-titres DSL calculation regression; synthetic values, version 1.
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.fr-compte-titres' from '../french-compte-titres.cashle'
+    id 'cashle.finance.fr-compte-titres.tax' from '../french-compte-titres-tax.cashle'
+    id 'cashle.finance.income'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.fr' from '../../french-tax/french-tax.cashle'
+}
+finance {
+    language 'en'
+    plan { from '2025-01-01'; until '2026-10-01'; currency 'EUR'; inflation 0d }
+    person('self') { name 'Synthetic French investor'; birthYear 1980; birthMonth 1 }
+    tax {
+        country 'FR'
+        preliminaryRate 0d
+        options([ruleYear:2025, residency:'full-year', initialState:[:], salaryDefinition:'gross-resolved-payroll',
+                 civilStatus:'single', familyParts:1d, familyProfile:'ordinary', capitalElection:'pfu',
+                 employmentSocialContributions:0d, deductibleEmployeeContributions:0d, payrollTaxableAdditions:0d,
+                 settlementCalendar:[month:9, day:30, yearOffset:1, confirmed:true]])
+    }
+    salary('salary') { name 'Salary'; amount 60000d; frequency 'once'; taxTreatment 'taxable'; taxBasis 'salary' }
+    frCompteTitres('portfolio') {
+        name 'Compte titres'
+        balance 15000d
+        settings([costBasis:10000d, closeEnabled:true, closeDate:'2025-06-01',
+                  policyOptions:[acquiredDate:'2020-01-01'],
+                  initialYear:[quarterOpeningValues:[null, null, null, null]]])
+    }
+}
+collect { }

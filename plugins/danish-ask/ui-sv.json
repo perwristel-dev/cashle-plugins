@@ -1,0 +1,12 @@
+{
+  "label": "Aktiesparekonto (ASK)",
+  "Aktiesparekonto (ASK)": "Aktiesparekonto (ASK)",
+  "Danmark 2026: årlig lagerskatt 17 %. Negativ skatt är en separat skattekredit, inte en värdeförlust eller avdrag från lön. Krediten förfaller vid avslut. Insättningstaket 174 200 DKK beror på marknadsvärdet den 31 december föregående år och årets nettoinsättningar; värdeökning över taket behöver inte säljas.": "Danmark 2026: årlig lagerskatt 17 %. Negativ skatt är en separat skattekredit, inte en värdeförlust eller avdrag från lön. Krediten förfaller vid avslut. Insättningstaket 174 200 DKK beror på marknadsvärdet den 31 december föregående år och årets nettoinsättningar; värdeökning över taket behöver inte säljas.",
+  "Ingående negativ skattekredit": "Ingående negativ skattekredit",
+  "Marknadsvärde den 31 december föregående år": "Marknadsvärde den 31 december föregående år",
+  "Marknadsvärde den 1 januari": "Marknadsvärde den 1 januari",
+  "Obetald kontoskatt från föregående år": "Obetald kontoskatt från föregående år",
+  "Ange föregående års kontoskatt som ännu inte har dragits från den danska ASK:n. Den betalas vid nästa betalning i februari eller vid avslut och är skild från den negativa skattekrediten.": "Ange föregående års kontoskatt som ännu inte har dragits från den danska ASK:n. Den betalas vid nästa betalning i februari eller vid avslut och är skild från den negativa skattekrediten.",
+  "Ange marknadsvärdet den 31 december föregående år (0 för ett nytt konto).": "Ange marknadsvärdet den 31 december föregående år (0 för ett nytt konto).",
+  "Ange kontots marknadsvärde den 1 januari under prognosens första år.": "Ange kontots marknadsvärde den 1 januari under prognosens första år."
+}

@@ -1,0 +1,13 @@
+{
+  "name": "French PEA",
+  "description": {
+    "sv": "Franskt aktiesparande med regler för tillåtna värdepapper och insättningsgränser.",
+    "en": "French equity savings plan with eligible investments and contribution limits."
+  },
+  "country": "FR",
+  "category": "accounts",
+  "releases": [
+    "ae434ef66bf7e03d44442c6fbff264e843088bbb7c5cfccf6b5215d10b0c8ec8",
+    "a49214374d576af4b2a27f5ec6f1bd2f710369bae3a363f98ab341283cb8196c"
+  ]
+}

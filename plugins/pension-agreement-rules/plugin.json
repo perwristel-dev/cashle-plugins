@@ -1,0 +1,8 @@
+{
+  "id": "cashle.pension.agreement.rules",
+  "sourceExports": ["SwedishAgreementRules.groovy", "Pa16AgreementRules.groovy"],
+  "sources": [
+    { "path": "SwedishAgreementRules.groovy" },
+    { "path": "Pa16AgreementRules.groovy" }
+  ]
+}

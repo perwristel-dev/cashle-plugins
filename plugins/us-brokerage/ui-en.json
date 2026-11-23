@@ -1,0 +1,19 @@
+{
+  "USA – aktiedepå (ett anskaffningstillfälle)": "US brokerage account (single acquisition)",
+  "USA 2026: en homogen post börsnoterade aktier med samma historiska anskaffningsdatum. Uttag säljer samma andel av denna post. Inga ytterligare köp, återinvesteringar eller försäljningar med återköp; nya poster kräver separata konton och kontroll av wash sale. Utdelning betalas till hushållets kontanter. Kort/lång vinst bestäms av faktisk ägartid; qualified gäller bara efter verifierat bolags- och innehavsvillkor. Historisk realisation måste delas i fyra kort/lång-vinst/förlustposter i ingående tillstånd.": "US 2026: one homogeneous lot of listed shares with the same historical acquisition date. Withdrawals sell a proportional share of this lot. No additional purchases, reinvestment or sales with repurchase; new lots require separate accounts and a wash-sale check. Dividends are paid to household cash. Short- or long-term gains use actual holding time; qualified dividends require verified company and holding conditions. Historical realized gains and losses must be split into four short-/long-term gain/loss entries in opening state.",
+  "Postens verkliga anskaffningsdatum": "Actual acquisition date of the lot",
+  "Verifierad utdelningsklass": "Verified dividend class",
+  "Välj": "Select",
+  "Ordinary dividends": "Ordinary dividends",
+  "Qualified dividends – verifierade villkor": "Qualified dividends – conditions verified",
+  "Inga wash sale-köp av väsentligen identiska värdepapper inom 30 dagar före/efter förlustförsäljningar (verifierat)": "No purchases of substantially identical securities within 30 days before or after loss sales (wash sale rule verified)",
+  "Tidigare kortfristig realiserad vinst": "Previous realized short-term gain",
+  "Tidigare kortfristig realiserad förlust": "Previous realized short-term loss",
+  "Tidigare långfristig realiserad vinst": "Previous realized long-term gain",
+  "Tidigare långfristig realiserad förlust": "Previous realized long-term loss",
+  "Posten måste ha förvärvats senast vid prognosstart.": "The lot must have been acquired by the start of the forecast.",
+  "En ny post vid prognosstart måste ha samma anskaffningsdatum som prognosstarten.": "A new lot must have an acquisition date matching the start of the forecast.",
+  "En ny post kan inte ha realiserad historik före starten.": "A new lot cannot have realized gains or losses before it opens.",
+  "USA-posten tillåter inte återinvesterad utdelning.": "The US brokerage account does not allow dividend reinvestment.",
+  "label": "US brokerage account (single acquisition)"
+}

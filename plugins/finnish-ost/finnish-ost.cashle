@@ -1,0 +1,10 @@
+investmentAccount('cashlab.fi-ost', 1) {
+    pluginId 'cashle.finance.fi-ost'
+    dsl 'fiOst'
+    country 'FI'
+    kind 'FIost'
+    taxPolicy 'ost'
+    messages 'dev.cashle.accounts.fi_ost.FinnishOstPlugin'
+    prepaidTax true
+    transfers true
+}

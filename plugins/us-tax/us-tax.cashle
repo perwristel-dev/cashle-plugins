@@ -1,0 +1,476 @@
+import dev.cashle.core.i18n.Messages
+import dev.cashle.tax.InvestmentAccountYear
+import dev.cashle.tax.PropertySaleAssessment
+import dev.cashle.tax.PropertyTaxCalendar
+import dev.cashle.tax.StatefulTaxAssessment
+import dev.cashle.tax.TaxAssessment
+import dev.cashle.tax.TaxMoneyBasis
+import dev.cashle.tax.TaxPlugin
+import dev.cashle.tax.TaxStateField
+import java.time.DayOfWeek
+import java.time.LocalDate
+
+import static dev.cashle.tax.support.Inputs.*
+import static dev.cashle.tax.support.PropertyInputs.MONEY
+import static dev.cashle.tax.support.PropertyInputs.base
+import static dev.cashle.tax.support.PropertyInputs.date
+import static dev.cashle.tax.support.PropertyInputs.gain
+import static dev.cashle.tax.support.PropertyInputs.integer
+import static dev.cashle.tax.support.PropertyInputs.noReplacementRollover
+import static dev.cashle.tax.support.PropertyInputs.requiredBool
+import static dev.cashle.tax.support.PropertyInputs.scope as propertyScope
+import static dev.cashle.tax.support.PropertyInputs.weekday
+
+// Federal individual income tax and employee FICA for rule year 2026.
+int referenceYear = 2026
+def externalBases = ['salary', 'capitalIncome', 'qualifiedDividends', 'shortTermCapitalGains',
+    'shortTermCapitalLosses', 'longTermCapitalGains', 'longTermCapitalLosses'].asImmutable()
+def localBasis = { String basis -> 'local' + basis.capitalize() }
+def federalCarry = { String field ->
+    field.startsWith('local') ? field.substring(5, 6).toLowerCase(Locale.ROOT) + field.substring(6) : field
+}
+def allBases = (externalBases + externalBases.collect(localBasis) + ['payrollSalary']).asImmutable()
+def verifiedStates = ['AK', 'FL', 'NV', 'SD', 'TN', 'TX', 'WY'].toSet().asImmutable()
+def allStates = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD',
+    'MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN',
+    'TX','UT','VT','VA','WA','WV','WI','WY','DC'].toSet().asImmutable()
+def stateSchema = [
+    shortTermCapitalLossCarry: new TaxStateField('US federal short-term capital loss carry', true),
+    longTermCapitalLossCarry: new TaxStateField('US federal long-term capital loss carry', true),
+    localShortTermCapitalLossCarry: new TaxStateField('US local estimate short-term capital loss carry', true),
+    localLongTermCapitalLossCarry: new TaxStateField('US local estimate long-term capital loss carry', true),
+].asImmutable()
+def moneyFields = (allBases + ['spouseSalary'] + stateSchema.keySet()).toSet().asImmutable()
+def allowedOptions = (moneyFields + ['state', 'stateTaxMethod', 'estimatedStateTaxRate', 'filingStatus', 'spouseSenior',
+    'seniorDeductionEligible', 'januaryFirstBirthday', 'ruleYear', 'birthYear', 'residency',
+    'noticeDatesByYear', 'noticeAmountsByYear', 'settlementCalendar']).asImmutable()
+def sourceFlags = ['federalTaxable', 'localTaxable'].toSet().asImmutable()
+def isFinite = { value -> value instanceof Number && Double.isFinite(value.doubleValue()) }
+def nonnegativeAmount = { inputs, String key ->
+    double value = number(inputs, key, 0d)
+    require(value >= 0d, key + ' must be nonnegative.')
+    value
+}
+def localAmount = { inputs, String basis ->
+    String local = localBasis(basis)
+    nonnegativeAmount(inputs, inputs.containsKey(local) ? local : basis)
+}
+def returnDue = { int year ->
+    LocalDate due = weekday(LocalDate.of(year + 1, 4, 15))
+    LocalDate emancipation = LocalDate.of(year + 1, 4, 16)
+    if (emancipation.dayOfWeek == DayOfWeek.SATURDAY) emancipation = emancipation.minusDays(1)
+    if (emancipation.dayOfWeek == DayOfWeek.SUNDAY) emancipation = emancipation.plusDays(1)
+    due == emancipation ? weekday(due.plusDays(1)) : due
+}
+def progressive = { double income, List limits, List rates ->
+    double tax = 0d
+    double lower = 0d
+    for (int index = 0; index < rates.size(); index++) {
+        double upper = index < limits.size() ? limits[index] : Double.POSITIVE_INFINITY
+        tax += Math.max(0d, Math.min(income, upper) - lower) * rates[index]
+        lower = upper
+    }
+    tax
+}
+def preferred = { double income, double ordinary, double zero, double top ->
+    double atZero = Math.min(income, Math.max(0d, zero - ordinary))
+    double atFifteen = Math.min(income - atZero, Math.max(0d, top - Math.max(zero, ordinary)))
+    atFifteen * 0.15d + Math.max(0d, income - atZero - atFifteen) * 0.20d
+}
+def usesEstimate = { inputs ->
+    String state = Objects.toString(inputs.get('state'), '')
+    require(allStates.contains(state), 'Choose one of the 50 US states or DC; territories require separate rules.')
+    String method = Objects.toString(inputs.getOrDefault('stateTaxMethod', 'verified'), '')
+    require(method in ['verified', 'estimated-flat'], 'Choose verified state rules or an explicit estimated-flat state/local tax assumption.')
+    if (method == 'verified') {
+        require(verifiedStates.contains(state), 'This US state requires an explicit estimated-flat state/local tax assumption; verified rules cover AK/FL/NV/SD/TN/TX/WY.')
+        return false
+    }
+    require(inputs.containsKey('estimatedStateTaxRate'), 'An estimated state/local tax rate must be explicitly supplied.')
+    double rate = number(inputs, 'estimatedStateTaxRate', Double.NaN)
+    require(rate >= 0d && rate <= 1d, 'Estimated state/local income-tax rate must be between 0 and 1.')
+    true
+}
+
+// Match the two UI comparisons against zero for invalid household inputs as well as numbers.
+def arrayString
+arrayString = { List values ->
+    values.collect { value ->
+        value == null ? '' : value instanceof List ? arrayString(value) :
+            value instanceof Map ? '[object Object]' : value.toString()
+    }.join(',')
+}
+def positiveCoerced = { value ->
+    if (value instanceof Number) return value.doubleValue() > 0d
+    if (value instanceof Boolean) return value
+    if (value instanceof List) value = arrayString(value)
+    if (!(value instanceof String)) return false
+    String entered = value.trim()
+    if (entered.isEmpty()) return false
+    try {
+        if (entered.matches('0[xX][0-9a-fA-F]+')) return new BigInteger(entered.substring(2), 16).signum() > 0
+        if (entered.matches('0[bB][01]+')) return new BigInteger(entered.substring(2), 2).signum() > 0
+        if (entered.matches('0[oO][0-7]+')) return new BigInteger(entered.substring(2), 8).signum() > 0
+        Double.parseDouble(entered) > 0d
+    } catch (NumberFormatException ignored) {
+        false
+    }
+}
+
+def seniorAmount = { inputs, double agi, boolean separate, boolean joint ->
+    !separate && bool(inputs, 'seniorDeductionEligible', true) ?
+        Math.max(0d, 6000d - Math.max(0d, agi - (joint ? 150000d : 75000d)) * 0.06d) : 0d
+}
+def netGains = { double shortTerm, double longTerm ->
+    if (shortTerm < 0d && longTerm > 0d) {
+        double offset = Math.min(-shortTerm, longTerm)
+        shortTerm += offset
+        longTerm -= offset
+    } else if (longTerm < 0d && shortTerm > 0d) {
+        double offset = Math.min(-longTerm, shortTerm)
+        longTerm += offset
+        shortTerm -= offset
+    }
+    [shortTerm, longTerm]
+}
+def remainingLoss = { double shortTerm, double longTerm, double deductionUsed ->
+    [Math.max(0d, -shortTerm - Math.min(deductionUsed, Math.max(0d, -shortTerm))),
+     Math.max(0d, -longTerm - Math.max(0d, deductionUsed - Math.max(0d, -shortTerm)))]
+}
+// Separate netting for the user's local AGI estimate.
+def localIncome = { inputs, double spouse, double deduction, boolean separate, boolean joint, int seniorCount ->
+    double ordinary = localAmount(inputs, 'salary') + spouse + localAmount(inputs, 'capitalIncome')
+    double qualified = localAmount(inputs, 'qualifiedDividends')
+    double st = localAmount(inputs, 'shortTermCapitalGains') - localAmount(inputs, 'shortTermCapitalLosses') -
+        nonnegativeAmount(inputs, inputs.containsKey('localShortTermCapitalLossCarry') ? 'localShortTermCapitalLossCarry' : 'shortTermCapitalLossCarry')
+    double lt = localAmount(inputs, 'longTermCapitalGains') - localAmount(inputs, 'longTermCapitalLosses') -
+        nonnegativeAmount(inputs, inputs.containsKey('localLongTermCapitalLossCarry') ? 'localLongTermCapitalLossCarry' : 'longTermCapitalLossCarry')
+    def (shortTerm, longTerm) = netGains(st, lt)
+    double lossDeduction = Math.min(separate ? 1500d : 3000d, Math.max(0d, -shortTerm - longTerm))
+    double agi = ordinary + qualified + Math.max(0d, shortTerm) + Math.max(0d, longTerm) - lossDeduction
+    double carryUsed = Math.min(lossDeduction, Math.max(0d, ordinary + qualified - deduction -
+        seniorAmount(inputs, agi, separate, joint) * seniorCount))
+    def (shortRemaining, longRemaining) = remainingLoss(shortTerm, longTerm, carryUsed)
+    [agi: agi, shortRemaining: shortRemaining, longRemaining: longRemaining]
+}
+
+def assessFederalAndLocal = { inputs ->
+    keys(inputs, allowedOptions)
+    require(number(inputs, 'ruleYear', 0d) == referenceYear, 'Select explicit ruleYear:2026.')
+    require('full-year'.equals(inputs.get('residency')), 'Only full-year resident individuals are supported.')
+    double birthYear = number(inputs, 'birthYear', 0d)
+    require(birthYear == Math.rint(birthYear) && birthYear >= 1d && birthYear <= 2007d,
+        'This profile requires birthYear 1–2007 (supported adult age band).')
+    for (String basis : allBases) nonnegativeAmount(inputs, basis)
+    boolean estimated = usesEstimate(inputs)
+    String status = Objects.toString(inputs.get('filingStatus'), '')
+    require(status in ['single', 'marriedJoint', 'marriedSeparate', 'headOfHousehold'], 'Choose an explicit supported filingStatus.')
+    boolean joint = status == 'marriedJoint'
+    boolean separate = status == 'marriedSeparate'
+    boolean head = status == 'headOfHousehold'
+    boolean januaryFirstBirthday = bool(inputs, 'januaryFirstBirthday', false)
+    bool(inputs, 'seniorDeductionEligible', true)
+    boolean spouseSenior = bool(inputs, 'spouseSenior', false)
+    double salary = nonnegativeAmount(inputs, 'salary')
+    double spouse = nonnegativeAmount(inputs, 'spouseSalary')
+    require(joint || spouse == 0d, 'spouseSalary requires marriedJoint.')
+    double ordinary = salary + spouse + nonnegativeAmount(inputs, 'capitalIncome')
+    double qualified = nonnegativeAmount(inputs, 'qualifiedDividends')
+    int age = referenceYear - (int) birthYear
+    boolean senior = age >= 65 || (age == 64 && januaryFirstBirthday)
+    require(joint || !spouseSenior, 'A separate-return spouse age allowance needs unsupported spouse income/dependency eligibility facts.')
+    int seniorCount = (senior ? 1 : 0) + (spouseSenior ? 1 : 0)
+    double additionalStandard = (senior ? (joint || separate ? 1650d : 2050d) : 0d) + (spouseSenior ? 1650d : 0d)
+    double deduction = (joint ? 32200d : head ? 24150d : 16100d) + additionalStandard
+    double st = nonnegativeAmount(inputs, 'shortTermCapitalGains') - nonnegativeAmount(inputs, 'shortTermCapitalLosses') -
+        nonnegativeAmount(inputs, 'shortTermCapitalLossCarry')
+    double lt = nonnegativeAmount(inputs, 'longTermCapitalGains') - nonnegativeAmount(inputs, 'longTermCapitalLosses') -
+        nonnegativeAmount(inputs, 'longTermCapitalLossCarry')
+    def (shortTerm, longTerm) = netGains(st, lt)
+    double lossDeduction = Math.min(separate ? 1500d : 3000d, Math.max(0d, -shortTerm - longTerm))
+    double agi = ordinary + qualified + Math.max(0d, shortTerm) + Math.max(0d, longTerm) - lossDeduction
+    double seniorDeduction = seniorAmount(inputs, agi, separate, joint) * seniorCount
+    // Schedule D preserves losses unabsorbed after standard and enhanced senior deductions.
+    double carryUsed = Math.min(lossDeduction, Math.max(0d, ordinary + qualified - deduction - seniorDeduction))
+    def (stRemaining, ltRemaining) = remainingLoss(shortTerm, longTerm, carryUsed)
+    double taxable = Math.max(0d, agi - deduction - seniorDeduction)
+    double preference = Math.min(taxable, qualified + Math.max(0d, longTerm))
+    double ordinaryTaxable = taxable - preference
+    def limits = joint ? [24800d, 100800d, 211400d, 403550d, 512450d, 768700d] :
+        head ? [17700d, 67450d, 105700d, 201750d, 256200d, 640600d] :
+            [12400d, 50400d, 105700d, 201775d, 256225d, separate ? 384350d : 640600d]
+    double zero = joint ? 98900d : head ? 66200d : 49450d
+    double top = joint ? 613700d : head ? 579600d : separate ? 306850d : 545500d
+    double ordinaryTax = progressive(ordinaryTaxable, limits, [0.10d, 0.12d, 0.22d, 0.24d, 0.32d, 0.35d, 0.37d])
+    double preferredTax = preferred(preference, ordinaryTaxable, zero, top)
+    // IRC 56(b)(5)(D) adds both deductions back for AMT. Qualified gains keep preferential rates.
+    double amti = Math.max(0d, agi)
+    double exemption = Math.max(0d, (joint ? 140200d : separate ? 70100d : 90100d) -
+        Math.max(0d, amti - (joint ? 1000000d : 500000d)) * 0.5d)
+    require(!separate || amti <= 640200d, 'High-income marriedSeparate AMT surcharge profiles are unsupported.')
+    double amtBase = Math.max(0d, amti - exemption)
+    double amtPreference = Math.min(amtBase, qualified + Math.max(0d, longTerm))
+    double amtOrdinary = amtBase - amtPreference
+    double tentative = progressive(amtOrdinary, [separate ? 122250d : 244500d], [0.26d, 0.28d]) +
+        preferred(amtPreference, amtOrdinary, zero, top)
+    double amt = Math.max(0d, tentative - ordinaryTax - preferredTax)
+    require(amt == 0d || nonnegativeAmount(inputs, 'shortTermCapitalLossCarry') + nonnegativeAmount(inputs, 'longTermCapitalLossCarry') == 0d,
+        'AMT with brought-forward capital losses needs separately reconciled AMT capital-loss carry, which is unsupported.')
+    double niitThreshold = joint ? 250000d : separate ? 125000d : 200000d
+    double investmentNet = Math.max(0d, nonnegativeAmount(inputs, 'capitalIncome') + qualified +
+        Math.max(0d, shortTerm) + Math.max(0d, longTerm) - lossDeduction)
+    double niit = 0.038d * Math.min(investmentNet, Math.max(0d, agi - niitThreshold))
+    double payrollSalary = inputs.containsKey('payrollSalary') ? nonnegativeAmount(inputs, 'payrollSalary') : salary
+    double ss = (Math.min(payrollSalary, 184500d) + Math.min(spouse, 184500d)) * 0.062d
+    double medicare = (payrollSalary + spouse) * 0.0145d
+    double extraMedicare = Math.max(0d, payrollSalary + spouse - niitThreshold) * 0.009d
+    def local = localIncome(inputs, spouse, deduction, separate, joint, seniorCount)
+    double stateTax = estimated ? Math.max(0d, (double) local.agi) * number(inputs, 'estimatedStateTaxRate', 0d) : 0d
+    new TaxAssessment(ordinaryTax + preferredTax + amt + niit + stateTax, ss + medicare + extraMedicare,
+        components('ordinaryIncomeTax', ordinaryTax, 'preferentialIncomeTax', preferredTax, 'alternativeMinimumTax', amt,
+            'niit', niit, 'stateIncomeTax', stateTax, 'estimatedStateAndLocalIncomeTax', stateTax, 'standardDeduction', deduction,
+            'additionalAgeStandardDeduction', additionalStandard, 'enhancedSeniorDeduction', seniorDeduction,
+            'adjustedGrossIncome', agi, 'taxableIncome', taxable, 'socialSecurity', ss, 'medicare', medicare,
+            'additionalMedicare', extraMedicare, 'capitalLossDeduction', lossDeduction, 'shortTermCapitalLossRemaining', stRemaining,
+            'longTermCapitalLossRemaining', ltRemaining, 'localAdjustedGrossIncome', local.agi,
+            'localShortTermCapitalLossRemaining', local.shortRemaining, 'localLongTermCapitalLossRemaining', local.longRemaining))
+}
+
+def annualInputsFor = { options, int birthYear, int year, amounts ->
+    require(!'marriedJoint'.equals(options.get('filingStatus')),
+        'Joint US returns require one combined tax unit; the per-person annual adapter supports single, marriedSeparate or headOfHousehold only.')
+    def inputs = new LinkedHashMap(options)
+    inputs.remove('initialState')
+    inputs.remove('settlementDate')
+    inputs.put('ruleYear', referenceYear)
+    inputs.put('birthYear', birthYear - year + referenceYear)
+    for (def entry : amounts.entrySet()) {
+        require(allBases.contains(entry.key), 'Unsupported tax basis: ' + entry.key)
+        require(Double.isFinite(entry.value) && entry.value >= 0d, 'Negative movements need explicit capital-loss classifications.')
+        inputs.put(entry.key, number(inputs, entry.key, 0d) + entry.value)
+    }
+    // Entered ordinary amounts go to both scopes unless the source accumulator supplies an explicit local amount.
+    for (String basis : externalBases) {
+        String local = localBasis(basis)
+        inputs.put(local, nonnegativeAmount(options, options.containsKey(local) ? local : basis) +
+            amounts.getOrDefault(local, amounts.getOrDefault(basis, 0d)))
+    }
+    inputs.put('payrollSalary', nonnegativeAmount(options, options.containsKey('payrollSalary') ? 'payrollSalary' : 'salary') +
+        amounts.getOrDefault('payrollSalary', amounts.getOrDefault('salary', 0d)))
+    inputs
+}
+
+def validateClassification = { String basis, options ->
+    require(externalBases.contains(basis), 'Unsupported US source tax basis: ' + basis)
+    keys(options, sourceFlags)
+    bool(options, 'federalTaxable', true)
+    bool(options, 'localTaxable', true)
+}
+def classify = { String basis, double amount, options ->
+    validateClassification(basis, options)
+    require(Double.isFinite(amount), 'Tax source movement must be finite.')
+    def classified = new LinkedHashMap()
+    classified.put(basis, bool(options, 'federalTaxable', true) ? amount : 0d)
+    classified.put(localBasis(basis), bool(options, 'localTaxable', true) ? amount : 0d)
+    if (basis == 'salary') classified.put('payrollSalary', amount)
+    classified
+}
+
+countryTaxPolicy('US') {
+    pluginId 'cashle.tax.us'
+    currency 'USD'
+    ruleYear referenceYear
+    incomeBases allBases
+    sourceBases externalBases
+    requiresTaxPlan true
+    messages 'dev.cashle.tax.unitedstates.UnitedStatesTaxSource'
+
+    validateProfile { inputs, context, Messages catalogue ->
+        def errors = []
+        if (!isFinite(inputs.ruleYear) || inputs.ruleYear.doubleValue() != referenceYear || !'full-year'.equals(inputs.residency))
+            errors.add(catalogue.text('profile.ruleYearResidency'))
+        def people = context.people()
+        if (people.any { person ->
+            def birth = person.get('birthYear')
+            isFinite(birth) && Math.rint(birth.doubleValue()) == birth.doubleValue() && (birth < 1d || birth > 2007d)
+        }) errors.add(catalogue.text('profile.birthYear'))
+        def state = inputs.get('state')
+        def method = inputs.get('stateTaxMethod') == null ? 'verified' : inputs.get('stateTaxMethod')
+        if (!allStates.contains(state)) errors.add(catalogue.text('profile.state'))
+        if (!(method in ['verified', 'estimated-flat'])) errors.add(catalogue.text('profile.stateTaxMethod'))
+        if ('verified'.equals(method) && !verifiedStates.contains(state)) errors.add(catalogue.text('profile.verifiedState'))
+        if ('estimated-flat'.equals(method) && (!isFinite(inputs.estimatedStateTaxRate) ||
+            inputs.estimatedStateTaxRate < 0d || inputs.estimatedStateTaxRate > 1d))
+            errors.add(catalogue.text('profile.estimatedStateTaxRate'))
+        if (!(inputs.filingStatus in ['single', 'marriedSeparate', 'headOfHousehold']))
+            errors.add(catalogue.text('profile.filingStatus'))
+        for (String key : ['openingShortTermCapitalLoss', 'openingLongTermCapitalLoss']) {
+            if (!isFinite(inputs.get(key)) || inputs.get(key) < 0d)
+                errors.add(catalogue.text('profile.nonnegativeFiniteAmount').replace('{field}', key))
+        }
+        if (people.size() > 1 && (positiveCoerced(inputs.openingShortTermCapitalLoss) || positiveCoerced(inputs.openingLongTermCapitalLoss)))
+            errors.add(catalogue.text('profile.personalCapitalLoss'))
+        errors
+    }
+
+    validateSourceOptions { options, boolean active, Messages catalogue ->
+        if (options.keySet().any { !(it instanceof String) }) throw new IllegalArgumentException(catalogue.text('source.invalidKey'))
+        if (sourceFlags.any { options.containsKey(it) && !(options.get(it) instanceof Boolean) })
+            throw new IllegalArgumentException(catalogue.text('source.taxation'))
+        if (active && !sourceFlags.containsAll(options.keySet())) throw new IllegalArgumentException(catalogue.text('source.unknownField'))
+    }
+
+    assessmentOptions { inputs ->
+        def result = new LinkedHashMap(inputs)
+        def state = new LinkedHashMap()
+        for (String term : ['Short', 'Long']) {
+            String opening = 'opening' + term + 'TermCapitalLoss'
+            if (result.containsKey(opening)) {
+                def value = result.remove(opening)
+                String local = 'local' + term + 'TermCapitalLossCarry'
+                state.put(federalCarry(local), value)
+                state.put(local, value)
+            }
+        }
+        if (result.get('initialState') instanceof Map) state.putAll(result.get('initialState'))
+        result.put('initialState', state)
+        result
+    }
+    optionsInRuleMoney { options, prices -> prices.convertFields(options, moneyFields) }
+
+    validateResidenceYear { int year, LocalDate changeDate, TaxPlugin previous ->
+        require(previous == null || changeDate.year != year || changeDate == LocalDate.of(year, 1, 1),
+            'US midyear state or filing-profile changes require unsupported partial-year state rules.')
+    }
+    settlementDate { int year, options -> returnDue(year) }
+
+    stateFields stateSchema
+    initialAnnualState { options ->
+        def initial = new LinkedHashMap()
+        def nested = options.get('initialState')
+        for (String field : stateSchema.keySet()) {
+            def value = nested instanceof Map && nested.get(field) instanceof Number ? nested.get(field) : options.get(field)
+            double amount = value instanceof Number ? value.doubleValue() : 0d
+            require(Double.isFinite(amount), 'Initial tax state must be finite: ' + field)
+            initial.put(field, amount)
+        }
+        for (String field : ['localShortTermCapitalLossCarry', 'localLongTermCapitalLossCarry']) {
+            boolean explicit = options.containsKey(field) || (nested instanceof Map && nested.containsKey(field))
+            if (!explicit) initial.put(field, initial.get(federalCarry(field)))
+        }
+        Map.copyOf(initial)
+    }
+    assessAnnualStateful { options, int birthYear, int birthMonth, int year, amounts, state ->
+        def merged = new LinkedHashMap(options)
+        for (String field : stateSchema.keySet()) merged.put(field, state.getOrDefault(field, state.getOrDefault(federalCarry(field), 0d)))
+        TaxAssessment assessment = assessFederalAndLocal(annualInputsFor(merged, birthYear, year, amounts))
+        def remaining = stateSchema.keySet().collectEntries { String field ->
+            [(field): assessment.components().get(field.replace('Carry', 'Remaining'))]
+        }
+        new StatefulTaxAssessment(assessment, remaining)
+    }
+    annualInputs { options, int birthYear, int birthMonth, int year, amounts -> annualInputsFor(options, birthYear, year, amounts) }
+    assess { inputs -> assessFederalAndLocal(inputs) }
+
+    accumulationBases { String basis, options ->
+        validateClassification(basis, options)
+        basis == 'salary' ? Set.of(basis, localBasis(basis), 'payrollSalary') : Set.of(basis, localBasis(basis))
+    }
+    classifyMovement { String basis, double amount, options -> classify(basis, amount, options) }
+    classifyAnnualBases { amounts, options ->
+        validateClassification('salary', options)
+        def classified = new LinkedHashMap()
+        for (def entry : amounts.entrySet()) {
+            classify(entry.key, entry.value, options).each { key, value ->
+                classified.put(key, classified.getOrDefault(key, 0d) + value)
+            }
+        }
+        classified
+    }
+    preliminaryEligible { String basis, options ->
+        validateClassification(basis, options)
+        bool(options, 'federalTaxable', true) || bool(options, 'localTaxable', true)
+    }
+
+    foreignInvestmentBases { InvestmentAccountYear account, TaxMoneyBasis money ->
+        Objects.requireNonNull(account)
+        Objects.requireNonNull(money)
+        require(money.ruleYear() == referenceYear, 'Foreign investment money basis must match the destination rule year.')
+        require(money.nativePerPlanUnit() == 1d && (money.planCurrency() == null || money.planCurrency() == money.taxCurrency()),
+            "Foreign investment facts must already be in the destination's native currency; use inflationOnly().")
+        require(money.taxCurrency() == null || money.taxCurrency() == 'USD', 'Foreign investment currency must match the destination.')
+        def entered = account.policyOptions()
+        require(!'fund'.equalsIgnoreCase(Objects.toString(entered.get('securitiesClassification'), '')),
+            'Foreign fund taxation is unsupported; a fund cannot use ordinary listed-share rules.')
+        require('listed-shares'.equals(Objects.toString(entered.get('foreignInvestmentAssetType'), 'listed-shares')),
+            'Foreign investment taxation supports ordinary listed shares only; funds, pensions and other asset classifications need separate rules.')
+        String treatment = Objects.toString(entered.get('foreignDividendTreatment'), 'ordinary')
+        require(account.dividends() == 0d || treatment in ['ordinary', 'qualified'], 'Unsupported foreignDividendTreatment: ' + treatment)
+        boolean verified = bool(entered, 'foreignHoldingPeriodConfirmed', false)
+        String longTermField = 'foreignVerifiedLongTermGains'
+        require(!verified || account.realizedGain() == 0d || entered.containsKey(longTermField),
+            'Confirmed foreign holding periods require verified disposal gain amounts: ' + longTermField)
+        double longTerm = number(entered, longTermField, 0d)
+        require(longTerm >= 0d && longTerm <= account.realizedGain(), longTermField + ' must be between zero and gross realized gains.')
+        require(verified || longTerm == 0d, 'Preferential foreign disposal gains require foreignHoldingPeriodConfirmed.')
+        boolean lossConfirmed = bool(entered, 'foreignLossReliefConfirmed', false) || bool(entered, 'noWashSaleConfirmed', false)
+        String dividendBasis = account.dividends() != 0d && treatment == 'qualified' ? 'qualifiedDividends' : 'capitalIncome'
+        Map.of('shortTermCapitalGains', account.realizedGain() - longTerm, 'longTermCapitalGains', longTerm,
+            'shortTermCapitalLosses', lossConfirmed ? account.realizedLoss() : 0d, dividendBasis, account.dividends())
+    }
+
+    propertySales {
+        overridesAnnualNotice false
+        inputsInRuleMoney { inputs, money -> money.convertFields(inputs, MONEY) }
+
+        assess { inputs ->
+            propertyScope(inputs, 'USD')
+            noReplacementRollover(inputs)
+            require(allStates.contains(Objects.toString(inputs.get('state'), '')), 'US home sale requires one of the 50 states or DC.')
+            String status = Objects.toString(inputs.get('filingStatus'), '')
+            require(status in ['single', 'marriedSeparate', 'headOfHousehold', 'marriedJoint'], 'Provide the sale-year filingStatus.')
+            LocalDate acquired = date(inputs, 'acquiredDate')
+            LocalDate sold = date(inputs, inputs.containsKey('settlementDate') ? 'settlementDate' : 'closingDate')
+            require(!sold.isBefore(date(inputs, 'contractDate')), 'closingDate cannot precede contractDate.')
+            require(!bool(inputs, 'nonqualifiedUse', false), 'Section 121 nonqualified-use allocations are unsupported.')
+            double exclusion = 0d
+            if (requiredBool(inputs, 'claimSection121')) {
+                int ownership = integer(inputs, 'ownershipMonthsLast60')
+                int use = integer(inputs, 'residenceMonthsLast60')
+                require(ownership <= 60 && use <= 60, 'Ownership and residence months cannot exceed 60.')
+                require(!sold.isBefore(acquired.plusMonths(ownership)), 'Claimed ownership months exceed actual ownership duration.')
+                require(requiredBool(inputs, 'noOtherExclusionLast2Years'),
+                    'A section 121 exclusion used in the previous two years requires separate rules.')
+                boolean qualifies = ownership >= 24 && use >= 24
+                if (status == 'marriedJoint') {
+                    int spouseUse = integer(inputs, 'spouseResidenceMonthsLast60')
+                    require(spouseUse <= 60, 'Spouse residence months cannot exceed 60.')
+                    require(requiredBool(inputs, 'spouseNoOtherExclusionLast2Years'), 'Spouse section 121 look-back requirement must be verified.')
+                    qualifies = qualifies && spouseUse >= 24
+                }
+                require(qualifies, 'This requested full section 121 exclusion does not satisfy the ordinary 2-of-5-year tests; reduced exclusions are unsupported.')
+                exclusion = status == 'marriedJoint' ? 500000d : 250000d
+            }
+            double profit = gain(inputs)
+            double taxable = Math.max(0d, profit - exclusion)
+            boolean longTerm = sold.isAfter(acquired.plusYears(1))
+            String basis = longTerm ? 'longTermCapitalGains' : 'shortTermCapitalGains'
+            new PropertySaleAssessment(sold.year, taxable, 0d, base(basis, taxable),
+                components('gain', profit, 'section121Exclusion', Math.min(Math.max(0d, profit), exclusion),
+                    'personalLossNondeductible', Math.max(0d, -profit), 'longTerm', longTerm ? 1d : 0d))
+        }
+
+        validateResidence { inputs, residence ->
+            require(Objects.equals(inputs.get('state'), residence.get('state')),
+                'US property source state must match annual residence state; cross-state property taxation needs separate source-state rules.')
+            usesEstimate(residence)
+        }
+
+        calendar { inputs ->
+            LocalDate sold = date(inputs, inputs.containsKey('settlementDate') ? 'settlementDate' : 'closingDate')
+            def due = inputs.get('paymentDueDate')
+            LocalDate payment = due != null && !due.toString().isBlank() ? date(inputs, 'paymentDueDate') : returnDue(sold.year)
+            new PropertyTaxCalendar(sold.year, [taxRecognitionDate: sold, paymentDueDate: payment], Set.of())
+        }
+    }
+}

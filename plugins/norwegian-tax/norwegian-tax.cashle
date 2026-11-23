@@ -1,0 +1,251 @@
+import dev.cashle.tax.InvestmentAccountYear
+import dev.cashle.tax.PropertySaleAssessment
+import dev.cashle.tax.PropertyTaxCalendar
+import dev.cashle.tax.PropertyTaxCollection
+import dev.cashle.tax.TaxAssessment
+import dev.cashle.tax.TaxMoneyBasis
+import dev.cashle.tax.TaxProfileContext
+import dev.cashle.tax.support.PropertyCalendars
+import dev.cashle.tax.support.PropertyInputs
+
+import java.time.LocalDate
+
+import static dev.cashle.tax.support.Inputs.*
+import static dev.cashle.tax.support.PropertyInputs.MONEY
+import static dev.cashle.tax.support.PropertyInputs.date
+import static dev.cashle.tax.support.PropertyInputs.gain
+import static dev.cashle.tax.support.PropertyInputs.integer
+import static dev.cashle.tax.support.PropertyInputs.money
+import static dev.cashle.tax.support.PropertyInputs.noReplacementRollover
+import static dev.cashle.tax.support.PropertyInputs.requiredBool
+import static dev.cashle.tax.support.PropertyInputs.scope
+import static dev.cashle.tax.support.PropertyInputs.weekday
+
+// Norwegian 2026 ordinary individual tax. See README.md for rule provenance.
+String taxCurrency = 'NOK'
+int referenceYear = 2026
+def externalBases = ['salary', 'capitalIncome', 'interestExpenses'].asImmutable()
+def acceptedBases = (externalBases + ['shareIncome', 'investmentCapitalLoss']).asImmutable()
+def amounts = (acceptedBases + ['prepaidTax']).toSet().asImmutable()
+def allowedOptions = (amounts + ['birthYear', 'ruleYear', 'residency', 'region', 'youngWorkerTrialSelected']).asImmutable()
+def brackets = [
+    [226100d, 318300d, 0.017d],
+    [318300d, 725050d, 0.04d],
+    [725050d, 980100d, 0.137d],
+    [980100d, 1467200d, 0.168d],
+    [1467200d, Double.POSITIVE_INFINITY, 0.178d],
+].collect { it.asImmutable() }.asImmutable()
+
+def validRegion = { Object value -> 'ordinary'.equals(value) || 'intervention-zone'.equals(value) }
+
+countryTaxPolicy('NO') {
+    pluginId 'cashle.tax.no'
+    currency taxCurrency
+    ruleYear referenceYear
+    incomeBases acceptedBases
+    sourceBases externalBases
+    calendarYearEventSchedule true
+    investmentCapitalLossCarryYears Integer.MAX_VALUE
+    messages 'dev.cashle.tax.norway.NorwegianTaxSource'
+
+    validateProfile { Map<String, Object> options, TaxProfileContext context ->
+        List<String> errors = []
+        Object year = options.get('ruleYear')
+        if (!(year instanceof Number) || ((Number) year).doubleValue() != referenceYear) {
+            errors.add('profile.ruleYear')
+        }
+        if (!'full-year'.equals(options.get('residency'))) errors.add('profile.residency')
+        if (!validRegion(options.get('region'))) errors.add('profile.region')
+        if (context.people().any { person ->
+            Object raw = person.get('birthYear')
+            if (!(raw instanceof Number)) return false
+            double yearOfBirth = ((Number) raw).doubleValue()
+            Double.isFinite(yearOfBirth) && Math.rint(yearOfBirth) == yearOfBirth && yearOfBirth < 1960
+        }) errors.add('profile.birthYear')
+        if (!Boolean.FALSE.equals(options.get('youngWorkerTrialSelected'))) {
+            errors.add('profile.youngWorkerTrial')
+        }
+        List.copyOf(errors)
+    }
+
+    assessmentOptions { Map<String, Object> options ->
+        Map<String, Object> result = new LinkedHashMap<>()
+        options.each { String key, Object value ->
+            if (value != null && !''.equals(value)) result.put(key, value)
+        }
+        result
+    }
+
+    optionsInRuleMoney { Map<String, Object> options, TaxMoneyBasis prices ->
+        prices.convertFields(options, amounts)
+    }
+
+    annualInputs { Map<String, Object> options, int birthYear, int birthMonth,
+                   int assessmentYear, Map<String, Double> bases ->
+        Objects.requireNonNull(options, 'Tax options are required')
+        LocalDate.of(birthYear, birthMonth, 1)
+        for (def entry : bases.entrySet()) {
+            require(acceptedBases.contains(entry.key), "NO does not support tax basis: ${entry.key}")
+            require(entry.value != null && Double.isFinite(entry.value), "Tax basis must be finite: ${entry.key}")
+        }
+        def inputs = new LinkedHashMap<String, Object>(options)
+        require(number(inputs, 'ruleYear', referenceYear) == referenceYear, 'Unsupported ruleYear for NO')
+        inputs.put('ruleYear', referenceYear)
+        inputs.put('birthYear', birthYear - assessmentYear + referenceYear)
+        inputs.putIfAbsent('residency', 'full-year')
+        for (String basis : acceptedBases) {
+            if (externalBases.contains(basis) || bases.containsKey(basis)) {
+                inputs.put(basis, number(inputs, basis, 0d) + bases.getOrDefault(basis, 0d))
+            }
+        }
+        inputs
+    }
+
+    assess { Map<String, Object> options ->
+        keys(options, allowedOptions)
+        for (String amount : amounts) {
+            if (amount != 'shareIncome' && options.containsKey(amount)) {
+                require(number(options, amount, 0d) >= 0d, "$amount must be nonnegative.")
+            }
+        }
+        if (options.containsKey('birthYear')) {
+            require(number(options, 'birthYear', 0d) >= 0d, 'birthYear must be nonnegative.')
+        }
+        require(number(options, 'ruleYear', 0d) == referenceYear,
+                'Select explicit ruleYear:2026; other years are unsupported.')
+        require('full-year'.equals(options.get('residency')), 'Only full-year residency is supported.')
+        double birthYear = number(options, 'birthYear', 0d)
+        require(birthYear == Math.floor(birthYear) && birthYear >= 1900 && birthYear <= 2007,
+                'Provide a supported adult birthYear (1900–2007).')
+        require(birthYear >= 1960, 'Pension-age and reduced-insurance profiles are unsupported.')
+        boolean pilot = bool(options, 'youngWorkerTrialSelected', birthYear >= 1991 && birthYear <= 2006)
+        require(!pilot, 'Confirm official pilot selection status; selected young-worker pilot participants are unsupported.')
+        Object region = options.get('region')
+        require(validRegion(region), 'Choose ordinary or verified intervention-zone residence explicitly.')
+        boolean interventionZone = 'intervention-zone'.equals(region)
+
+        double salary = number(options, 'salary', 0d)
+        double capital = number(options, 'capitalIncome', 0d)
+        double interest = number(options, 'interestExpenses', 0d)
+        double standard = Math.min(salary * 0.46d, 95700d)
+        double beforeAllowance = salary + capital + number(options, 'shareIncome', 0d) -
+                standard - interest - number(options, 'investmentCapitalLoss', 0d)
+        boolean investmentLoss = options.containsKey('shareIncome') || options.containsKey('investmentCapitalLoss')
+        require(beforeAllowance >= 0d || investmentLoss,
+                'Loss carry-forward assessments are unsupported; interest exceeds the supported income basis.')
+        double ordinary = Math.max(0d, beforeAllowance - 114540d - (interventionZone ? 45000d : 0d))
+        double bracket = 0d
+        for (def band : brackets) {
+            double lower = band[0]
+            double upper = band[1]
+            double rate = band[2]
+            bracket += Math.max(0d, Math.min(salary, upper) - lower) * rate
+        }
+        double insurance = Math.min(salary * 0.076d, Math.max(0d, salary - 99650d) * 0.25d)
+        def parts = components('ordinary', ordinary * (interventionZone ? 0.185d : 0.22d),
+                'bracket', bracket, 'nationalInsurance', insurance)
+        double liability = sum(parts)
+        if (investmentLoss) parts.put('investmentCapitalLossRemaining', Math.max(0d, -beforeAllowance))
+        new TaxAssessment(liability, 0d, parts)
+    }
+
+    foreignInvestmentBases { InvestmentAccountYear account, TaxMoneyBasis money ->
+        Objects.requireNonNull(account)
+        Objects.requireNonNull(money)
+        require(money.ruleYear() == referenceYear, 'Foreign investment money basis must match the destination rule year.')
+        require(money.nativePerPlanUnit() == 1d &&
+                (money.planCurrency() == null || money.planCurrency().equals(money.taxCurrency())),
+                "Foreign investment facts must already be in the destination's native currency; use inflationOnly().")
+        require(money.taxCurrency() == null || money.taxCurrency().equals(taxCurrency),
+                'Foreign investment currency must match the destination.')
+        def options = account.policyOptions()
+        require(!'fund'.equalsIgnoreCase(Objects.toString(options.get('securitiesClassification'), '')),
+                'Foreign fund taxation is unsupported; a fund cannot use ordinary listed-share rules.')
+        require('listed-shares'.equals(Objects.toString(options.get('foreignInvestmentAssetType'), 'listed-shares')),
+                'Foreign investment taxation supports ordinary listed shares only; funds, pensions and other asset classifications need separate rules.')
+        double shielding = number(options, 'foreignShareShielding', 0d)
+        require(shielding >= 0d, 'Foreign share shielding must be a verified nonnegative native-currency amount.')
+        double shareIncome = (Math.max(0d, account.dividends() + account.realizedGain() - shielding) -
+                account.realizedLoss()) * 1.72d
+        require(Double.isFinite(shareIncome), 'Foreign investment basis must remain finite: shareIncome')
+        Map.of('shareIncome', shareIncome)
+    }
+
+    propertySales {
+        inputsInRuleMoney { Map<String, Object> input, TaxMoneyBasis prices ->
+            prices.convertFields(input, MONEY)
+        }
+
+        assess { Map<String, Object> input ->
+            scope(input, taxCurrency)
+            noReplacementRollover(input)
+            require(requiredBool(input, 'fullOwnUse'),
+                    'Part-rental and mixed-use Norwegian homes require separate allocation.')
+            int months = integer(input, 'ownResidenceMonthsLast24')
+            require(months <= 24, 'ownResidenceMonthsLast24 cannot exceed 24.')
+            LocalDate contract = date(input, 'contractDate')
+            LocalDate takeover = date(input, 'takeoverDate')
+            LocalDate acquired = date(input, 'acquiredDate')
+            require(!takeover.isBefore(contract), 'takeoverDate must not precede contractDate.')
+            boolean exempt = contract.isAfter(acquired.plusYears(1)) && months >= 12
+            require(exempt || acquired.year > 1990,
+                    'Taxable Norwegian property held since 1990 or earlier requires legacy basis adjustment.')
+            double gainAmount = gain(input)
+            double taxable = exempt ? 0d : Math.max(0d, gainAmount)
+            double deduction = exempt ? 0d : Math.max(0d, -gainAmount)
+            Map<String, Double> bases = new LinkedHashMap<>()
+            if (taxable > 0d) bases.put('capitalIncome', taxable)
+            if (deduction > 0d) bases.put('interestExpenses', deduction)
+            new PropertySaleAssessment(takeover.year, taxable, 0d, bases,
+                    components('gain', gainAmount, 'exempt', exempt ? 1d : 0d, 'ordinaryIncomeLossDeduction', deduction))
+        }
+
+        calendar { Map<String, Object> input ->
+            def calendarInputs = new LinkedHashMap<String, Object>(input)
+            LocalDate takeover = input.containsKey('takeoverDate') ? date(input, 'takeoverDate') : null
+            if (takeover != null) calendarInputs.put('taxYear', takeover.year)
+            def explicit = PropertyInputs.calendar(calendarInputs)
+            def dates = new LinkedHashMap<String, LocalDate>(explicit.dates())
+            if (takeover != null) dates.put('taxRecognitionDate', takeover)
+            if (explicit.requiredInputs().isEmpty() || !input.containsKey('assessmentIssuedDate') ||
+                    !input.containsKey('residualTax')) {
+                return new PropertyTaxCalendar(explicit.taxYear(), dates, explicit.requiredInputs())
+            }
+
+            LocalDate notice = date(input, 'assessmentIssuedDate')
+            require(notice.year == explicit.taxYear() + 1, 'assessmentIssuedDate must be in the year following taxYear.')
+            double residual = money(input, 'residualTax', 0d)
+            if (residual >= 100d) {
+                boolean amended = bool(input, 'amendedAssessment', false)
+                LocalDate first = notice.plusWeeks(3)
+                LocalDate earliest = LocalDate.of(notice.year, 8, 20)
+                if (!amended && first.isBefore(earliest)) first = earliest
+                dates.put('paymentDueDate1', weekday(first))
+                if (residual >= 1000d && !amended) dates.put('paymentDueDate2', weekday(first.plusWeeks(5)))
+            }
+            new PropertyTaxCalendar(explicit.taxYear(), dates, Set.of())
+        }
+
+        paymentAmounts { Map<String, Object> input, double residual, List<LocalDate> dueDates, defaultAmounts ->
+            PropertyCalendars.validatePaymentDateOrder(input)
+            if (dueDates.isEmpty() && Double.isFinite(residual) && residual >= 0d && residual < 100d &&
+                    input.containsKey('assessmentIssuedDate')) {
+                date(input, 'assessmentIssuedDate')
+                return List.of()
+            }
+            if (dueDates.size() != 2 || input.containsKey('paymentAmounts')) {
+                return defaultAmounts.get()
+            }
+            require(Double.isFinite(residual) && residual >= 0d, 'Residual tax must be finite and nonnegative.')
+            List.of(residual / 2d, residual - residual / 2d)
+        }
+
+        collectionAdjustment { Map<String, Object> input, double residual, PropertyTaxCalendar calendar ->
+            if (Double.isFinite(residual) && residual > 0d && residual < 100d && calendar.requiredInputs().isEmpty() &&
+                    calendar.paymentDates().isEmpty() && input.containsKey('assessmentIssuedDate')) {
+                return new PropertyTaxCollection(residual, date(input, 'assessmentIssuedDate'))
+            }
+            PropertyTaxCollection.none()
+        }
+    }
+}

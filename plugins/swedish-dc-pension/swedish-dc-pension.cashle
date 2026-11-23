@@ -1,0 +1,354 @@
+import dev.cashle.pension.agreement.AgreementRegistry
+import dev.cashle.sdk.pension.PensionModuleProvider.Balance
+import dev.cashle.pension.agreement.PensionAgreement
+import dev.cashle.pension.agreement.PensionAgreement.Kind
+import dev.cashle.core.Frequency
+import dev.cashle.core.i18n.Messages
+import dev.cashle.sdk.model.Variable
+import dev.cashle.sdk.pension.PensionCalendar
+import dev.cashle.sdk.pension.PensionContext
+import dev.cashle.sdk.pension.PensionModuleProvider.Input
+import groovy.transform.CompileStatic
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
+
+/** Contract and statement choices owned by the DC pension plugin. */
+@CompileStatic
+final class DcPensionPolicy implements PensionPayoutPolicy {
+  private final LocalDate birth;
+  private final PensionAgreement agreement;
+  private final Messages messages;
+
+  DcPensionPolicy(PensionContext request,PensionAgreement agreement) {
+    this.agreement=Objects.requireNonNull(agreement);
+    Map<?,?> input=request.input();
+    messages = SwedishPensions.messages(input, "dc");
+    birth = SwedishPensions.birth(request.person());
+    if(input.get("payoutChanges")!=null && (!(input.get("payoutChanges") instanceof List) || !((List) input.get("payoutChanges")).isEmpty()))
+      throw new IllegalArgumentException(messages.text("payout.stepsPublicOnly"));
+    for(int row=1;row<=2;row++) {
+      Object year=input.get("openingPendingYear"+row),first=input.get("openingPendingIncome"+row),second=input.get("openingPendingPremium"+row),flag=input.get("openingPendingPremiumCredited"+row);
+      double income=first==null?0d:SwedishPensions.number(first, Double.NaN);
+      double premium=second==null?0d:SwedishPensions.number(second, Double.NaN);
+      if(!Double.isFinite(income)||income<0d||!Double.isFinite(premium)||premium<0d||flag!=null && !(flag instanceof Boolean))
+        throw new IllegalArgumentException(messages.text("rights.invalid"));
+      if(!((year==null || SwedishPensions.number(year, Double.NaN)==0d) && income==0d && premium==0d && !Boolean.TRUE.equals(flag)))
+        throw new IllegalArgumentException(messages.text("rights.yearRequired"));
+    }
+    Object premiums=input.get("continuePremiums");
+    if(premiums!=null && !(premiums instanceof Boolean))throw new IllegalArgumentException(messages.text("accrual.choiceRequired"));
+    Object after=input.get("continueAfterPayout");
+    if(after!=null && !(after instanceof Boolean))throw new IllegalArgumentException(messages.text("accrual.afterPayoutChoice"));
+    if(Boolean.TRUE.equals(after) && (!Boolean.TRUE.equals(premiums) || ((Number)input.get("duration")).doubleValue()<=0d))throw new IllegalArgumentException(messages.text("accrual.afterPayoutRequirements"));
+    Object later=input.get("continueAfter69");
+    if(later!=null && !(later instanceof Boolean))throw new IllegalArgumentException(messages.text("accrual.after69Choice"));
+    if(Boolean.TRUE.equals(later) && !agreement.metadata().supportsContinuedAccrualAfter69())throw new IllegalArgumentException(messages.text("accrual.after69Unsupported"));
+  }
+
+  @Override public LocalDate resolve(LocalDate date,boolean relative,LocalDate available) {
+    if(date==null)return null;
+    LocalDate earliest=birth.plusYears(agreement.metadata().minimumPayoutAge()),latest=birth.plusYears(101).minusDays(1);
+    if(relative) {
+      if(available!=null && available.isAfter(earliest))earliest=available;
+      if(earliest.isAfter(latest))throw new IllegalArgumentException(messages.text("payout.allowedStartMissing"));
+      if(date.isBefore(earliest))date=earliest;
+      else if(date.isAfter(latest))date=latest;
+    }
+    if(date.isBefore(birth.plusYears(agreement.metadata().minimumPayoutAge())) || !date.isBefore(birth.plusYears(101)))
+      throw new IllegalArgumentException(messages.text("payout.ageRange"));
+    return date;
+  }
+}
+
+/** Type-owned accrual and payout algorithm; common support owns checkpoint/replay mechanics. */
+@CompileStatic
+final class DcPensionLedger extends PensionLedger {
+ private final dev.cashle.core.i18n.Messages pluginMessages;
+ private final PensionAgreement agreement;
+ private final boolean ongoingLifetimeDcStatement;
+ private final Variable through;
+ public DcPensionLedger(PensionContext request,PensionAgreement agreement) {
+  this(request,agreement,false);
+ }
+ DcPensionLedger(PensionContext request,PensionAgreement agreement,boolean eventDriven) {
+  super(request,new DcPensionPolicy(request,agreement));
+  this.agreement=agreement;
+  through=eventDriven?context.variable(planStart.minusDays(1).toEpochDay()):null;
+  pluginMessages=SwedishPensions.messages(input, "dc");
+  ongoingLifetimeDcStatement=is("inputMode","statement") && n("duration")==0d && valuation.isAfter(payoutStart());
+  if(ongoingLifetimeDcStatement) {
+    if(!SwedishPensions.nonnegative(input.get("ongoingDcMonthly")))
+      throw new IllegalArgumentException(pluginMessages.text("payout.currentAmountRequired"));
+    double rate = SwedishPensions.number(input.get("ongoingDcPaymentGrowth"), Double.NaN)
+    if (!Double.isFinite(rate) || rate <= -100d || rate > 100d)
+      throw new IllegalArgumentException(pluginMessages.text("payout.growthInvalid"));
+  }
+ }
+
+ @Override public PensionCalendar calculations() {
+   Optional<PensionCalendar> wageEvents = context.model().wageEvents()
+   return wageEvents.isPresent() ? eventSchedule(wageEvents.get(), payments()) : super.calculations()
+ }
+
+ PensionCalendar eventSchedule(PensionCalendar wages,PensionCalendar payments) {
+   List<PensionCalendar> events=new ArrayList<>(List.of(wages,payments,fixedDate(planStart)));
+   if(ongoingLifetimeDcStatement)events.add(every(Frequency.YEAR, LocalDate.of(1,1,1)));
+   int remittance=agreement.metadata().remittanceMonths();
+   if(remittance>1)for(int month=remittance;month<=12;month+=remittance) {
+     LocalDate from=LocalDate.of(4,month,1); // Leap-year anchor also supports a February month end.
+     events.add(every(Frequency.YEAR, from.withDayOfMonth(from.lengthOfMonth())));
+   }
+   return new PensionCalendar.Union(events);
+ }
+
+ @Override public double getPayment() {
+   return through==null || through.getValue()==clock.getDate().toEpochDay()?super.getPayment():0d;
+ }
+
+ @Override public double getFirstBalance() { return projected(first); }
+ @Override public double getSecondBalance() { return projected(second); }
+
+ private double projected(Variable balance) {
+   double capital=balance.getValue();
+   return through==null || capital==0d?capital:capital*growthSinceLastEvent(clock.getDate());
+ }
+
+ private double growthSinceLastEvent(LocalDate today) {
+   double factor=1d,annual=1d+n("growthRate")/100d;
+   for(LocalDate from=LocalDate.ofEpochDay((long)through.getValue()).plusDays(1);!from.isAfter(today);) {
+     LocalDate end=LocalDate.of(from.getYear(),12,31);
+     if(today.isBefore(end))end=today;
+     factor*=Math.pow(annual,(ChronoUnit.DAYS.between(from,end)+1d)/from.lengthOfYear());
+     from=end.plusDays(1);
+   }
+   return factor;
+ }
+
+ @Override protected void captureAdditionalReplayVariables(List<Variable> values) {
+   if(through!=null)values.add(through);
+ }
+
+  @Override protected void step(
+    LocalDate date,
+    double annualSalary,
+    boolean recordPayment
+  ) {
+    stepInterval(date,annualSalary,recordPayment,1,null);
+  }
+
+  @Override protected void replayEstimatedHistory(LocalDate from, LocalDate until, double annualSalary) {
+    if(!from.isBefore(until))return;
+    LocalDate payout=payoutStart();
+    LocalDate payoutEnd=n("duration")==0d?null:payout.plusYears((int)n("duration"));
+    LocalDate payment=historicalPaymentCalendar.nextAfter(from.minusDays(1));
+    for(LocalDate cursor=from;cursor.isBefore(until);) {
+      LocalDate last=cursor.withDayOfMonth(cursor.lengthOfMonth());
+      if(!last.isBefore(until))last=until.minusDays(1);
+      if(cursor.isBefore(payout) && !last.isBefore(payout))last=payout.minusDays(1);
+      if(cursor.equals(payout))last=cursor;
+      if(payoutEnd!=null && cursor.isBefore(payoutEnd) && !last.isBefore(payoutEnd))last=payoutEnd.minusDays(1);
+      if(payment!=null && payment.isBefore(last))last=payment;
+      double[] breakpoints=agreement.historicalContributionBreakpoints(contributionInput(0d,cursor));
+      if(breakpoints==null) {
+        super.replayEstimatedHistory(cursor,until,annualSalary);
+        return;
+      }
+      int days=Math.toIntExact(ChronoUnit.DAYS.between(cursor,last)+1);
+      stepInterval(last,annualSalary,false,days,breakpoints);
+      if(last.equals(payment))payment=historicalPaymentCalendar.nextAfter(last);
+      cursor=last.plusDays(1);
+    }
+  }
+
+  private void stepInterval(LocalDate date,double annualSalary,boolean recordPayment,int count,double[] breakpoints) {
+    double days = date.lengthOfYear(),
+      wage = Math.max(0d, annualSalary),
+      one = first.getValue(),
+      two = second.getValue(),
+      pay = 0;
+
+    boolean paymentDue=(recordPayment ? paymentCalendar : historicalPaymentCalendar).due(date)
+      && (recordPayment || date.getYear()!=planStart.getYear() || date.getMonthValue()!=planStart.getMonthValue());
+      double dailyGrowth=Math.pow(1+n("growthRate")/100,1/days);
+      double growth;
+      if(recordPayment && through!=null) {
+        growth=growthSinceLastEvent(date);
+        through.setValue(date.toEpochDay());
+      } else growth=count==1?dailyGrowth:Math.pow(dailyGrowth,count);
+      one*=growth;two*=growth;
+
+      double premiumAwaitingPayoutRecalculation=0d;
+
+      if(ongoingLifetimeDcStatement && date.getMonthValue()==1 && date.getDayOfMonth()==1 && date.getYear()>valuation.getYear())
+        annualFirst.setValue(annualFirst.getValue()*(1d+n("ongoingDcPaymentGrowth")/100d));
+      int key = assessmentKey(date);
+      if (periodKey.getValue() != key) {
+        periodKey.setValue(key);
+        periodSalary.setValue(0);
+      }
+      double previous = periodSalary.getValue(),
+        dailyAddition = wage / (12d * date.lengthOfMonth()), addition=dailyAddition*count;
+      periodSalary.setValue(previous + addition);
+
+        double factor = 12d/agreement.metadata().assessmentMonths();
+        double contribution =
+          (agreement.contribution(contributionInput((previous + addition) * factor,date)) -
+            agreement.contribution(contributionInput(previous * factor,date))) /
+          factor;
+        double invested=contribution;
+        if(count>1 && agreement.metadata().remittanceMonths()==1 && dailyAddition>0d && dailyGrowth!=1d)
+          invested=investedPremium(contributionInput(previous*factor,date),dailyAddition*factor,count,dailyGrowth,breakpoints)/factor;
+        if (!date.isBefore(payoutStart()) && contribution > 0) {
+          boolean optedIn=Boolean.TRUE.equals(input.get("continuePremiums"));
+          if (!optedIn) throw new IllegalArgumentException(
+            pluginMessages.text("accrual.duringPayoutRequired")
+          );
+          if (n("duration")>0d && !date.isBefore(payoutStart().plusYears((int)n("duration"))) && !Boolean.TRUE.equals(input.get("continueAfterPayout"))) throw new IllegalArgumentException(
+            pluginMessages.text("accrual.afterPayoutRequired")
+          );
+        }
+        if(agreement.metadata().remittanceMonths()>1) {
+          // Earned premiums remain outside invested capital until the agreement's remittance date.
+          pendingAkapPremium.setValue(pendingAkapPremium.getValue()+contribution);
+          if(date.getMonthValue()%agreement.metadata().remittanceMonths()==0 && date.getDayOfMonth()==date.lengthOfMonth()) {
+            contribution=pendingAkapPremium.getValue();pendingAkapPremium.setValue(0d);
+          } else contribution=0d;
+          invested=contribution;
+        }
+        if(!date.isBefore(payoutStart()) && contribution>0d && n("duration")==0d && annualFirst.getValue()>=0d) {
+          double share=agreement.metadata().firstCapitalShare();
+          annualFirst.setValue(annualFirst.getValue()+contribution*share/n("divisor"));
+          annualSecond.setValue(annualSecond.getValue()+contribution*(1d-share)/n("divisor"));
+        }
+        one += invested;
+        if (agreement.metadata().firstCapitalShare()!=1d) {
+          double secondShare=1d-agreement.metadata().firstCapitalShare();
+          one -= invested * secondShare;
+          two += invested * secondShare;
+        }
+
+      if (!date.isBefore(payoutStart())) {
+
+        if (annualFirst.getValue() < 0) {
+          double duration = n("duration") == 0 ? n("divisor") : n("duration");
+          annualFirst.setValue(((one / duration) * n("payoutFraction")) / 100);
+          annualSecond.setValue(((Math.max(0d,two-premiumAwaitingPayoutRecalculation) / duration) * n("payoutFraction")) / 100);
+        }
+        boolean active =
+          n("duration") == 0 ||
+          date.isBefore(payoutStart().plusYears((int) n("duration")));
+        if (active && paymentDue) {
+          double p1 = annualFirst.getValue() / 12d,
+            p2 = annualSecond.getValue() / 12d;
+          if (n("duration") > 0) {
+            LocalDate last=payoutStart().plusYears((int)n("duration")).minusDays(1);
+            long remaining=ChronoUnit.MONTHS.between(date.withDayOfMonth(1),last.withDayOfMonth(1))+1;
+            p1 = one / remaining;
+            p2 = Math.max(0d,two-premiumAwaitingPayoutRecalculation) / remaining;
+          }
+
+            one = Math.max(0, one - p1);
+            two = Math.max(0, two - p2);
+
+          pay = p1 + p2;
+        }
+      }
+
+    first.setValue(one);
+    second.setValue(two);
+    if (recordPayment) paymentValue.setValue(paymentDue ? scenarioPayment(date, pay) : 0d);
+  }
+
+  /** Each straight salary band credits the same premium per day. Compound that series as one amount. */
+  private double investedPremium(PensionAgreement.ContributionInput start,double dailySalary,int days,double growth,double[] breakpoints) {
+    double paid=0d;
+    int offset=0;
+    for(double breakpoint:breakpoints) {
+      int end=(int)Math.max(offset,Math.min(days,Math.floor((breakpoint-start.salary())/dailySalary)));
+      if(end>offset)paid=investBand(start,dailySalary,offset,end,growth,paid);
+      if(end<days && start.salary()+dailySalary*end<breakpoint) {
+        paid=investBand(start,dailySalary,end,end+1,growth,paid);
+        end++;
+      }
+      offset=end;
+    }
+    return offset==days?paid:investBand(start,dailySalary,offset,days,growth,paid);
+  }
+
+  private double investBand(PensionAgreement.ContributionInput start,double dailySalary,int first,int end,double growth,double paid) {
+    int count=end-first;
+    double premium=agreement.contribution(start.withSalary(start.salary()+dailySalary*end))
+      -agreement.contribution(start.withSalary(start.salary()+dailySalary*first));
+    double factor=Math.pow(growth,count);
+    return paid*factor+premium/count*((factor-1d)/(growth-1d));
+  }
+
+  @Override protected void initializeStatement() {
+        first.setValue(n("capital"));
+        second.setValue(0);
+        if(agreement.metadata().remittanceMonths()>1) {
+          Object raw=input.get(agreement.metadata().pendingPremiumInput());
+          if(raw!=null && !(raw instanceof Number))throw new IllegalArgumentException(pluginMessages.text("premium.openingPendingInvalid"));
+          double amount=SwedishPensions.number(raw, 0d);
+          if(!Double.isFinite(amount) || amount<0d)throw new IllegalArgumentException(pluginMessages.text("premium.openingPendingInvalid"));
+          pendingAkapPremium.setValue(amount);
+        }
+
+        if(ongoingLifetimeDcStatement) {
+          annualFirst.setValue(n("ongoingDcMonthly")*12d);
+          annualSecond.setValue(0d);
+        }
+
+  }
+  @Override protected int assessmentKey(LocalDate date) {
+    return date.getYear()*12+((date.getMonthValue()-1).intdiv(agreement.metadata().assessmentMonths()))*agreement.metadata().assessmentMonths()+1;
+  }
+
+  @Override protected double replayScale(LocalDate date) { return 12d * date.lengthOfMonth(); }
+  private PensionAgreement.ContributionInput contributionInput(double salary,LocalDate date) {
+    Object ownEmployment = input.get('employmentStartDate')
+    LocalDate hired = ownEmployment instanceof String && !((String) ownEmployment).isEmpty() ? LocalDate.parse((String) ownEmployment) : null;
+    return new PensionAgreement.ContributionInput(salary,date,birth,n("baseGrowth"),Boolean.TRUE.equals(input.get("continueAfter69")),hired);
+  }
+
+  @Override protected LocalDate entitledPaymentDate(LocalDate next) {
+    boolean entitled=first.getValue()>0d || second.getValue()>0d
+      || (n("duration")==0d && (annualFirst.getValue()>0d || annualSecond.getValue()>0d
+        || (ongoingLifetimeDcStatement && initialized.getValue()==0d && n("ongoingDcMonthly")>0d)));
+    return entitled && n("payoutFraction")>0d ? next : null;
+  }
+}
+
+@CompileStatic
+final class DcPensionAccounts {
+  static List<Balance> dcBalances(Map<String, Object> data, AgreementRegistry agreements) {
+    PensionAgreement agreement = agreements.require((String) data.get('scheme'), Kind.DEFINED_CONTRIBUTION)
+    PensionAgreement.Metadata metadata = agreement.metadata((String) data.get('language'))
+    boolean include = !Boolean.FALSE.equals(data.get('includeOccupationalPensionInNetWorth'))
+    String name = (String) data.get('name')
+    List<Balance> balances = [new Balance(Balance.Role.FIRST, name + metadata.firstCapitalSuffix(), include, false),
+      new Balance(Balance.Role.SECOND, name + metadata.secondCapitalSuffix(), include, false)]
+    if (metadata.remittanceMonths() > 1)
+      balances.add(new Balance(Balance.Role.PENDING, name + SwedishPensions.messages(data, 'dc').text('account.pendingSuffix'), include, false))
+    return balances
+  }
+}
+
+pensionType('cashlab.swedish-dc-pension', 1) {
+    pluginId 'cashle.finance.pension.dc'
+    kind 'dc'
+    standaloneRuntime true
+    dsl 'dcPension'
+    defaults { String id -> SwedishPensions.defaults(id, 'dc', 'ITP1') }
+    prepare { Input module -> SwedishPensions.prepare(module, 'dc') }
+    wageBasis {
+        allowsAdditionalEmployment true
+        assessmentScale { LocalDate day -> 12d * day.lengthOfMonth() }
+    }
+    balances { Map data, AgreementRegistry agreements -> DcPensionAccounts.dcBalances(data, agreements) }
+    receipt { Map data -> SwedishPensions.receipt(data, 'dc', 'income.pension.occupational') }
+    runtime { PensionContext context ->
+        def agreement = context.model().agreements().require(context.input().scheme, Kind.DEFINED_CONTRIBUTION)
+        new DcPensionLedger(context, agreement, context.model().wageEvents().isPresent())
+    }
+}

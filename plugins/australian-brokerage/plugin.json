@@ -1,0 +1,31 @@
+{
+  "id": "cashle.finance.au-brokerage",
+  "archive": "cashle-account-au-brokerage-source.zip",
+  "requires": [
+    "cashle.finance",
+    "cashle.account.support",
+    "cashle.account.tax.support"
+  ],
+  "ui": "ui.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui-en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui-sv.json"
+    }
+  ],
+  "sources": [
+    {
+      "path": "australian-brokerage.cashle",
+      "resources": [
+        "dev/cashle/accounts/au_brokerage/AustralianBrokeragePlugin_en.properties",
+        "dev/cashle/tax/australia/AustralianInvestmentRules_en.properties",
+        "dev/cashle/accounts/au_brokerage/AustralianBrokeragePlugin_sv.properties",
+        "dev/cashle/tax/australia/AustralianInvestmentRules_sv.properties"
+      ]
+    }
+  ]
+}

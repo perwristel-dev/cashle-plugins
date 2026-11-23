@@ -1,0 +1,15 @@
+{
+  "authority": "Skatteverket",
+  "taxYear": 2025,
+  "regulation": "SKVFS 2024:19",
+  "retrievedOn": "2026-11-04",
+  "catalogUrl": "https://www.skatteverket.se/foretag/arbetsgivare/arbetsgivaravgifterochskatteavdrag/skattetabeller/tekniskbeskrivningforskattetabeller.4.319dc1451507f2f99e86ee.html",
+  "sourceUrl": "https://www.skatteverket.se/download/18.262c54c219391f2e9632601/1733848831383/allmanna-tabeller-2-veckors.txt",
+  "technicalDescriptionUrl": "https://skatteverket.se/download/18.262c54c219391f2e9633edd/1734513198853/Teknisk%20beskrivning%20SKV433%202025%20utg%C3%A5va%2035.pdf",
+  "localFile": "preliminary-tax-biweekly-2025.txt",
+  "bytes": 391203,
+  "sha256": "931c9ad1bc4c76a5db26b2cf1468e19decd465e183104fcb9f803c26ff66d5cb",
+  "records": 7824,
+  "coverage": "Tables 29–42, all six columns, complete two-week income intervals",
+  "weeklyCalculation": "Use the official two-week table on twice the weekly amount and divide the tax by two; tax is stated in whole kronor."
+}

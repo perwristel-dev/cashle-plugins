@@ -1,0 +1,66 @@
+import cashle.plugins.sweden.tax.HistoricalPropertyValidation
+import cashle.plugins.sweden.tax.ProfileOptions
+import cashle.plugins.sweden.tax.ProfilePolicy
+import cashle.plugins.sweden.tax.SourceOptions
+import cashle.plugins.sweden.tax.SwedishIncomeTax
+import cashle.plugins.sweden.tax.SwedishPreliminaryWithholdingPolicy
+import cashle.plugins.sweden.tax.SwedishPropertySaleRules
+
+import java.time.LocalDate
+
+countryTaxPolicy('SE') {
+    pluginId 'cashle.tax.se'
+    currency 'SEK'
+    ruleYear SwedishIncomeTax.RULE_YEAR
+    incomeBases SwedishIncomeTax.incomeBases()
+    sourceBases SwedishIncomeTax.SOURCE_BASES.toList()
+    nonMonetaryBases SwedishIncomeTax.NON_MONETARY_BASES.toList()
+    messages 'cashle.plugins.sweden.tax.SwedishTaxPlugin'
+    calendarYearEventSchedule true
+    residenceReferenceDate { year -> LocalDate.of(year - 1, 11, 1) }
+
+    validateProfile { options, context, messages ->
+        ProfilePolicy.validate(options, messages)
+    }
+    assessmentOptions { options -> ProfileOptions.sweden(options) }
+    optionsInRuleMoney { options, money -> SwedishIncomeTax.optionsInRuleMoney(options, money) }
+    assess { inputs -> SwedishIncomeTax.assess(inputs) }
+    assessAnnual { options, birthYear, birthMonth, year, bases ->
+        SwedishIncomeTax.assessAnnual(options, birthYear, birthMonth, year, bases)
+    }
+
+    validateSourceOptions { options, active, messages -> SourceOptions.sweden(options, active, messages) }
+    validatesSourceOptionsAfterDeparture true
+    accumulationBases { basis -> SwedishIncomeTax.accumulationBases(basis) }
+    accumulationBases { basis, options -> SwedishIncomeTax.accumulationBases(basis, options) }
+    classifyMovement { basis, amount -> SwedishIncomeTax.classifyMovement(basis, amount) }
+    classifyMovement { basis, amount, options -> SwedishIncomeTax.classifyMovement(basis, amount, options) }
+    classifySource { context, basis, amount -> SwedishIncomeTax.classifySource(context, basis, amount) }
+    sourceMoneyReferenceYear 2026
+    validDepartureOptions { options -> SwedishIncomeTax.validDepartureOptions(options) }
+    residenceYearOptions { options, months, residence -> SwedishIncomeTax.residenceYearOptions(options, months, residence) }
+    retainsSourceInvestmentRegime { options -> SwedishIncomeTax.retainsSourceInvestmentRegime(options) }
+    emigrationSourceOptions { countryOptions, inherited -> SwedishIncomeTax.emigrationSourceOptions(countryOptions, inherited) }
+    investmentSourceOptions { kind, options -> SwedishIncomeTax.investmentSourceOptions(kind, options) }
+    paidInterestDeductibleFraction { security, options -> SwedishIncomeTax.paidInterestDeductibleFraction(security) }
+
+    conservativeTaxableReceiptNetShare { options, enteredRate -> 0.39d }
+    preliminaryWithholdingPolicy { catalog -> new SwedishPreliminaryWithholdingPolicy(catalog) }
+
+    taxAccountLifecycleId 'SE-physical-tax-account'
+    supportsSyntheticTaxAccountInterest false
+
+    propertySales {
+        prefersActualAnnualNotice true
+        supportsOpeningProvisionalDeferral true
+        supportsHistoricalSales true
+        usesOwnerSpecificDeferralInputs true
+        recognizesOpeningContract { contract, start, eventDate -> SwedishPropertySaleRules.recognizesOpeningContract(contract, start, eventDate) }
+        validateHistoricalSale { sale -> HistoricalPropertyValidation.validate(sale) }
+        assess { inputs -> SwedishPropertySaleRules.assess(inputs) }
+        calendar { inputs -> SwedishPropertySaleRules.calendar(inputs) }
+        inputsInRuleMoney { inputs, money -> SwedishPropertySaleRules.inputsInRuleMoney(inputs, money) }
+        reinstate { inputs -> SwedishPropertySaleRules.reinstate(inputs) }
+        reconcile { inputs -> SwedishPropertySaleRules.reconcile(inputs) }
+    }
+}

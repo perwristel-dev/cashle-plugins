@@ -1,0 +1,10 @@
+investmentAccount('cashlab.it-pir', 1) {
+    pluginId 'cashle.finance.it-pir'
+    dsl 'itPir'
+    messages 'dev.cashle.accounts.it_pir.ItalianPirPlugin'
+    country 'IT'
+    kind 'ITpir'
+    taxPolicy 'pir'
+    prepaidTax false
+    transfers true
+}

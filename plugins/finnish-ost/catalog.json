@@ -1,0 +1,13 @@
+{
+  "name": "Finnish OST",
+  "description": {
+    "sv": "Finskt aktiesparkonto med proportionell fördelning vid uttag.",
+    "en": "Finnish equity savings account with proportional withdrawals."
+  },
+  "country": "FI",
+  "category": "accounts",
+  "releases": [
+    "f0ade6263361fde0d8667101e5a6dbc3d825ac227bfc6c9d0c522f178f41b506",
+    "14f96263837a0648a9a6785decd4bd74e228cd8abc6d56f29325fe6791e3af1d"
+  ]
+}

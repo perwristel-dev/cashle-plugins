@@ -1,0 +1,13 @@
+{
+  "name": "PA16 I",
+  "description": {
+    "sv": "Villkor och pensionspremier enligt PA16 avdelning I.",
+    "en": "Eligibility and pension contributions under PA16 Section I."
+  },
+  "country": "SE",
+  "category": "income",
+  "releases": [
+    "b348d62a0404b24e435e14cd358d8aa5be125970892eb230409dfe6857943982",
+    "61922c07312016d59690347492d1ad99ada706e4b874372e41ef3913749c00cf"
+  ]
+}

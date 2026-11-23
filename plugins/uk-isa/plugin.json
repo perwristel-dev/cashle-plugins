@@ -1,0 +1,36 @@
+{
+  "id": "cashle.finance.gb-isa",
+  "archive": "cashle-account-gb-isa-source.zip",
+  "requires": [
+    "cashle.finance",
+    "cashle.account.support",
+    "cashle.account.tax.support"
+  ],
+  "ui": "ui.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui-en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui-sv.json"
+    }
+  ],
+  "sources": [
+    {
+      "path": "uk-isa.cashle",
+      "resources": [
+        "dev/cashle/accounts/gb_isa/BritishIsaPlugin_en.properties",
+        "dev/cashle/accounts/gb_isa/BritishIsaPlugin_sv.properties"
+      ]
+    },
+    {
+      "path": "uk-isa-tax.cashle",
+      "resources": [
+        "dev/cashle/accounts/gb_isa/BritishIsaTaxPolicy_en.properties",
+        "dev/cashle/accounts/gb_isa/BritishIsaTaxPolicy_sv.properties"
+      ]
+    }
+  ]
+}

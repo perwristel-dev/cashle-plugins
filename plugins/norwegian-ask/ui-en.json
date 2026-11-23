@@ -1,0 +1,12 @@
+{
+  "label": "Aksjesparekonto (ASK)",
+  "Oanvänd skjerming": "Unused shielding allowance",
+  "Ingående oanvänd skjerming": "Opening unused shielding allowance",
+  "Antagen årlig skjermingsränta (prognos)": "Assumed annual shielding rate (forecast)",
+  "Ange vinstdelen av tidigare uttag före årets avdrag för skjerming, inte uttagna tillskott. Årsberäkningen drar av tillgänglig skjerming en gång. Ange återstående tillskjutet kapital separat under skatteunderlag.": "Enter the gain portion of previous withdrawals before this year’s shielding allowance, excluding returned contributions. The annual calculation deducts the available allowance once. Enter remaining contributed capital separately under tax basis.",
+  "Norge 2026: tillskjutet kapital tas ut först, därefter används skjerming. Förlust får avdrag först vid uttryckligt avslut. Skjermingsräntan för 2026 fastställs efter årets slut och är ännu inte känd; ange ett eget prognosantagande, även om du väljer 0 %. 2025 års 3,6 % är inte en fastställd ränta för 2026.": "Norway 2026: contributed capital is withdrawn first, then the shielding allowance is used. Losses are deductible only on explicit closure. The 2026 shielding rate is set after year end and is not yet known; enter a forecast assumption, even if choosing 0%. The 2025 rate of 3.6% is not a confirmed rate for 2026.",
+  "Årets hittills lägsta tillskjutna kapital (NO ASK)": "Lowest contributed capital year to date (NO ASK)",
+  "Ange årets hittills lägsta återstående tillskjutna kapital för skjerming.": "Enter the lowest remaining contributed capital year to date for shielding.",
+  "Ange en antagen skjermingsränta mellan 0 och 100 % för prognosen (0 % är ett uttryckligt val, även för ett tomt konto).": "Enter an assumed shielding rate between 0% and 100% for the forecast (0% is an explicit choice, even for an empty account).",
+  "2026 års officiella skjermingsränta är ännu inte publicerad. Ange ett eget antagande även för ett tomt konto som kan få framtida insättningar; 0 % måste också väljas uttryckligen.": "The official 2026 shielding rate has not yet been published. Enter your own assumption even for an empty account that may receive future deposits; 0% must also be selected explicitly."
+}

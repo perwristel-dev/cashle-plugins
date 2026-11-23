@@ -1,0 +1,25 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.tax'
+    id 'cashle.tax.se'
+}
+
+finance {
+    plan { from '2025-01-15'; until '2026-01-02'; currency 'SEK'; inflation 0d }
+    person('self') { name 'Example resident'; birthYear 1986; birthMonth 1 }
+    tax {
+        country 'SE'
+        preliminaryRate 30d
+        options([ruleYear: 2025, residentMonths: 12, municipalRate: 0.3241d,
+                 burialFeeRate: 0.00293d, communityMember: false])
+    }
+    salary('job') {
+        name 'Example salary'
+        owner 'self'
+        amount 50000d
+        frequency 'monthly'
+        taxTreatment 'taxable'
+    }
+}
+collect {}

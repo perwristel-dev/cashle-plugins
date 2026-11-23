@@ -1,0 +1,13 @@
+{
+  "name": "Canadian tax",
+  "description": {
+    "sv": "Federal skatt och provinsregler för Alberta och Ontario.",
+    "en": "Federal tax and provincial rules for Alberta and Ontario."
+  },
+  "country": "CA",
+  "category": "tax",
+  "releases": [
+    "2297a1a8f9d2bf3526051ad52e5c7702f759e700077de7aecbaaee9865b54777",
+    "4cdfc1184a1004025f91e0401057bc75c35a40c6df67e62a31157bbcf3fb9496"
+  ]
+}

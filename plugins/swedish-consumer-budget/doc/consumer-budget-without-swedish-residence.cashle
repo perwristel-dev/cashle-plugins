@@ -1,0 +1,14 @@
+plugins {
+    id 'cashle.finance'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.budget.se' from '../consumer-budget.cashle'
+    id 'cashle.tax'
+}
+
+finance {
+    plan { from '2026-01-01'; until '2026-03-01'; currency 'SEK' }
+    person('self') { birthYear 1990; birthMonth 1 }
+    tax { country 'NO' }
+    consumerBudget('budget') { name 'Budget' }
+}
+collect { }

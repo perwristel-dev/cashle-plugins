@@ -1,0 +1,13 @@
+{
+  "name": "Dutch beleggingsrekening",
+  "description": {
+    "sv": "Nederländsk värdepappersdepå som rapporterar innehav för Box 3.",
+    "en": "Dutch investment account that reports holdings for Box 3."
+  },
+  "country": "NL",
+  "category": "accounts",
+  "releases": [
+    "096cae059442d5ba709991f7161536371316bcefe9116511ab2ca783a215ce94",
+    "6bc5758c31d9756b9c9ceeba8aa9500d3392ac0a5655d3df3bcdfe631809d180"
+  ]
+}

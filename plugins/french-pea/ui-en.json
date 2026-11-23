@@ -1,0 +1,17 @@
+{
+  "Ange faktisk anskaffningsdag för den enda aktieposten.": "Enter the actual acquisition date for the single share lot.",
+  "Ange faktisk insättning i annat PEA/PEA-PME, även 0.": "Enter the actual contributions to the other PEA or PEA-PME, including zero.",
+  "Ange verkliga livstidsinsättningar; de får inte understiga återstående insatt kapital.": "Enter actual lifetime contributions that cover the remaining contributed principal.",
+  "Det andra, externa PEA/PEA-PME-kontots livstidsinsättningar (EUR)": "Lifetime contributions to the other external PEA/PEA-PME account (EUR)",
+  "Endast första insättning från 2018 stöds.": "Enter a first deposit date in 2018 or later.",
+  "Faktisk anskaffningsdag / första insättningsdag": "Actual acquisition date / first deposit date",
+  "Faktiska sammanlagda insättningar sedan öppning (EUR)": "Actual total contributions since opening (EUR)",
+  "Frankrike, inkomster 2025: kvalificerat PEA/PEA-PME med endast noterade godkända tillgångar och faktisk första insättning från 2018. Femårsgränsen räknas från första insättningen. Före fem år krävs fullständigt avslut; vinsten belastas med 12,8 % plus 17,2 % sociala avgifter. Efter fem år är vinsten fri från inkomstskatt men 17,2 % sociala avgifter tas på proportionell vinstandel vid uttag. Historiska blandade sociala skattesatser, onoterad utdelning och undantag för tidiga partiella uttag ingår inte. Insättningsgräns PEA 150 000 EUR och totalt PEA+PEA-PME 225 000 EUR; uttag återställer inte utrymme. Ange verkliga livstidsinsättningar, inte marknadsvärde. Högst ett modellerat konto i PEA-familjen per ägare; det andra kontots fasta externa insättningar anges separat.": "France, 2025 income: qualifying PEA/PEA-PME with only approved listed assets and an actual first contribution from 2018. The five-year period starts with the first contribution. Before five years, full closure is required and the gain is charged 12.8% plus 17.2% social contributions. After five years the gain is income-tax-free, but 17.2% social contributions apply to the proportional gain withdrawn. Historical mixed social rates, unlisted dividends and exceptions for early partial withdrawals are excluded. Contribution limits are EUR 150,000 for PEA and EUR 225,000 combined for PEA+PEA-PME; withdrawals do not restore room. Enter actual lifetime contributions, not market value. One modelled PEA-family account per owner; fixed external contributions to the other account are entered separately.",
+  "Inkludera kända framtida insättningar. Endast ett PEA-familjekonto får modelleras per ägare.": "Include known future contributions. Only one PEA-family account may be modeled per owner.",
+  "Jag har verifierat enbart godkända noterade PEA-tillgångar": "I have verified that only eligible listed PEA assets are held",
+  "PEA-utdelning måste återinvesteras inom kontot.": "Reinvest PEA dividends within the account.",
+  "Plan d’épargne en actions (PEA)": "Plan d’épargne en actions (PEA)",
+  "Verifiera godkända noterade PEA-tillgångar.": "Confirm that the listed PEA assets are eligible.",
+  "Årets insättningar före prognosstart (EUR)": "Contributions this year before the forecast starts (EUR)",
+  "Årets tidigare vinst från tidigt avslut (EUR)": "Previous gain this year from early closure (EUR)"
+}

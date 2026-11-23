@@ -1,0 +1,36 @@
+{
+  "id": "cashle.finance.fr-pea",
+  "archive": "cashle-account-fr-pea-source.zip",
+  "requires": [
+    "cashle.finance",
+    "cashle.account.support",
+    "cashle.account.tax.support"
+  ],
+  "ui": "ui.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui-en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui-sv.json"
+    }
+  ],
+  "sources": [
+    {
+      "path": "french-pea.cashle",
+      "resources": [
+        "dev/cashle/accounts/fr_pea/FrenchPeaPlugin_en.properties",
+        "dev/cashle/accounts/fr_pea/FrenchPeaPlugin_sv.properties"
+      ]
+    },
+    {
+      "path": "french-pea-tax.cashle",
+      "resources": [
+        "dev/cashle/accounts/fr_pea/FrenchPeaTaxPolicy_en.properties",
+        "dev/cashle/accounts/fr_pea/FrenchPeaTaxPolicy_sv.properties"
+      ]
+    }
+  ]
+}

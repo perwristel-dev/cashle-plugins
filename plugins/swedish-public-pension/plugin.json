@@ -1,0 +1,29 @@
+{
+  "id": "cashle.finance.pension.public",
+  "requires": [
+    "cashle.finance",
+    "cashle.pension.types",
+    "cashle.finance.pension.rules"
+  ],
+  "sources": [
+    {
+      "path": "swedish-public-pension.cashle",
+      "providers": [
+        "cashle.finance.pension.public"
+      ],
+      "resources": [
+        "swedish/pension/public_en.properties",
+        "swedish/pension/public_sv.properties"
+      ],
+      "imports": {
+        "cashle.finance.pension.rules": [
+          "swedish-pension-common.cashle"
+        ]
+      }
+    }
+  ],
+  "ui": "ui.js",
+  "replaces": [
+    "cashle.finance.pension.public"
+  ]
+}

@@ -1,0 +1,318 @@
+package cashle.plugins.sweden.tax
+
+import groovy.transform.CompileStatic
+import dev.cashle.tax.*
+
+import java.time.LocalDate
+import java.util.Locale
+import java.util.Map
+import java.util.Objects
+
+/**
+ * Pure Swedish domestic-law classification after emigration. All monetary inputs
+ * and outputs are SEK. No cash is booked and no mutable pension allowance is kept.
+ * See SWEDISH_EMIGRATION_SOURCES.md for verified rules and planning assumptions.
+ */
+@CompileStatic
+final class SwedishEmigrationPolicy {
+    private SwedishEmigrationPolicy() {}
+
+    public enum Liability { LIMITED, UNLIMITED }
+    public enum WorkLocation { SWEDEN, ABROAD }
+    public enum EmploymentProfile { ORDINARY_PRIVATE, UNSUPPORTED_SPECIAL }
+    public enum ForeignEmploymentExemption { NONE, CONFIRMED_SIX_MONTH, CONFIRMED_ONE_YEAR }
+    public enum PensionKind { PRIVATE_OCCUPATIONAL, ELIGIBLE_PUBLIC }
+    public enum CapitalKind {
+        BANK_INTEREST, DIVIDEND, SECURITY_GAIN,
+        PRIVATE_HOME_GAIN, PRIVATE_HOME_LOSS, PROPERTY_RENTAL
+    }
+    public enum SecuritiesClassification { QUALIFYING_SHARES, FUND, EXCLUDED, UNKNOWN }
+
+    public static final class Employment {
+        final double grossSek
+        final String originCountry
+        final WorkLocation workLocation
+        final EmploymentProfile profile
+        final ForeignEmploymentExemption exemption
+
+        Employment(double grossSek, String originCountry, WorkLocation workLocation, EmploymentProfile profile, ForeignEmploymentExemption exemption) {
+            nonnegative(grossSek, "Salary")
+            originCountry = country(originCountry)
+            Objects.requireNonNull(workLocation)
+            Objects.requireNonNull(profile)
+            Objects.requireNonNull(exemption)
+            this.grossSek = grossSek
+            this.originCountry = originCountry
+            this.workLocation = workLocation
+            this.profile = profile
+            this.exemption = exemption
+        }
+
+        double grossSek() { return grossSek }
+        String originCountry() { return originCountry }
+        WorkLocation workLocation() { return workLocation }
+        EmploymentProfile profile() { return profile }
+        ForeignEmploymentExemption exemption() { return exemption }
+    }
+
+    public static final class Pension {
+        final double grossSek
+        final String originCountry
+        final PensionKind kind
+
+        Pension(double grossSek, String originCountry, PensionKind kind) {
+            nonnegative(grossSek, "Pension")
+            originCountry = country(originCountry)
+            Objects.requireNonNull(kind)
+            this.grossSek = grossSek
+            this.originCountry = originCountry
+            this.kind = kind
+        }
+
+        double grossSek() { return grossSek }
+        String originCountry() { return originCountry }
+        PensionKind kind() { return kind }
+    }
+
+    /** allowanceUsed is the amount consumed by THIS payment, not a running total. */
+    public static final class IncomeAssessment {
+        final double ordinaryTaxableSek
+        final double sinkTaxableSek
+        final double definitiveTaxSek
+        final double publicAllowanceUsedSek
+
+        IncomeAssessment(double ordinaryTaxableSek, double sinkTaxableSek, double definitiveTaxSek, double publicAllowanceUsedSek) {
+            this.ordinaryTaxableSek = ordinaryTaxableSek
+            this.sinkTaxableSek = sinkTaxableSek
+            this.definitiveTaxSek = definitiveTaxSek
+            this.publicAllowanceUsedSek = publicAllowanceUsedSek
+        }
+
+        double ordinaryTaxableSek() { return ordinaryTaxableSek }
+        double sinkTaxableSek() { return sinkTaxableSek }
+        double definitiveTaxSek() { return definitiveTaxSek }
+        double publicAllowanceUsedSek() { return publicAllowanceUsedSek }
+    }
+    public static final class PublicPensionAllowance {
+        final double monthlySek
+        final int moneyYear
+        final boolean projected
+
+        PublicPensionAllowance(double monthlySek, int moneyYear, boolean projected) {
+            this.monthlySek = monthlySek
+            this.moneyYear = moneyYear
+            this.projected = projected
+        }
+
+        double monthlySek() { return monthlySek }
+        int moneyYear() { return moneyYear }
+        boolean projected() { return projected }
+    }
+    public static final class CapitalIncome {
+        final double amountSek
+        final String originCountry
+        final CapitalKind kind
+        final SecuritiesClassification securitiesClassification
+        final boolean treatyExemptionConfirmed
+        final double couponRate
+
+        CapitalIncome(double amountSek, String originCountry, CapitalKind kind, SecuritiesClassification securitiesClassification, boolean treatyExemptionConfirmed, double couponRate) {
+            require(Double.isFinite(amountSek), "Capital amount must be finite.")
+            originCountry = country(originCountry)
+            Objects.requireNonNull(kind)
+            Objects.requireNonNull(securitiesClassification)
+            require(Double.isFinite(couponRate) && couponRate >= 0 && couponRate <= 0.30d,
+                "Treaty coupon rate must be between 0 and 0.30.")
+            if (kind != CapitalKind.SECURITY_GAIN && kind != CapitalKind.PROPERTY_RENTAL)
+                nonnegative(amountSek, "Capital income")
+            this.amountSek = amountSek
+            this.originCountry = originCountry
+            this.kind = kind
+            this.securitiesClassification = securitiesClassification
+            this.treatyExemptionConfirmed = treatyExemptionConfirmed
+            this.couponRate = couponRate
+        }
+
+        double amountSek() { return amountSek }
+        String originCountry() { return originCountry }
+        CapitalKind kind() { return kind }
+        SecuritiesClassification securitiesClassification() { return securitiesClassification }
+        boolean treatyExemptionConfirmed() { return treatyExemptionConfirmed }
+        double couponRate() { return couponRate }
+    }
+    public static final class CapitalAssessment {
+        final double ordinaryTaxableSek
+        final double definitiveTaxSek
+
+        CapitalAssessment(double ordinaryTaxableSek, double definitiveTaxSek) {
+            this.ordinaryTaxableSek = ordinaryTaxableSek
+            this.definitiveTaxSek = definitiveTaxSek
+        }
+
+        double ordinaryTaxableSek() { return ordinaryTaxableSek }
+        double definitiveTaxSek() { return definitiveTaxSek }
+    }
+
+    public static double sinkRate(int receiptYear) {
+        supportedYear(receiptYear)
+        return receiptYear == 2025 ? 0.25d : receiptYear == 2026 ? 0.225d : 0.20d
+    }
+
+    /** Later years retain the last verified 2026 amount, before the caller's inflation projection. */
+    public static PublicPensionAllowance publicPensionAllowance(int receiptYear) {
+        supportedYear(receiptYear)
+        return receiptYear == 2025 ? new PublicPensionAllowance(3773, 2025, false)
+            : new PublicPensionAllowance(3799, 2026, receiptYear > 2026)
+    }
+
+    public static IncomeAssessment assessEmployment(LocalDate paymentDate, Liability liability, Employment employment) {
+        Objects.requireNonNull(paymentDate)
+        Objects.requireNonNull(liability)
+        Objects.requireNonNull(employment)
+        require(employment.profile() == EmploymentProfile.ORDINARY_PRIVATE,
+            "Special employment (including public service and seafarers) requires an unsupported Swedish classification.")
+        boolean exempt = employment.exemption() != ForeignEmploymentExemption.NONE
+        require(!exempt || employment.workLocation() == WorkLocation.ABROAD,
+            "Foreign employment exemption requires work performed abroad.")
+        if (liability == Liability.UNLIMITED)
+            return ordinary(exempt ? 0 : employment.grossSek())
+        return employment.workLocation() == WorkLocation.SWEDEN ? sink(paymentDate, employment.grossSek(), 0) : ordinary(0)
+    }
+
+    public static IncomeAssessment assessPension(LocalDate paymentDate, Liability liability, Pension pension,
+                                                 double monthlyPublicAllowanceUsedSek) {
+        return assessPension(paymentDate, liability, pension, monthlyPublicAllowanceUsedSek,
+            publicPensionAllowance(paymentDate.getYear()).monthlySek())
+    }
+
+    /** Explicit nominal allowance supports the runtime's existing inflation contract. */
+    public static IncomeAssessment assessPension(LocalDate paymentDate, Liability liability, Pension pension,
+                                                 double monthlyPublicAllowanceUsedSek, double monthlyAllowanceSek) {
+        Objects.requireNonNull(paymentDate)
+        Objects.requireNonNull(liability)
+        Objects.requireNonNull(pension)
+        nonnegative(monthlyPublicAllowanceUsedSek, "Used public pension allowance")
+        nonnegative(monthlyAllowanceSek, "Monthly public pension allowance")
+        if (liability == Liability.UNLIMITED) return ordinary(pension.grossSek())
+        if (!"SE".equals(pension.originCountry())) return ordinary(0)
+        double allowance = pension.kind() == PensionKind.ELIGIBLE_PUBLIC
+            ? Math.min(pension.grossSek(), Math.max(0, monthlyAllowanceSek - monthlyPublicAllowanceUsedSek)) : 0
+        return sink(paymentDate, pension.grossSek() - allowance, allowance)
+    }
+
+    /** Map boundary shared with exported source settings; origin never substitutes for work country. */
+    public static IncomeAssessment assessIncome(LocalDate paymentDate, boolean unlimited, String basis, double grossSek,
+                                                String originCountry, String residenceCountry, Map<String,Object> sourceOptions,
+                                                double monthlyPublicAllowanceUsedSek) {
+        return assessIncome(paymentDate, unlimited, basis, grossSek, originCountry, residenceCountry, sourceOptions,
+            monthlyPublicAllowanceUsedSek, publicPensionAllowance(paymentDate.getYear()).monthlySek())
+    }
+
+    public static IncomeAssessment assessIncome(LocalDate paymentDate, boolean unlimited, String basis, double grossSek,
+                                                String originCountry, String residenceCountry, Map<String,Object> sourceOptions,
+                                                double monthlyPublicAllowanceUsedSek, double monthlyAllowanceSek) {
+        Objects.requireNonNull(sourceOptions)
+        Liability liability = unlimited ? Liability.UNLIMITED : Liability.LIMITED
+        if ("pension".equals(basis)) {
+            PensionKind kind = pensionKind(option(sourceOptions, "pensionKind", "private"))
+            return assessPension(paymentDate, liability, new Pension(grossSek, originCountry, kind),
+                monthlyPublicAllowanceUsedSek, monthlyAllowanceSek)
+        }
+        require("salary".equals(basis) || "employment".equals(basis), "Unsupported Swedish emigration income basis: " + basis)
+        Object workCountry=sourceOptions.get("workCountry")
+        String actualWorkCountry=workCountry instanceof String&&((String)workCountry).isBlank()?residenceCountry:
+            option(sourceOptions,"workCountry",residenceCountry)
+        WorkLocation location = "SE".equals(country(actualWorkCountry))
+            ? WorkLocation.SWEDEN : WorkLocation.ABROAD
+        EmploymentProfile profile = employmentProfile(option(sourceOptions, "employmentProfile", "ordinary"))
+        ForeignEmploymentExemption exemption = foreignEmploymentExemption(option(sourceOptions, "foreignEmploymentExemption", "none"))
+        require(exemption == ForeignEmploymentExemption.NONE || confirmed(sourceOptions, "foreignEmploymentExemptionConfirmed"),
+            "Confirm all conditions of the six-month/one-year rule before exempting foreign salary.")
+        return assessEmployment(paymentDate, liability, new Employment(grossSek, originCountry, location, profile, exemption))
+    }
+
+    private static PensionKind pensionKind(String value) {
+        switch (value) {
+            case "private": return PensionKind.PRIVATE_OCCUPATIONAL
+            case "public": return PensionKind.ELIGIBLE_PUBLIC
+            default: throw new IllegalArgumentException("Unsupported Swedish pension kind.")
+        }
+    }
+
+    private static EmploymentProfile employmentProfile(String value) {
+        switch (value) {
+            case "ordinary": return EmploymentProfile.ORDINARY_PRIVATE
+            case "special": return EmploymentProfile.UNSUPPORTED_SPECIAL
+            default: throw new IllegalArgumentException("Unsupported Swedish employment profile.")
+        }
+    }
+
+    private static ForeignEmploymentExemption foreignEmploymentExemption(String value) {
+        switch (value) {
+            case "none": return ForeignEmploymentExemption.NONE
+            case "six-month": return ForeignEmploymentExemption.CONFIRMED_SIX_MONTH
+            case "one-year": return ForeignEmploymentExemption.CONFIRMED_ONE_YEAR
+            default: throw new IllegalArgumentException("Unsupported foreign employment exemption.")
+        }
+    }
+
+    public static CapitalAssessment assessCapital(LocalDate paymentDate, LocalDate emigrationDate, Liability liability,
+                                                   CapitalIncome income) {
+        Objects.requireNonNull(paymentDate)
+        Objects.requireNonNull(liability)
+        Objects.requireNonNull(income)
+        double ordinaryAmount=income.kind()==CapitalKind.SECURITY_GAIN&&income.amountSek()<0?income.amountSek()*0.70d:income.amountSek()
+        if (liability == Liability.UNLIMITED) return new CapitalAssessment(ordinaryAmount, 0)
+        boolean swedish = "SE".equals(income.originCountry())
+        switch (income.kind()) {
+            case CapitalKind.BANK_INTEREST: return new CapitalAssessment(0, 0)
+            case CapitalKind.DIVIDEND: return new CapitalAssessment(0, swedish ? income.amountSek() * income.couponRate() : 0)
+            case CapitalKind.PRIVATE_HOME_GAIN:
+            case CapitalKind.PRIVATE_HOME_LOSS:
+            case CapitalKind.PROPERTY_RENTAL: return new CapitalAssessment(swedish ? income.amountSek() : 0, 0)
+            case CapitalKind.SECURITY_GAIN:
+                require(income.securitiesClassification() != SecuritiesClassification.UNKNOWN,
+                    "Select qualifying shares, fund or excluded securities before calculating Swedish nonresident gains.")
+                boolean taxable = income.securitiesClassification() == SecuritiesClassification.QUALIFYING_SHARES
+                    && !income.treatyExemptionConfirmed() && withinTenYearWindow(paymentDate, emigrationDate)
+                return new CapitalAssessment(taxable ? ordinaryAmount : 0, 0)
+            default: throw new IllegalArgumentException("Unsupported capital kind.")
+        }
+    }
+
+    public static boolean withinTenYearWindow(LocalDate saleDate, LocalDate lastEmigrationDate) {
+        Objects.requireNonNull(saleDate)
+        Objects.requireNonNull(lastEmigrationDate, "Last Swedish emigration date is required for qualifying securities.")
+        return !saleDate.isBefore(lastEmigrationDate) && saleDate.getYear() <= lastEmigrationDate.getYear() + 10
+    }
+
+    /** The caller supplies attributable ORDINARY tax only; definitive SINK/coupon/property fees are excluded. */
+    public static double creditForeignTax(double paidSek, boolean entitlementConfirmed, double swedishOrdinaryAttributableSek) {
+        nonnegative(paidSek, "Entered foreign tax")
+        nonnegative(swedishOrdinaryAttributableSek, "Attributable ordinary Swedish tax")
+        return entitlementConfirmed ? Math.min(paidSek, swedishOrdinaryAttributableSek) : 0
+    }
+
+    private static IncomeAssessment ordinary(double amount) { return new IncomeAssessment(amount, 0, 0, 0); }
+    private static IncomeAssessment sink(LocalDate date, double taxable, double allowance) {
+        return new IncomeAssessment(0, taxable, taxable * sinkRate(date.getYear()), allowance)
+    }
+    static String option(Map<String,Object> options, String key, String fallback) {
+        if (!options.containsKey(key)) return fallback
+        Object value = options.get(key)
+        require(value instanceof String && !((String)value).isBlank(), "Swedish source option " + key + " must be a nonempty string.")
+        return ((String)value).trim()
+    }
+    static boolean confirmed(Map<String,Object> options, String key) {
+        if (!options.containsKey(key)) return false
+        require(options.get(key) instanceof Boolean, "Swedish source option " + key + " must be boolean.")
+        return Boolean.TRUE.equals(options.get(key))
+    }
+    private static String country(String value) {
+        require(value != null && value.trim().matches("[A-Za-z]{2}"), "A two-letter source/work/residence country is required.")
+        return value.trim().toUpperCase(Locale.ROOT)
+    }
+    private static void supportedYear(int year) { require(year >= 2025, "Swedish emigration policy supports income years from 2025."); }
+    private static void nonnegative(double value, String name) { require(Double.isFinite(value) && value >= 0, name + " must be finite and nonnegative."); }
+    private static void require(boolean condition, String message) { if (!condition) throw new IllegalArgumentException(message); }
+}

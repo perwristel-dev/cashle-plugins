@@ -1,0 +1,59 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.TaxPolicyField
+
+investmentAccount('cashlab.ca-brokerage', 1) {
+    pluginId 'cashle.finance.ca-brokerage'
+    dsl 'caBrokerage'
+    country 'CA'
+    kind 'CAbrokerage'
+    taxPolicy 'brokerage'
+    prepaidTax true
+    transfers true
+}
+
+accountTaxPolicy('brokerage') {
+    pluginId 'cashle.finance.ca-brokerage.tax-policy'
+    messages 'canadian.brokerage.policy'
+    country 'CA'
+    ruleYear 2026
+
+    annualBases 'capitalGains', 'capitalLosses', 'capitalIncome', 'eligibleDividends', 'nonEligibleDividends'
+    retainedAccount true
+    permitsImmediateReinvestment false
+    reinvestedDividendsIncreaseBasis true
+    dividendsTaxableOnReceipt true
+    internalSalesRealizeTax true
+
+    def dividendBases = [foreign: 'capitalIncome', eligible: 'eligibleDividends', nonEligible: 'nonEligibleDividends']
+    policyFields([
+        dividendTreatment: new TaxPolicyField('Dividend source and character', 'select',
+            List.copyOf(dividendBases.keySet())),
+        noSuperficialLossConfirmed: new TaxPolicyField('No superficial-loss acquisitions in the 61-day window', 'boolean')
+    ])
+
+    withdraw { request ->
+        def result = withdrawal(request, false, false, false)
+        require(result.realizedLoss() == 0d || bool(request.policyOptions(), 'noSuperficialLossConfirmed', false),
+            'Canadian loss recognition requires verified absence of superficial-loss acquisitions by the taxpayer or affiliated persons in the 61-day window.')
+        result
+    }
+
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        def bases = [:]
+        for (def account in accounts) {
+            require(account.realizedLoss() == 0d || bool(account.policyOptions(), 'noSuperficialLossConfirmed', false),
+                'Canadian capital-loss history requires noSuperficialLossConfirmed.')
+            require(account.realizedLoss() == 0d || Math.abs(account.dividends() - account.distributedDividends()) <= 0.00001d,
+                'Loss-year Canadian brokerage with dividend reinvestment requires unsupported superficial-loss allocation; distribute dividends to cash.')
+            def treatment = Objects.toString(account.policyOptions().get('dividendTreatment'), '')
+            require(dividendBases.containsKey(treatment),
+                'Canadian brokerage requires explicit foreign, eligible or nonEligible dividendTreatment.')
+            def dividendBasis = dividendBases[treatment]
+            bases.capitalGains = (bases.capitalGains ?: 0d) + account.realizedGain()
+            bases.capitalLosses = (bases.capitalLosses ?: 0d) + account.realizedLoss()
+            bases[dividendBasis] = (bases[dividendBasis] ?: 0d) + account.dividends()
+        }
+        new InvestmentAnnualAssessment(bases, 0d, [:])
+    }
+}

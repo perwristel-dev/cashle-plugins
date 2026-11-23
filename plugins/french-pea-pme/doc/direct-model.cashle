@@ -1,0 +1,31 @@
+// Owned fr-pea-pme DSL calculation regression; synthetic values, version 1.
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.fr-pea-pme' from '../french-pea-pme.cashle'
+    id 'cashle.finance.fr-pea-pme.tax' from '../french-pea-pme-tax.cashle'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.fr' from '../../french-tax/french-tax.cashle'
+}
+finance {
+    language 'en'
+    plan { from '2025-01-01'; until '2026-10-01'; currency 'EUR'; inflation 0d }
+    person('self') { name 'Synthetic French SME investor'; birthYear 1980; birthMonth 1 }
+    tax {
+        country 'FR'
+        preliminaryRate 0d
+        options([ruleYear:2025, residency:'full-year', initialState:[:], salaryDefinition:'gross-resolved-payroll',
+                 civilStatus:'single', familyParts:1d, familyProfile:'ordinary', capitalElection:'pfu',
+                 employmentSocialContributions:0d, deductibleEmployeeContributions:0d, payrollTaxableAdditions:0d,
+                 settlementCalendar:[month:9, day:30, yearOffset:1, confirmed:true]])
+    }
+    frPeaPme('portfolio') {
+        name 'PEA-PME'
+        balance 15000d
+        settings([costBasis:10000d, closeEnabled:true, closeDate:'2025-06-01',
+                  policyOptions:[acquiredDate:'2019-01-01', eligibleListedAssetsConfirmed:true, otherPlanContributions:0d],
+                  openingState:[cumulativeContributions:10000d, yearContributions:0d, earlyGain:0d],
+                  initialYear:[quarterOpeningValues:[null, null, null, null]]])
+    }
+}
+collect { }

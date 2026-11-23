@@ -1,0 +1,25 @@
+import dev.cashle.pension.agreement.PensionAgreement.ContributionInput
+import dev.cashle.pension.agreement.PensionAgreement.Kind
+
+import static SwedishAgreementRules.*
+
+def itp1 = localized('ITP1', 55, 5, 1, 1, .5d, 'openingPendingPremium', false,
+        ' – traditionell del', ' – traditional portion')
+pensionAgreement('ITP1') {
+    pluginId 'cashle.pension.agreement.ITP1'
+    kind Kind.DEFINED_CONTRIBUTION
+    metadata itp1('sv')
+    localizedMetadata itp1
+    eligible { ContributionInput input -> itp1Eligible(input) }
+    historicalContributionBreakpoints { ContributionInput input -> thresholds(input, 7.5d, 30d) }
+    contribution { ContributionInput input ->
+        if (!itp1Eligible(input)) return 0d
+        double base = incomeBase(input)
+        double salary = input.salary()
+        band(salary, 0d, 7.5d * base, .045d) + band(salary, 7.5d * base, 30d * base, .30d)
+    }
+}
+
+static boolean itp1Eligible(ContributionInput input) {
+    age(input) >= 25d && age(input) < 66d
+}

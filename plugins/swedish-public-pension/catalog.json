@@ -1,0 +1,13 @@
+{
+  "name": "Swedish public pension",
+  "description": {
+    "sv": "Svensk allmän pension med inkomstpension och premiepension.",
+    "en": "Swedish public pension including income and premium pension."
+  },
+  "country": "SE",
+  "category": "income",
+  "releases": [
+    "d226b0652a4703a930c79feba0ff98656e30ef8d29546cdbd5b1a0c01a4f28a1",
+    "fba27b8180e028e497a7264dd9715ddd9b82c6a2aec8efbda06a317a2f224aa8"
+  ]
+}

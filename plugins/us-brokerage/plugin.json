@@ -1,0 +1,35 @@
+{
+  "id": "cashle.finance.us-brokerage",
+  "archive": "cashle-us-brokerage-source.zip",
+  "requires": [
+    "cashle.finance",
+    "cashle.account.support"
+  ],
+  "ui": "ui.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui-en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui-sv.json"
+    }
+  ],
+  "sources": [
+    {
+      "path": "us-brokerage.cashle",
+      "resources": [
+        "dev/cashle/accounts/us_brokerage/UsBrokeragePlugin_en.properties",
+        "dev/cashle/accounts/us_brokerage/UsBrokeragePlugin_sv.properties"
+      ]
+    },
+    {
+      "path": "us-brokerage-tax.cashle",
+      "resources": [
+        "dev/cashle/accounts/us_brokerage/UsBrokerageTaxPolicy_en.properties",
+        "dev/cashle/accounts/us_brokerage/UsBrokerageTaxPolicy_sv.properties"
+      ]
+    }
+  ]
+}

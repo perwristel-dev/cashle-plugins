@@ -1,0 +1,13 @@
+{
+  "name": "Danish tax",
+  "description": {
+    "sv": "Dansk inkomstskatt, utländska aktier och privatbostadsförsäljning.",
+    "en": "Danish income tax, foreign shares and private-home sales."
+  },
+  "country": "DK",
+  "category": "tax",
+  "releases": [
+    "8dc856f3d8ed36e48c3987c11a2d484f9df990b89f2027f05ebc9c974ded2626",
+    "15132a22ee30f081620e06dcb43b40a4f293e5f6454587a882db18efa03737bf"
+  ]
+}

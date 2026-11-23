@@ -1,0 +1,30 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+
+investmentAccount('cashlab.nl-beleggingsrekening', 1) {
+    pluginId 'cashle.finance.nl-beleggingsrekening'
+    dsl 'nlBeleggingsrekening'
+    messages 'dev.cashle.accounts.nl_beleggingsrekening.DutchInvestmentSource'
+    country 'NL'
+    kind 'NLbeleggingsrekening'
+    taxPolicy 'beleggingsrekening'
+}
+
+accountTaxPolicy('beleggingsrekening') {
+    pluginId 'cashle.finance.nl-beleggingsrekening.policy'
+    messages 'dev.cashle.accounts.nl_beleggingsrekening.DutchInvestmentSource'
+    country 'NL'
+    ruleYear 2026
+    annualBases 'box3InvestmentsJan1'
+    existingYearFacts true
+
+    withdraw { request -> withdrawal(request, false, false, true) }
+
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        double opening = 0d
+        for (def account in accounts) {
+            opening += account.openingValue()
+        }
+        new InvestmentAnnualAssessment([box3InvestmentsJan1: opening], 0d, [:])
+    }
+}

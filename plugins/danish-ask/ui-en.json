@@ -1,0 +1,12 @@
+{
+  "label": "Aktiesparekonto (ASK)",
+  "Aktiesparekonto (ASK)": "Aktiesparekonto (ASK)",
+  "Danmark 2026: årlig lagerskatt 17 %. Negativ skatt är en separat skattekredit, inte en värdeförlust eller avdrag från lön. Krediten förfaller vid avslut. Insättningstaket 174 200 DKK beror på marknadsvärdet den 31 december föregående år och årets nettoinsättningar; värdeökning över taket behöver inte säljas.": "Denmark 2026: annual mark-to-market tax is 17%. Negative tax is a separate credit, not a loss of value or a salary deduction. The credit expires on closure. The DKK 174,200 deposit limit depends on market value on December 31 of the previous year and net deposits this year; appreciation above the limit need not be sold.",
+  "Ingående negativ skattekredit": "Opening negative tax credit",
+  "Marknadsvärde den 31 december föregående år": "Market value on December 31 of the previous year",
+  "Marknadsvärde den 1 januari": "Market value on January 1",
+  "Obetald kontoskatt från föregående år": "Unpaid account tax from the previous year",
+  "Ange föregående års kontoskatt som ännu inte har dragits från den danska ASK:n. Den betalas vid nästa betalning i februari eller vid avslut och är skild från den negativa skattekrediten.": "Enter the previous year’s account tax not yet deducted from the Danish ASK. It is paid at the next February payment or closure and is separate from the negative tax credit.",
+  "Ange marknadsvärdet den 31 december föregående år (0 för ett nytt konto).": "Enter the market value on December 31 of the previous year (0 for a new account).",
+  "Ange kontots marknadsvärde den 1 januari under prognosens första år.": "Enter the account’s market value on January 1 of the forecast’s first year."
+}

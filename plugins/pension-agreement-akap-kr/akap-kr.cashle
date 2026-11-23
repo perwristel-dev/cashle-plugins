@@ -1,0 +1,27 @@
+import dev.cashle.pension.agreement.PensionAgreement.ContributionInput
+import dev.cashle.pension.agreement.PensionAgreement.Kind
+
+import static SwedishAgreementRules.*
+
+def akapKr = localized('AKAP-KR', 62, 10, 6, 3, 1d, 'openingPendingAkapPremium')
+pensionAgreement('AKAP-KR') {
+    pluginId 'cashle.pension.agreement.AKAP-KR'
+    kind Kind.DEFINED_CONTRIBUTION
+    metadata akapKr('sv')
+    localizedMetadata akapKr
+    eligible { ContributionInput input -> akapKrEligible(input) }
+    historicalContributionBreakpoints { ContributionInput input -> thresholds(input, 7.5d, 30d) }
+    contribution { ContributionInput input ->
+        if (!akapKrEligible(input)) return 0d
+        double base = incomeBase(input)
+        double salary = input.salary()
+        double cap = 30d * base
+        if (age(input) >= 69d) return band(salary, 0d, cap, .06d)
+        double threshold = 7.5d * base
+        band(salary, 0d, threshold, .06d) + band(salary, threshold, cap, .315d)
+    }
+}
+
+static boolean akapKrEligible(ContributionInput input) {
+    input.employmentStart() == null || input.employmentStart().isBefore(input.birth().plusYears(69))
+}

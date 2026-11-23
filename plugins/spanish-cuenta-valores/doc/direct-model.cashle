@@ -1,0 +1,34 @@
+// Owned es-cuenta-valores DSL calculation regression; synthetic values, version 1.
+plugins {
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance'
+    id 'cashle.finance.es-cuenta-valores' from '../spanish-cuenta-valores.cashle'
+    id 'cashle.finance.es-cuenta-valores.tax' from '../spanish-cuenta-valores-tax.cashle'
+    id 'cashle.finance.income'
+    id 'cashle.tax'
+    id 'cashle.tax.es' from '../../spanish-tax/spanish-tax.cashle'
+}
+finance {
+    language 'en'
+    plan { from '2025-01-01'; until '2026-10-01'; currency 'EUR'; inflation 0d }
+    person('self') { name 'Synthetic Spanish investor'; birthYear 1980; birthMonth 1 }
+    tax {
+        country 'ES'
+        preliminaryRate 0d
+        options([ruleYear:2025, residency:'full-year', initialState:[:], autonomousCommunity:'Synthetic common-territory profile',
+                 regionalMinimum:5550d, employeeSocialContributions:0d,
+                 regionalSchedule:[[upTo:12450d, rate:0.095d], [upTo:20200d, rate:0.12d],
+                                   [upTo:35200d, rate:0.15d], [upTo:60000d, rate:0.185d],
+                                   [upTo:300000d, rate:0.225d], [rate:0.245d]],
+                 settlementCalendar:[month:9, day:30, yearOffset:1, confirmed:true]])
+    }
+    salary('salary') { name 'Salary'; amount 60000d; frequency 'once'; taxTreatment 'taxable'; taxBasis 'salary' }
+    esCuentaValores('portfolio') {
+        name 'Cuenta de valores'
+        balance 15000d
+        settings([costBasis:10000d, closeEnabled:true, closeDate:'2025-06-01',
+                  policyOptions:[acquiredDate:'2020-01-01', spanishLossDeductibilityConfirmed:true],
+                  initialYear:[quarterOpeningValues:[null, null, null, null]]])
+    }
+}
+collect { }

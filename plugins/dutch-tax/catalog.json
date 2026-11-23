@@ -1,0 +1,13 @@
+{
+  "name": "Dutch tax",
+  "description": {
+    "sv": "Nederländsk inkomstskatt, socialförsäkring och beskattning enligt Box 3.",
+    "en": "Dutch income tax, national insurance and Box 3 assessment."
+  },
+  "country": "NL",
+  "category": "tax",
+  "releases": [
+    "b728fccd61ac823657db7e5f33246836c819a29e2ee559c38cf9d6777b87a41b",
+    "f50458234b10d36378071b3b0e22c916928d512f5d9721f11edc0eda2d9f0de2"
+  ]
+}

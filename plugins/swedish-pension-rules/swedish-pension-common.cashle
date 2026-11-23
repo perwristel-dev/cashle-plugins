@@ -1,0 +1,467 @@
+/* Model-local ledger, calendar and shared saved Swedish pension settings. */
+import dev.cashle.core.Frequency
+import dev.cashle.core.i18n.Messages
+import dev.cashle.sdk.model.RuntimeClock
+import dev.cashle.sdk.model.ScheduleSpec
+import dev.cashle.sdk.model.Variable
+import dev.cashle.sdk.pension.PensionCalendar
+import dev.cashle.sdk.pension.PensionContext
+import dev.cashle.sdk.pension.PensionModuleProvider.Input
+import dev.cashle.sdk.pension.PensionModuleProvider.Receipt
+import dev.cashle.sdk.pension.PensionTypeRuntime
+import groovy.transform.CompileStatic
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
+import java.util.function.BooleanSupplier
+import java.util.function.DoubleSupplier
+import java.util.function.Supplier
+
+interface PensionPayoutPolicy {
+  LocalDate resolve(LocalDate desired, boolean relative, LocalDate available)
+}
+
+/** Preserve the selected day of month and the opening stub for an existing payout. */
+@CompileStatic
+final class MonthlyPensionCalendar {
+  private final LocalDate calculationDate, planEnd
+  private final Supplier<LocalDate> start
+  private final int years
+  private LocalDate cachedStart
+  private List<LocalDate> cachedDates = List.of()
+
+  MonthlyPensionCalendar(LocalDate calculationDate, Supplier<LocalDate> start, int years, LocalDate planEnd) {
+    this.calculationDate = calculationDate
+    this.start = start
+    this.years = years
+    this.planEnd = planEnd
+  }
+
+  private LocalDate first(LocalDate date) { return calculationDate.isAfter(date) ? calculationDate : date }
+  private LocalDate end(LocalDate date) { return years == 0 ? null : date.plusYears(years) }
+
+  boolean due(LocalDate date) {
+    LocalDate anchor = start.get()
+    if (anchor == null) return false
+    LocalDate firstDate = first(anchor), stop = end(anchor)
+    if (date.isBefore(firstDate) || stop != null && !date.isBefore(stop)) return false
+    long months = ChronoUnit.MONTHS.between(firstDate.withDayOfMonth(1), date.withDayOfMonth(1))
+    return firstDate.plusMonths(months).equals(date)
+  }
+
+  PensionCalendar schedule() {
+    if (planEnd != null) return PensionCalendar.dates(this.&dates as Supplier<List<LocalDate>>)
+    LocalDate anchor = start.get()
+    if (anchor == null) return PensionCalendar.union()
+    LocalDate firstDate = first(anchor), stop = end(anchor)
+    ScheduleSpec fixed = ScheduleSpec.every(Frequency.MONTH, firstDate)
+    if (stop == null) return PensionCalendar.entered(fixed)
+    return firstDate.isBefore(stop) ? PensionCalendar.entered(fixed.within(firstDate, stop)) : PensionCalendar.union()
+  }
+
+  private List<LocalDate> dates() {
+    LocalDate anchor = start.get()
+    if (anchor == null) return List.of()
+    if (anchor.equals(cachedStart)) return cachedDates
+    LocalDate firstDate = first(anchor), stop = end(anchor)
+    List<LocalDate> dates = new ArrayList<>()
+    for (int month = 0; ; month++) {
+      LocalDate date = firstDate.plusMonths(month)
+      if (!date.isBefore(planEnd) || stop != null && !date.isBefore(stop)) break
+      dates.add(date)
+    }
+    cachedStart = anchor
+    cachedDates = List.copyOf(dates)
+    return cachedDates
+  }
+
+  LocalDate nextAfter(LocalDate date) {
+    LocalDate anchor = start.get()
+    if (anchor == null) return null
+    LocalDate firstDate = first(anchor), stop = end(anchor)
+    long months = ChronoUnit.MONTHS.between(firstDate.withDayOfMonth(1), date.withDayOfMonth(1))
+    LocalDate next = date.isBefore(firstDate) ? firstDate : firstDate.plusMonths(months)
+    if (!next.isAfter(date)) next = firstDate.plusMonths(months + 1)
+    return stop != null && !next.isBefore(stop) ? null : next
+  }
+}
+
+
+/** Daily pension ledger. Every mutable value belongs to checkpointed model state. */
+@CompileStatic
+abstract class PensionLedger implements PensionTypeRuntime {
+  protected final PensionContext context
+  protected final Messages messages
+  protected final Map<String, Object> input
+  protected final Map<String, BooleanSupplier> moduleActivity
+  protected final RuntimeClock clock
+  protected final DoubleSupplier salary
+  protected final LocalDate birth, valuation, workStart, planStart
+  protected final Supplier<LocalDate> payoutStartDate
+  protected static final LocalDate NO_PAYOUT = LocalDate.MAX.minusYears(100)
+  protected final MonthlyPensionCalendar paymentCalendar, historicalPaymentCalendar
+  protected final double historicalSalary
+  protected final Variable initialized, first, second, annualFirst, annualSecond, service, periodSalary, periodKey, pendingAkapPremium, deltaFirst, deltaSecond, paymentValue
+  protected final boolean dynamicPayout
+  private List<Variable> preStartVariables
+  private double[] preStartValues
+  private LocalDate preStartDay
+  private int preStartRun
+  private double preStartSalary, preStartFirst, preStartSecond
+
+  protected PensionLedger(PensionContext context, PensionPayoutPolicy payoutPolicy) {
+    this.context = context
+    input = context.input()
+    messages = SwedishPensions.messages(input, 'common')
+    Map<String, Object> person = context.person()
+    moduleActivity = context.activity()
+    clock = context.clock()
+    salary = context.salary()
+    planStart = context.from()
+    historicalSalary = context.historicalSalary()
+    birth = SwedishPensions.birth(person)
+    LocalDate entered = LocalDate.parse((String) input.get('statementDate'))
+    valuation = is('inputMode', 'estimate') && entered.isAfter(planStart) ? planStart : entered
+    if (valuation.isAfter(planStart)) throw new IllegalArgumentException(messages.text('statement.moveStart'))
+    Object workAge = person.get('workStartAge')
+    workStart = Boolean.TRUE.equals(person.get('notStartedWorking')) || !(workAge instanceof Number)
+      ? valuation : birth.plusYears(((Number) workAge).intValue())
+    Object payoutAge = input.get('payoutAge')
+    LocalDate ageStart = birth.plusYears(payoutAge instanceof Number ? ((Number) payoutAge).intValue() : 67)
+    dynamicPayout = context.until() != null && input.get('payoutStart') instanceof Map
+    String reference = dynamicPayout ? (String) ((Map) input.get('payoutStart')).get('reference') : ''
+    boolean relative = ['retirement', 'life', 'independence', 'milestone'].contains(reference)
+    boolean deferred = relative && context.model().conditionalPayout()
+    payoutStartDate = !dynamicPayout ? ({ -> ageStart } as Supplier<LocalDate>) : ({ ->
+      LocalDate desired = context.payoutStart().get()
+      LocalDate available = deferred && desired != null ? context.model().payoutAnchor().get() : null
+      return payoutPolicy.resolve(desired, relative, available)
+    } as Supplier<LocalDate>)
+    LocalDate actualStart = payoutStart()
+    LocalDate startForReplay = dynamicPayout ? LocalDate.of(1800, 1, 1) : actualStart
+    int duration = (int) n('duration')
+    paymentCalendar = new MonthlyPensionCalendar(planStart, payoutStartDate, duration, context.until())
+    historicalPaymentCalendar = new MonthlyPensionCalendar(startForReplay, payoutStartDate, duration, context.until())
+    initialized = context.variable(0);
+    first = context.variable(0);
+    second = context.variable(0);
+    annualFirst = context.variable(-1);
+    annualSecond = context.variable(-1);
+    service = context.variable(n("serviceYears"));
+    periodSalary = context.variable(0);
+    periodKey = context.variable(-1);
+    pendingAkapPremium = context.variable(0);
+    deltaFirst = context.variable(0);
+    deltaSecond = context.variable(0);
+    paymentValue = context.variable(0);
+  }
+
+  protected LocalDate payoutStart() {
+    LocalDate date=payoutStartDate.get();
+    return date == null ? NO_PAYOUT : date;
+  }
+
+  protected double n(String key) {
+    return ((Number) input.get(key)).doubleValue();
+  }
+
+  protected boolean is(String key, String value) {
+    return value.equals(input.get(key));
+  }
+
+  public double getFirstBalance() {
+    return first.getValue();
+  }
+
+  public double getSecondBalance() {
+    return second.getValue();
+  }
+
+  /** Earned premium awaiting agreement remittance. */
+  public double getPendingPremium() { return pendingAkapPremium.getValue(); }
+
+  public double getFirstDelta() {
+    return deltaFirst.getValue();
+  }
+
+  public double getSecondDelta() {
+    return deltaSecond.getValue();
+  }
+
+  public double getPayment() {
+    // A goal can be reached after today's ledger calculation. Recalculate that
+    // single day from its saved opening state before booking the first receipt.
+    if (preStartRun == clock.runIndex() && preStartDay != null && preStartDay.equals(clock.getDate()) && paymentCalendar.due(preStartDay)) {
+      for(int i=0;i<preStartVariables.size();i++) preStartVariables.get(i).setValue(preStartValues[i]);
+      step(preStartDay,preStartSalary,true);
+      deltaFirst.setValue(first.getValue()-preStartFirst);
+      deltaSecond.setValue(second.getValue()-preStartSecond);
+      preStartDay=null;
+    }
+    return paymentValue.getValue();
+  }
+
+  protected void snapshotBeforeStart(LocalDate day, double wage, double oldFirst, double oldSecond) {
+    if (preStartVariables == null) {
+      preStartVariables = new ArrayList<>();
+      Collections.addAll(preStartVariables, first, second, annualFirst, annualSecond, service, periodSalary, periodKey,
+          pendingAkapPremium, deltaFirst, deltaSecond, paymentValue);
+      captureAdditionalReplayVariables(preStartVariables);
+      preStartValues=new double[preStartVariables.size()];
+    }
+    for(int i=0;i<preStartVariables.size();i++) preStartValues[i]=preStartVariables.get(i).getValue();
+    preStartRun=clock.runIndex(); preStartDay=day; preStartSalary=wage; preStartFirst=oldFirst; preStartSecond=oldSecond;
+  }
+
+  @Override public ScheduleSpec paymentSchedule() { return context.enteredPayments() }
+  @Override public PensionCalendar payments() { return paymentCalendar.schedule() }
+  @Override public PensionCalendar calculations() { return every(Frequency.DAY, planStart) }
+
+  protected static PensionCalendar every(Frequency frequency, LocalDate date) {
+    return PensionCalendar.entered(ScheduleSpec.every(frequency, date))
+  }
+
+  protected static PensionCalendar fixedDate(LocalDate date) {
+    return PensionCalendar.entered(ScheduleSpec.on(date))
+  }
+
+  protected boolean inactiveWage(Map<?, ?> wage) {
+    BooleanSupplier active = moduleActivity.get(wage.get('moduleId'))
+    return active != null && !active.getAsBoolean()
+  }
+  public LocalDate nextPaymentDate() {
+    LocalDate next=paymentCalendar.nextAfter(clock.getDate());
+    if(next==null) return null;
+    // The comparison scenario can supply income even without a base entitlement.
+    if(scenarioPayment(next,0d)>0d) return next;
+    next=entitledPaymentDate(next);
+    return next != null && scenarioPayment(next,1d)>0d ? next : null;
+  }
+
+  /** Type-owned rights and withdrawal rules choose the next date with a base entitlement. */
+  protected abstract LocalDate entitledPaymentDate(LocalDate next);
+
+  /** Include all type-owned checkpointed values when a conditional start is recalculated. */
+  protected void captureAdditionalReplayVariables(List<Variable> values) {}
+
+  @Override
+  public double getAsDouble() {
+    double oldFirst = first.getValue(),
+      oldSecond = second.getValue();
+    if (initialized.getValue() == 0) {
+      if (is("inputMode", "statement")) {
+        initializeStatement();
+        if (Boolean.TRUE.equals(input.get("priorSalaryConfirmed"))) {
+          periodKey.setValue(assessmentKey(valuation));
+          periodSalary.setValue(n("priorSalary"));
+        }
+      } else {
+        double historical = initialHistoricalSalary();
+        service.setValue(0);
+        replayEstimatedHistory(workStart, valuation, historical);
+      }
+      for (
+        LocalDate d = valuation;
+        d.isBefore(planStart);
+        d = d.plusDays(1)
+      ) step(d, replayWage(d), false);
+      initialized.setValue(1);
+    }
+    double currentSalary=salary.getAsDouble();
+    if(dynamicPayout && payoutStartDate.get()==null) snapshotBeforeStart(clock.getDate(),currentSalary,oldFirst,oldSecond);
+    else preStartDay=null;
+    step(clock.getDate(), currentSalary, true);
+    deltaFirst.setValue(first.getValue() - oldFirst);
+    deltaSecond.setValue(second.getValue() - oldSecond);
+    return paymentValue.getValue();
+  }
+
+  protected double initialHistoricalSalary() { return historicalSalary; }
+  protected void replayEstimatedHistory(LocalDate from, LocalDate until, double annualSalary) {
+    for (LocalDate day=from; day.isBefore(until); day=day.plusDays(1)) step(day, annualSalary, false);
+  }
+
+  protected abstract int assessmentKey(LocalDate date);
+  protected abstract double replayScale(LocalDate date);
+  protected abstract void initializeStatement();
+
+  protected double replayWage(LocalDate date) {
+    Object rows = input.get('replayWages')
+    if (rows instanceof List) {
+      double sum = 0d
+      for (Object item : (List) rows) {
+        Map<?, ?> wage = (Map<?, ?>) item
+        if (inactiveWage(wage)) continue
+        Object months = wage.get('workMonthMask')
+        if (months instanceof Number && (((Number) months).intValue() & (1 << (date.getMonthValue() - 1))) == 0) continue
+        if (date.equals(valuation) && Boolean.TRUE.equals(wage.get('statementDayIncluded'))) continue
+        Object start = wage.get('start'), end = wage.get('end')
+        if (start instanceof String && date.isBefore(LocalDate.parse((String) start))) continue
+        if (end instanceof String && !date.isBefore(LocalDate.parse((String) end))) continue
+        Object amount = wage.get('onceAmount'), once = wage.get('onceDate'), anchor = wage.get('paymentAnchor')
+        if (amount instanceof Number) {
+          if (once instanceof String && date.equals(LocalDate.parse((String) once)))
+            sum += ((Number) amount).doubleValue() * replayScale(date)
+        } else if (anchor instanceof String) {
+          if (date.isAfter(LocalDate.parse((String) wage.get('lastReplayDate')))) continue
+          String frequency = (String) wage.get('paymentFrequency')
+          if (dueWage(date, LocalDate.parse((String) anchor), frequency)) {
+            double pay = ((Number) wage.get('periodAmount')).doubleValue()
+            if ('daily'.equals(frequency) && Boolean.TRUE.equals(wage.get('hourly'))) pay *= 365d / date.lengthOfYear()
+            sum += pay * replayScale(date)
+          }
+        } else sum += ((Number) wage.get('annual')).doubleValue()
+      }
+      return sum
+    }
+    if (Boolean.FALSE.equals(input.get('replaySalaryActive'))) return 0d
+    Object start = input.get('replayStart'), end = input.get('replayEnd')
+    if (start instanceof String && date.isBefore(LocalDate.parse((String) start))) return 0d
+    if (end instanceof String && !date.isBefore(LocalDate.parse((String) end))) return 0d
+    return historicalSalary;
+  }
+
+  protected abstract void step(LocalDate date,double annualSalary,boolean recordPayment);
+
+  /** Income stress only: keep the base ledger and withdrawal schedule intact. */
+  protected double scenarioPayment(LocalDate date, double amount) {
+    if (date.isBefore(payoutStart()) || (n("duration") > 0 && !date.isBefore(payoutStart().plusYears((int) n("duration"))))) return amount;
+    // Resolve through the live outer map: a reused model replaces its nested scenario values.
+    Object scenario = input.get('scenario')
+    Object pensions = scenario instanceof Map ? ((Map) scenario).get('pensionIncome') : null
+    Object change = pensions instanceof Map ? ((Map) pensions).get(input.get('pensionId')) : null
+    if (change instanceof Map) {
+      Map<?, ?> adjustment = (Map<?, ?>) change
+      return amount * SwedishPensions.number(adjustment.get('factor'), 1d) + SwedishPensions.number(adjustment.get('annualAddition'), 0d) / 12d
+    }
+    return amount
+  }
+
+  private boolean dueWage(LocalDate date, LocalDate start, String frequency) {
+    if (date.isBefore(start)) return false
+    switch (frequency) {
+      case 'yearly': case 'daily': return true
+      case 'weekly': return ChronoUnit.DAYS.between(start, date) % 7L == 0L
+      case 'biweekly': return ChronoUnit.DAYS.between(start, date) % 14L == 0L
+      case 'once': return date.equals(start)
+      case 'annual': return date.getMonthValue() == start.getMonthValue() && date.getDayOfMonth() == Math.min(start.getDayOfMonth(), date.lengthOfMonth())
+      case 'monthly': return date.getDayOfMonth() == Math.min(start.getDayOfMonth(), date.lengthOfMonth())
+      case 'quarterly': return date.getDayOfMonth() == Math.min(start.getDayOfMonth(), date.lengthOfMonth())
+        && ((date.getYear() - start.getYear()) * 12 + date.getMonthValue() - start.getMonthValue()) % 3 == 0
+      default: throw new IllegalArgumentException(messages.text('amount.frequencyUnknown') + frequency)
+    }
+  }
+}
+
+@CompileStatic
+final class SwedishPensions {
+  static LocalDate birth(Map<String, Object> person) {
+    return LocalDate.of(((Number) person.get('birthYear')).intValue(), ((Number) person.get('birthMonth')).intValue(), 1)
+  }
+
+  static Messages messages(Map<?, ?> input, String part) {
+    Object value = input.get('language')
+    return new Messages(SwedishPensions, 'swedish.pension.' + part, value instanceof String ? (String) value : 'sv')
+  }
+
+  static double number(Object value, double fallback) {
+    return value instanceof Number ? ((Number) value).doubleValue() : fallback
+  }
+
+  static boolean nonnegative(Object value) {
+    double amount = number(value, Double.NaN)
+    return Double.isFinite(amount) && amount >= 0d
+  }
+
+  static Map<String, Object> defaults(String id, String kind, String scheme) {
+    return [name: id, owner: 'self', amount: 0d, nature: 'PUBLIC_PENSION', frequency: 'monthly', basis: 'nominal',
+      start: [reference: 'now', offset: 0], end: [reference: 'end', offset: 0], change: [mode: 'none'], repeat: false,
+      _engineDsl: true, kind: kind, inputMode: 'estimate', scheme: scheme,
+      capital: 0d, incomeCapital: 0d, premiumCapital: 0d, annualBenefit: 0d, annualBenefitFrequency: 'yearly',
+      payoutStart: [reference: 'age', age: 67, offset: 0, personId: 'self'], payoutAge: 67, payoutFraction: 100d,
+      payoutChanges: [], duration: 0d, serviceYears: 0d, growthRate: 0d, incomeIndex: 2d, baseGrowth: 2d, divisor: 20d, salaryId: '',
+      additionalSalaryIds: [], historicalWageEvents: [], includeIncomePensionInNetWorth: false,
+      includePremiumPensionInNetWorth: true, includeOccupationalPensionInNetWorth: true] as Map<String, Object>
+  }
+
+  static Map<String, Object> prepare(Input module, String kind) {
+    Map<String, Object> raw = module.data()
+    Object facts = module.facts().get('pensionData')
+    Map<String, Object> data = new LinkedHashMap<>(facts instanceof Map ? (Map<String, Object>) facts : raw)
+    data.put('language', module.language())
+    Messages text = messages(data, kind)
+    if (!kind.equals(data.get('kind'))) throw new IllegalArgumentException(text.text('kind.unknown'))
+    for (String key : ['includeIncomePensionInNetWorth', 'includePremiumPensionInNetWorth', 'includeOccupationalPensionInNetWorth'])
+      if (data.containsKey(key) && !(data.get(key) instanceof Boolean)) throw new IllegalArgumentException(text.text('netWorth.choice'))
+    Object all = module.plan().get('generalAssumptions')
+    Object assumptions = all instanceof Map ? ((Map) all).get('swedish-pension') : null
+    Map group = assumptions instanceof Map ? (Map) assumptions : Map.of()
+    double growth = number(group.get('baseAmountIncrease'), 2d)
+    double division = number(group.get('lifelongDivisionYears'), 20d)
+    if (!Double.isFinite(growth) || growth <= -100d || growth > 100d
+        || !Double.isFinite(division) || division < 1d || division > 60d || division != Math.rint(division))
+      throw new IllegalArgumentException(messages(data, 'common').text('assumptions.invalid'))
+    double historical = number(group.get('historicalIncomeBaseAmounts'), 4d)
+    if (!Double.isFinite(historical) || historical < 0d || historical > 100d)
+      throw new IllegalArgumentException(messages(data, 'common').text('assumptions.historyInvalid'))
+    data.put('baseGrowth', growth)
+    data.put('divisor', division)
+    data.put('historicalIncomeBaseAmounts', historical)
+    if ('estimate'.equals(data.get('inputMode'))) data.put('statementDate', module.plan().get('from'))
+    if (!data.containsKey('statementDate')) data.put('statementDate', module.plan().get('from'))
+    if (!data.containsKey('pensionId')) data.put('pensionId', module.id())
+    data.put('annualBenefit', annualBenefit(data))
+    for (String key : ['taxSourceOptions', 'taxSourceOrigins', 'preliminaryMethod', 'preliminaryRate', 'preliminaryPayer']) {
+      if (raw.containsKey(key)) data.put(key, raw.get(key))
+    }
+    return data
+  }
+
+  private static double annualBenefit(Map<String, Object> data) {
+    Object benefit = data.get('annualBenefit')
+    double amount = benefit == null ? 0d : number(benefit, Double.NaN)
+    Object entered = data.get('annualBenefitFrequency')
+    double multiplier
+    switch (entered == null ? 'yearly' : entered) {
+      case 'yearly': case 'annual': multiplier = 1d; break
+      case 'monthly': multiplier = 12d; break
+      case 'quarterly': multiplier = 4d; break
+      case 'semiannual': multiplier = 2d; break
+      case 'biweekly': multiplier = 26d; break
+      case 'weekly': multiplier = 52d; break
+      case 'daily': multiplier = 365d; break
+      default: throw new IllegalArgumentException(messages(data, 'common').text('benefit.frequencyInvalid'))
+    }
+    double annual = amount * multiplier
+    if (!Double.isFinite(annual)) throw new IllegalArgumentException(messages(data, 'common').text('benefit.amountInvalid'))
+    return annual
+  }
+
+  static Receipt receipt(Map<String, Object> data, String kind, String economicNature) {
+    Map<String, Object> options = new LinkedHashMap<>(map(map(data.get('taxSourceOptions')).get('taxTreatment')))
+    Map<String, Object> sweden = new LinkedHashMap<>(map(options.get('SE')))
+    Object method = data.get('preliminaryMethod')
+    if ('percent'.equals(method)) {
+      double rate = number(data.get('preliminaryRate'), Double.NaN)
+      if (!Double.isFinite(rate) || rate < 0d || rate > 100d)
+        throw new IllegalArgumentException(messages(data, 'common').text('tax.withholdingRate'))
+      sweden.put('preliminaryMethod', 'percent')
+      sweden.put('preliminaryRate', rate / 100d)
+      options.put('SE', sweden)
+    } else if ('table'.equals(method)) {
+      Object payer = data.get('preliminaryPayer')
+      if (!(payer instanceof String) || ((String) payer).isBlank())
+        throw new IllegalArgumentException(messages(data, 'common').text('tax.payerName'))
+      sweden.put('preliminaryMethod', 'table')
+      sweden.put('preliminaryPayer', payer)
+      options.put('SE', sweden)
+    }
+    String origin = (String) map(data.get('taxSourceOrigins')).get('taxTreatment')
+    String name = (String) data.get('name') + messages(data, kind).text('account.payoutSuffix')
+    return new Receipt(name, economicNature,
+        'pension', options, origin, sweden)
+  }
+
+  private static Map<String, Object> map(Object value) {
+    return value instanceof Map ? (Map<String, Object>) value : Map.of()
+  }
+}

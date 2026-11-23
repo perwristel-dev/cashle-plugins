@@ -1,0 +1,10 @@
+investmentAccount('cashlab.es-cuenta-valores', 1) {
+    pluginId 'cashle.finance.es-cuenta-valores'
+    dsl 'esCuentaValores'
+    messages 'dev.cashle.accounts.es_cuenta_valores.SpanishSecuritiesPlugin'
+    country 'ES'
+    kind 'EScuentaValores'
+    taxPolicy 'cuenta-valores'
+    prepaidTax true
+    transfers false
+}

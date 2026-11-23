@@ -1,0 +1,23 @@
+plugins {
+    id 'cashle.finance'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.budget.se' from '../consumer-budget.cashle'
+    id 'cashle.tax'
+}
+
+finance {
+    plan { from '2026-01-01'; until '2026-03-01'; currency 'SEK'; inflation 0d }
+    person('self') { birthYear 1990; birthMonth 1 }
+    tax {
+        country 'SE'
+        preliminaryRate 0d
+        options([ruleYear:2025, residentMonths:12, municipality:'0180', municipalRate:0.306d,
+                 burialFeeRate:0.00293d, communityMember:false])
+    }
+    income 'salary', 20000d
+    consumerBudget('budget') {
+        name 'Budget'
+        settings([citySize:'medium', splitCategories:true, extraPercent:20d])
+    }
+}
+collect { }

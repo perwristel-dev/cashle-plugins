@@ -1,0 +1,36 @@
+{
+  "id": "cashle.finance.it-conto-ordinario",
+  "archive": "cashle-account-it-conto-ordinario-source.zip",
+  "requires": [
+    "cashle.finance",
+    "cashle.account.support",
+    "cashle.account.tax.support"
+  ],
+  "ui": "ui.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui-en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui-sv.json"
+    }
+  ],
+  "sources": [
+    {
+      "path": "italian-conto-ordinario.cashle",
+      "resources": [
+        "dev/cashle/accounts/it_conto_ordinario/ItalianOrdinaryPlugin_en.properties",
+        "dev/cashle/accounts/it_conto_ordinario/ItalianOrdinaryPlugin_sv.properties"
+      ]
+    },
+    {
+      "path": "italian-conto-ordinario-tax.cashle",
+      "resources": [
+        "dev/cashle/accounts/it_conto_ordinario/ItalianOrdinaryTaxPolicy_en.properties",
+        "dev/cashle/accounts/it_conto_ordinario/ItalianOrdinaryTaxPolicy_sv.properties"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+// Owned gb-isa DSL calculation regression; synthetic values, version 1.
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.gb-isa' from '../uk-isa.cashle'
+    id 'cashle.finance.gb-isa.tax' from '../uk-isa-tax.cashle'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.gb' from '../../uk-tax/uk-tax.cashle'
+}
+finance {
+    language 'en'
+    plan { from '2026-04-06'; until '2028-02-01'; currency 'GBP'; inflation 0d }
+    person('self') { name 'Synthetic British investor'; birthYear 1980; birthMonth 1 }
+    tax {
+        country 'GB'
+        preliminaryRate 0d
+        options([ruleYear:2026, residency:'full-year', region:'england-wales-ni', niCategory:'A', openingCapitalLoss:0d])
+    }
+    gbIsa('sheltered') {
+        name 'ISA'
+        balance 15000d
+        settings([costBasis:10000d, closeEnabled:true, closeDate:'2026-09-01',
+                  policyOptions:[otherIsaSubscriptions:0d],
+                  initialYear:[openingValue:15000d, quarterOpeningValues:[null, null, null, null]]])
+    }
+}
+collect { }

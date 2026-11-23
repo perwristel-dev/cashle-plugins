@@ -1,0 +1,11 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.tax'
+    id 'cashle.pension.types'
+    id 'cashle.finance.pension.dc'
+    id 'cashle.pension.agreement.ITPK'
+}
+
+String pensionAgreementId = 'ITPK'
+apply from: '../../pension-agreement-rules/doc/contribution-example.cashle'

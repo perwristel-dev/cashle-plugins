@@ -1,0 +1,90 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.InvestmentCarry
+import dev.cashle.tax.InvestmentRules
+import dev.cashle.tax.TaxPolicyField
+import dev.cashle.tax.TaxStateField
+
+investmentAccount('cashlab.ca-tfsa', 1) {
+    pluginId 'cashle.finance.ca-tfsa'
+    dsl 'caTfsa'
+    country 'CA'
+    kind 'CAtfsa'
+    taxPolicy 'tfsa'
+    prepaidTax false
+    transfers true
+}
+
+accountTaxPolicy('tfsa') {
+    pluginId 'cashle.finance.ca-tfsa.tax-policy'
+    messages 'canadian.tfsa.policy'
+    country 'CA'
+    ruleYear 2026
+
+    def maximumAccounts = 1
+    maxAccountsPerPerson maximumAccounts
+    policyFields([
+        openingContributionRoom: new TaxPolicyField('Verified total remaining contribution room at start', 'number')
+    ])
+    stateFields([
+        contributionRoom: new TaxStateField('Available TFSA room', true),
+        withdrawalRoomNextYear: new TaxStateField('Withdrawals restored next year', true),
+        allowanceYear: new TaxStateField('TFSA year already allocated', false)
+    ])
+
+    def openingRoom = { rules, options, state ->
+        double room = state.containsKey('contributionRoom') ? state.contributionRoom :
+            rules.number(options, 'openingContributionRoom', Double.NaN)
+        rules.require(Double.isFinite(room) && room >= 0d,
+            'TFSA requires verified available contribution room, including room used in every other TFSA.')
+        room
+    }
+    def currentRoom = { rules, options, state, money ->
+        double lastAllocatedYear = state.getOrDefault('allowanceYear', (double) money.assessmentYear())
+        double yearsElapsed = money.assessmentYear() - lastAllocatedYear
+        rules.require(lastAllocatedYear == Math.rint(lastAllocatedYear) && yearsElapsed >= 0d && yearsElapsed <= 1d,
+            'TFSA needs consecutive full resident annual observations; allowance year must be current or previous.')
+        openingRoom(rules, options, state) + yearsElapsed * rules.nominal(7000d, money)
+    }
+
+    maximumDeposit { deposit ->
+        currentRoom(delegate, deposit.policyOptions(), deposit.state(), deposit.money())
+    }
+    stateAfterDeposit { deposit ->
+        double room = currentRoom(delegate, deposit.policyOptions(), deposit.state(), deposit.money())
+        require(deposit.amount() <= room + 1e-7d,
+            'TFSA deposit exceeds remaining personal contribution room; same-year withdrawals do not restore room.')
+        Map.copyOf(deposit.state() + [
+            contributionRoom: Math.max(0d, room - deposit.amount()),
+            allowanceYear: (double) deposit.money().assessmentYear()
+        ])
+    }
+    withdraw { request ->
+        withdrawal(request, false, false, true)
+    }
+    stateAfterWithdrawal { request ->
+        def state = new LinkedHashMap(request.state())
+        state.putIfAbsent('contributionRoom', openingRoom(delegate, request.policyOptions(), request.state()))
+        state.putIfAbsent('allowanceYear', request.date() == null ? 2026d : (double) request.date().year)
+        state.withdrawalRoomNextYear = (state.withdrawalRoomNextYear ?: 0d) + request.amount()
+        Map.copyOf(state)
+    }
+
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        require(accounts.size() <= maximumAccounts,
+            'Model TFSA as one aggregate personal account to enforce shared contribution room.')
+        def carries = [:]
+        for (def account in accounts) {
+            double remaining = currentRoom(delegate, account.policyOptions(), account.state(), money)
+            double restored = Math.max(account.withdrawals(), account.state().getOrDefault('withdrawalRoomNextYear', 0d)) +
+                account.distributedDividends()
+            InvestmentRules.nonnegative(restored, 'TFSA withdrawal room')
+            carries[account.id()] = new InvestmentCarry(0d, 0d, [
+                contributionRoom: remaining + restored,
+                withdrawalRoomNextYear: 0d,
+                allowanceYear: (double) money.assessmentYear()
+            ])
+        }
+        new InvestmentAnnualAssessment([:], 0d, carries)
+    }
+}

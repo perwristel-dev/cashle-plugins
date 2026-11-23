@@ -1,0 +1,126 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.InvestmentCarry
+import dev.cashle.tax.InvestmentRules
+import dev.cashle.tax.TaxPolicyField
+import dev.cashle.tax.TaxStateField
+import java.time.LocalDate
+
+double ownLimit = 225_000d
+double otherLimit = 150_000d
+double combinedLimit = 225_000d
+double tolerance = 1e-7d
+def historicalRateStart = LocalDate.of(2018, 1, 1)
+
+def stateAmount = { values, String key ->
+    double value = values.getOrDefault(key, 0d)
+    InvestmentRules.nonnegative(value, key)
+    value
+}
+def requireEligibleAssets = { options, checks ->
+    checks.require(checks.bool(options, 'eligibleListedAssetsConfirmed', false),
+        'Confirm eligible listed PEA assets; unlisted distributions and historic social-rate profiles are unsupported.')
+}
+def availableContributionRoom = { deposit, checks ->
+    requireEligibleAssets(deposit.policyOptions(), checks)
+    double own = stateAmount(deposit.state(), 'cumulativeContributions')
+    double year = stateAmount(deposit.state(), 'yearContributions')
+    checks.require(own + tolerance >= deposit.remainingPrincipal() && year <= own + tolerance,
+        'Historical contributions must cover remaining contributed principal and current-year contributions; market value cannot substitute for these counters.')
+    double other = checks.requiredAmount(deposit.policyOptions(), 'otherPlanContributions')
+    double scale = deposit.money().nominalPerRuleUnit()
+    checks.require(own <= ownLimit * scale + tolerance && other <= otherLimit * scale + tolerance &&
+        own + other <= combinedLimit * scale + tolerance,
+        'Existing PEA/PEA-PME lifetime contribution counters exceed ordinary statutory ceilings.')
+    Math.max(0d, Math.min(ownLimit * scale - own, combinedLimit * scale - own - other))
+}
+def beforeFiveYears = { request, checks ->
+    LocalDate firstPayment = request.acquiredDate()
+    LocalDate withdrawalDate = request.date()
+    checks.require(firstPayment != null && withdrawalDate != null,
+        'PEA requires actual first-payment acquiredDate and withdrawal date.')
+    checks.require(!firstPayment.isBefore(historicalRateStart),
+        'Pre-2018 PEA historical social-rate profiles require provider-specific assessment.')
+    checks.require(!withdrawalDate.isBefore(firstPayment), 'PEA withdrawal cannot precede opening.')
+    withdrawalDate.isBefore(firstPayment.plusYears(5L))
+}
+def assessWithdrawal = { request, checks ->
+    requireEligibleAssets(request.policyOptions(), checks)
+    def position = request.position()
+    checks.require((double) stateAmount(request.state(), 'cumulativeContributions') + tolerance >= position.costBasis(),
+        'Provide actual lifetime wrapper contributions covering the remaining contributed principal.')
+    boolean early = beforeFiveYears(request, checks)
+    boolean closing = request.closeAccount()
+    checks.require(closing || request.amount() < position.marketValue() || request.amount() == 0d,
+        'A complete PEA withdrawal closes the plan and requires explicit closeAccount; an empty closed plan cannot be reused for new deposits.')
+    checks.require(!closing || position.marketValue() >= position.costBasis(),
+        'PEA closure at a loss requires provider-verified liquidation and statutory loss eligibility, unsupported in this profile.')
+    checks.require(!early || closing,
+        'A withdrawal before five years must fully close this ordinary PEA profile; statutory exceptional partial withdrawals are unsupported.')
+    checks.withdrawal(request, false, false, false)
+}
+
+accountTaxPolicy('pea-pme') {
+    pluginId 'cashle.finance.fr-pea-pme.tax'
+    messages 'dev.cashle.accounts.fr_pea_pme.FrenchPeaPmeTaxPolicy'
+    country 'FR'
+    ruleYear 2025
+    openingStateInNativeCurrency true
+    maxAccountsPerPerson 1
+    accountLimitGroup 'pea-family'
+    resetAcquiredDateWhenEmptyDeposit false
+    annualBases 'referenceIncome'
+
+    policyFields([
+        otherPlanContributions: new TaxPolicyField('Lifetime contributions to the other PEA/PEA-PME', 'number'),
+        eligibleListedAssetsConfirmed: new TaxPolicyField('Only eligible listed PEA assets, no unlisted-income exception', 'boolean')
+    ])
+    stateFields([
+        cumulativeContributions: new TaxStateField('Lifetime external contributions, never reduced by withdrawals', true),
+        yearContributions: new TaxStateField('External contributions in current tax year', true),
+        earlyGain: new TaxStateField('Pre-five-year withdrawal gains in current year', true)
+    ])
+
+    maximumDeposit { deposit -> availableContributionRoom(deposit, delegate) }
+
+    stateAfterDeposit { deposit ->
+        require(deposit.amount() <= (double) availableContributionRoom(deposit, delegate) + tolerance,
+            'Deposit exceeds ordinary PIR annual/lifetime or PEA combined contribution ceiling.')
+        def result = new LinkedHashMap(deposit.state())
+        result.put('cumulativeContributions', (double) stateAmount(result, 'cumulativeContributions') + deposit.amount())
+        result.put('yearContributions', (double) stateAmount(result, 'yearContributions') + deposit.amount())
+        Map.copyOf(result)
+    }
+
+    withdraw { request -> assessWithdrawal(request, delegate) }
+
+    stateAfterWithdrawal { request ->
+        def result = assessWithdrawal(request, delegate)
+        def values = new LinkedHashMap(request.state())
+        if (beforeFiveYears(request, delegate)) {
+            values.put('earlyGain', (double) stateAmount(values, 'earlyGain') + result.realizedGain())
+        }
+        Map.copyOf(values)
+    }
+
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        double gains = 0d
+        double early = 0d
+        def carries = new LinkedHashMap()
+        for (def account : accounts) {
+            requireEligibleAssets(account.policyOptions(), delegate)
+            require(account.distributedDividends() == 0d,
+                'PEA/PIR dividends must remain inside the wrapper; external distributions require a dated withdrawal assessment and cannot be treated as tax-free cash.')
+            gains += account.realizedGain()
+            def values = new LinkedHashMap(account.state())
+            early += (double) stateAmount(values, 'earlyGain')
+            values.put('yearContributions', 0d)
+            values.put('earlyGain', 0d)
+            carries.put(account.id(), new InvestmentCarry(0d, 0d, values))
+        }
+        require(early <= gains + tolerance, 'PEA current-year early gains cannot exceed total withdrawal gains.')
+        double incomeAndSocial = money.inRuleMoney(early) * (0.128d + 0.172d)
+        double socialOnly = money.inRuleMoney(Math.max(0d, gains - early)) * 0.172d
+        new InvestmentAnnualAssessment([referenceIncome: gains], nominal(incomeAndSocial + socialOnly, money), carries)
+    }
+}

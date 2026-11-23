@@ -1,0 +1,249 @@
+package cashle.plugins.sweden.tax
+
+import groovy.transform.CompileStatic
+import dev.cashle.tax.*
+import dev.cashle.tax.support.PropertyCalendars
+
+import java.time.*
+import java.util.*
+import static dev.cashle.tax.support.Inputs.*
+
+/** DECCF private-home sale assessment plus source-verified Swedish deferral/calendar policy. */
+@CompileStatic
+final class SwedishPropertySaleRules {
+    private static final Set<String> MONEY=Set.of("salePrice","saleExpenses","purchasePrice","purchaseCosts","mortgagePayoff",
+            "previousDeferral","capitalContributions","repairFundAtSale","repairFundAtPurchase","requestedDeferral",
+            "outstandingDeferral","requestedReinstatement","provisionalDeferral","finalRequestedDeferral")
+    static boolean recognizesOpeningContract(LocalDate contract, LocalDate planStart, LocalDate eventDate) {
+        return contract.isBefore(planStart) && contract.getYear() == planStart.getYear() && eventDate.equals(planStart)
+    }
+
+    static PropertySaleAssessment assess(Map<String,Object> input) {
+        require(input!=null,"Sale input must be a map.")
+        privateScope(input)
+        String type=propertyType(input,"propertyType")
+        int saleYear=saleYear(input)
+        double sale=amount(input,"salePrice"),expenses=amount(input,"saleExpenses"),purchase=amount(input,"purchasePrice"),costs=amount(input,"purchaseCosts")
+        double mortgage=amount(input,"mortgagePayoff"),previous=amount(input,"previousDeferral"),share=number(input,"ownershipShare",1)
+        require(share>0&&share<=1,"Ownership share must be greater than zero and no more than one.")
+        boolean eligible=bool(input,"deferralEligibilityConfirmed",false)
+        require(!bool(input,"forcedSale",false)&&!bool(input,"significantCommunityRelocation",false),
+                "Forced-sale minimums and significant community-relocation extensions require separate unsupported profiles.")
+        Object status=input.getOrDefault("deferralStatus","resolved")
+        require(status instanceof String&&Set.of("resolved","none","final","provisional").contains(status),"deferralStatus must be none, final or provisional.")
+        double improvements=improvements(input,saleYear,type)
+        double contributions=amount(input,"capitalContributions"),fundSale=amount(input,"repairFundAtSale"),fundPurchase=amount(input,"repairFundAtPurchase")
+        require(!type.equals("villa")||contributions+fundSale+fundPurchase==0,"Bostadsratt capital contributions and repair funds cannot be used for a villa.")
+        double adjustment=type.equals("bostadsratt")?-contributions-fundSale+fundPurchase:0
+        double gain=sale-expenses-purchase-costs-improvements+adjustment
+        double restoredGain=gain+previous,netSale=sale-expenses-(type.equals("bostadsratt")?fundSale:0)
+        double replacement=replacementPrice(input)
+        double maximum=0
+        if(eligible&&input.containsKey("replacementHome")&&restoredGain>0) {
+            double ratio=netSale>0?Math.min(1,replacement/netSale):0
+            maximum=Math.max(0,Math.min(Math.min(restoredGain*ratio,3_000_000*share),restoredGain))
+            if(maximum<50_000)maximum=0
+        }
+        if(status.equals("none"))maximum=0
+        if(status.equals("provisional")) {
+            require(eligible&&bool(input,"intentToReplace",false),"Provisional deferral requires confirmed eligibility and intentToReplace:true.")
+            maximum=Math.max(0,Math.min(restoredGain,3_000_000*share))
+            if(maximum<50_000)maximum=0
+        }
+        double requested=input.containsKey("requestedDeferral")?amount(input,"requestedDeferral"):maximum
+        require(requested<=maximum&&(requested==0||requested>=50_000),"Requested deferral must be zero or between SEK 50,000 and the eligible maximum.")
+        if(status.equals("provisional"))require(requested==maximum,"Provisional deferral uses the full eligible amount; a smaller arbitrary amount cannot be selected.")
+        if(status.equals("final")&&requested>0)validateReplacementDates(input,saleYear,bool(input,"afterProvisional",false))
+        double taxable=restoredGain-requested,basis=taxable>=0?taxable*22/30:taxable*0.5d
+        // Preserve DECCF detail arithmetic, while the annual basis restores the exact 22% whole-SEK boundary.
+        return new PropertySaleAssessment(saleYear,basis,requested,annualBase(taxable),components(
+                "capitalGainBeforeDeferral",gain,"gainIncludingPreviousDeferral",restoredGain,"improvementDeduction",improvements,
+                "newDeferral",requested,"taxableGain",taxable,"taxableCapitalIncome",basis,"estimatedTax",Math.max(0,taxable)*0.22d,
+                "netSalePriceForDeferral",netSale,"replacementPurchasePriceForDeferral",replacement,"cashProceeds",sale-expenses-mortgage),
+                PropertyLossCarry.none(),requested==0?PropertyDeferralCarry.none():new PropertyDeferralCarry(
+                        status.equals("provisional")?PropertyDeferralCarry.Mode.PROVISIONAL_GAIN:PropertyDeferralCarry.Mode.FINAL_GAIN,
+                        status.equals("provisional")?saleYear+1:0))
+    }
+
+    static DeferralReinstatement reinstate(Map<String,Object> input) {
+        privateScope(input)
+        int year=year(input,"taxYear")
+        double outstanding=amount(input,"outstandingDeferral"),requested=amount(input,"requestedReinstatement")
+        require(requested<=outstanding,"Reinstatement cannot exceed the carried deferral.")
+        Object reason=input.getOrDefault("reason","voluntary")
+        require(Set.of("voluntary","replacement-sale","provisional-failed").contains(reason),"Unsupported deferral reinstatement reason.")
+        if(reason.equals("voluntary"))require(requested==0||requested==outstanding||requested>=20_000,
+                "Voluntary partial reinstatement must be at least SEK 20,000; the entire remaining deferral may be smaller.")
+        if(reason.equals("provisional-failed"))require(requested==outstanding,"Failed provisional deferral must be reinstated in full.")
+        double basis=requested*22/30
+        return new DeferralReinstatement(year,requested,outstanding-requested,basis,annualBase(requested))
+    }
+
+    static DeferralReinstatement reconcile(Map<String,Object> input) {
+        privateScope(input)
+        int originalYear=saleYear(input)
+        double provisional=amount(input,"provisionalDeferral")
+        require(provisional>0,"A positive carried provisionalDeferral is required.")
+        double finalDeferral=0
+        boolean completed=input.containsKey("replacementHome")&&input.containsKey("replacementPurchaseDate")&&input.containsKey("replacementMoveInDate")
+        if(completed&&withinReplacementDates(input,originalYear,true)) {
+            def finalInput=new LinkedHashMap<>(input)
+            finalInput.put("deferralStatus","final");finalInput.put("afterProvisional",true)
+            finalInput.remove("requestedDeferral")
+            if(input.containsKey("finalRequestedDeferral"))finalInput.put("requestedDeferral",amount(input,"finalRequestedDeferral"))
+            validateReplacementDates(finalInput,originalYear,true)
+            finalDeferral=assess(finalInput).newDeferral()
+        }
+        require(finalDeferral<=provisional,"Final deferral cannot exceed the carried provisional amount.")
+        double restored=provisional-finalDeferral,basis=restored*22/30
+        return new DeferralReinstatement(originalYear+1,restored,finalDeferral,basis,annualBase(restored))
+    }
+
+    static PropertyTaxCalendar calendar(Map<String,Object> input) {
+        PropertyCalendars.validatePaymentDateOrder(input)
+        Object event=input.getOrDefault("eventType","sale")
+        require(event instanceof String&&Set.of("sale","reinstatement","reconciliation").contains(event),"Unknown property calendar eventType.")
+        LocalDate contract=date(input,"contractDate",event.equals("sale")||event.equals("reconciliation"))
+        int originalYear=contract==null?year(input,"taxYear"):contract.getYear()
+        int year=event.equals("sale")?originalYear:year(input,"taxYear")
+        Map<String,LocalDate> dates=new LinkedHashMap<>()
+        if(event.equals("sale"))dates.put("taxRecognitionDate",contract)
+        else if(input.containsKey("reinstatementDate")) {
+            LocalDate restored=date(input,"reinstatementDate",true)
+            require(restored.getYear()==year,"Reinstatement date and taxYear must agree.")
+            dates.put("taxRecognitionDate",restored)
+        }
+        if(input.containsKey("settlementDate"))dates.put("settlementDate",date(input,"settlementDate",true))
+        dates.put("declarationDueDate",declarationDue(year+1))
+        dates.put("replacementPurchaseFrom",LocalDate.of(originalYear-1,1,1))
+        dates.put("replacementPurchaseBy",LocalDate.of(originalYear+1,12,31))
+        dates.put("finalReplacementPurchaseBy",LocalDate.of(originalYear,12,31))
+        dates.put("finalMoveInBy",LocalDate.of(originalYear+1,5,2))
+        dates.put("provisionalMoveInBy",LocalDate.of(originalYear+2,5,2))
+        dates.put("provisionalReconciliationDueDate",declarationDue(originalYear+2))
+        Set<String> required=new LinkedHashSet<>()
+        if(input.containsKey("paymentDueDate"))dates.put("paymentDueDate",date(input,"paymentDueDate",true))
+        else if(input.get("paymentDueDates") instanceof List && !((List<?>)input.get("paymentDueDates")).isEmpty()) {
+            List<?> dueDates = (List<?>) input.get("paymentDueDates")
+            for(int i=0;i<dueDates.size();i++) {
+                LocalDate due=date(Map.of("date",dueDates.get(i)),"date",true)
+                dates.put("paymentDueDate"+(i+1),due)
+                if(i==0)dates.put("paymentDueDate",due)
+            }
+        } else {
+            String assumption=event.equals("sale")?"assumePaymentDate":event.equals("reconciliation")?"assumeReconciliationPaymentDate":"assumeReinstatementPaymentDate"
+            if(bool(input,assumption,false)) {
+                require(year<9999,"An assumed final tax payment needs a following calendar year.")
+                // An explicitly selected forecast, not a statutory payment deadline.
+                dates.put("paymentDueDate",LocalDate.of(year+1,11,12))
+            } else required.add("paymentDueDate")
+        }
+        // These are voluntary interest-avoidance dates, never the final notice's payment deadline.
+        if(year==2025||year==2026) {
+            dates.put("extraPaymentOver30000By",LocalDate.of(year+1,2,12))
+            dates.put("extraPaymentRemainingBy",year==2025?LocalDate.of(2026,5,4):LocalDate.of(2027,5,3))
+        }
+        return new PropertyTaxCalendar(year,dates,required)
+    }
+
+    static Map<String,Object> inputsInRuleMoney(Map<String,Object> input,TaxMoneyBasis prices) {
+        def converted=prices.convertFields(input,MONEY)
+        if(input.containsKey("replacementHome"))converted.put("replacementHome",prices.convertFields(map(input,"replacementHome"),
+                Set.of("purchasePrice","purchaseCosts","qualifyingImprovements","repairFundAtPurchase")))
+        if(input.containsKey("improvements")) {
+            List<Map<String,Object>> entries=records(input,"improvements")
+            converted.put("improvements",entries.stream().map(entry->prices.convertFields(entry,Set.of("cost","rotReduction","insuranceReimbursement"))).toList())
+        }
+        return converted
+    }
+
+    static int saleYear(Map<String,Object> input) {
+        if(input.containsKey("contractDate")) {
+            int actual=date(input,"contractDate",true).getYear()
+            require(!input.containsKey("saleYear")||number(input,"saleYear",0)==actual,"saleYear must match the contract-signing year.")
+            return actual
+        }
+        return year(input,"saleYear")
+    }
+    private static double amount(Map<String,Object> input,String key) {
+        double value=number(input,key,0);require(value>=0,key+" must be a finite nonnegative SEK amount.");return value
+    }
+    private static String propertyType(Map<String,Object> input,String key) {
+        Object type=input.get(key);require("villa".equals(type)||"bostadsratt".equals(type),"Property type must be villa or bostadsratt.");return (String)type
+    }
+    private static int year(Map<String,Object> input,String key) {
+        double value=number(input,key,0);require(value==Math.floor(value)&&value>=1800&&value<=9999,key+" must be a four-digit year.");return (int)value
+    }
+    static LocalDate date(Map<String,Object> input,String key,boolean required) {
+        Object value=input.get(key)
+        if(value==null&&!required)return null
+        try {
+            if(value instanceof LocalDate)return (LocalDate)value
+            if(value instanceof String)return LocalDate.parse((String)value)
+        }catch(DateTimeException e){throw new IllegalArgumentException(key+" must be a valid ISO date.",e);}
+        throw new IllegalArgumentException(key+" is required as an ISO date.")
+    }
+    @SuppressWarnings("unchecked") private static List<Map<String,Object>> records(Map<String,Object> input,String key) {
+        Object rawList = input.get(key)
+        if(!(rawList instanceof List))throw new IllegalArgumentException(key+" must be a list.")
+        def result=new ArrayList<Map<String,Object>>()
+        for(Object raw:(List<?>)rawList) {
+            if(!(raw instanceof Map)||((Map<?,?>)raw).keySet().stream().anyMatch(k->!(k instanceof String)))throw new IllegalArgumentException(key+" entries must be maps.")
+            result.add((Map<String,Object>)raw)
+        }
+        return result
+    }
+    private static double improvements(Map<String,Object> input,int saleYear,String propertyType) {
+        if(!input.containsKey("improvements"))return 0
+        def years=new LinkedHashMap<Integer,double[]>()
+        for(def entry:records(input,"improvements")) {
+            int year=year(entry,"year");require(year<=saleYear,"Improvement year cannot be after the sale year.")
+            boolean repair="repair".equals(entry.get("type"))
+            require(repair||"improvement".equals(entry.get("type")),"Improvement type must be improvement or repair.")
+            double cost=amount(entry,"cost"),reduction=amount(entry,"rotReduction")+amount(entry,"insuranceReimbursement")
+            require(reduction<=cost,"Improvement reimbursements cannot exceed cost.")
+            double deductible=repair?number(entry,"deductibleShare",Double.NaN):1
+            require(!repair||Double.isFinite(deductible)&&deductible>=0&&deductible<=1,"Each repair needs a deductible share from zero to one.")
+            require(repair||!entry.containsKey("deductibleShare"),"An improvement cannot set a repair deductible share.")
+            if(!repair&&year<(propertyType.equals("villa")?1952:1974)||repair&&year<saleYear-5)continue
+            double outOfPocket=cost-reduction
+            double[] totals=years.computeIfAbsent(year,k->new double[2])
+            totals[0]+=outOfPocket;totals[1]+=repair?outOfPocket*deductible:outOfPocket
+        }
+        double total=0;for(double[] amounts:years.values())if(amounts[0]>=5000)total+=amounts[1];return total
+    }
+    private static double replacementPrice(Map<String,Object> input) {
+        if(!input.containsKey("replacementHome"))return 0
+        def home=map(input,"replacementHome");String type=propertyType(home,"propertyType")
+        double price=amount(home,"purchasePrice"),costs=amount(home,"purchaseCosts"),improvements=amount(home,"qualifyingImprovements"),fund=amount(home,"repairFundAtPurchase")
+        if(type.equals("villa")) {
+            require(fund==0,"A villa replacement cannot have a repair fund adjustment.");return price+costs+improvements
+        }
+        require(costs+improvements==0,"Bostadsratt replacement price uses the purchase price and repair fund only.")
+        require(fund<=price,"Replacement repair fund cannot exceed purchase price.");return price-fund
+    }
+    private static void validateReplacementDates(Map<String,Object> input,int saleYear,boolean afterProvisional) {
+        LocalDate purchased=date(input,"replacementPurchaseDate",true),moveIn=date(input,"replacementMoveInDate",true)
+        LocalDate earliest=LocalDate.of(saleYear-1,1,1),latest=LocalDate.of(saleYear+(afterProvisional?1:0),12,31)
+        require(!purchased.isBefore(earliest)&&!purchased.isAfter(latest),"Replacement purchase is outside the supported ordinary deferral window.")
+        require(!moveIn.isAfter(LocalDate.of(saleYear+(afterProvisional?2:1),5,2)),"Replacement move-in misses the statutory deferral deadline.")
+        require(!moveIn.isBefore(purchased),"Replacement move-in cannot precede the purchase contract in the supported ordinary profile.")
+    }
+    private static boolean withinReplacementDates(Map<String,Object> input,int saleYear,boolean afterProvisional) {
+        LocalDate purchased=date(input,"replacementPurchaseDate",true),moveIn=date(input,"replacementMoveInDate",true)
+        return !purchased.isBefore(LocalDate.of(saleYear-1,1,1))&&!purchased.isAfter(LocalDate.of(saleYear+(afterProvisional?1:0),12,31))
+                &&!moveIn.isAfter(LocalDate.of(saleYear+(afterProvisional?2:1),5,2))
+    }
+    private static Map<String,Double> annualBase(double taxableGain) {
+        return Map.of("capitalIncome",taxableGain>=0?taxableGain*0.22d/0.30d:taxableGain*0.5d)
+    }
+    private static void privateScope(Map<String,Object> input) {
+        for(String key:List.of("businessUse","commercialDealing","foreignProperty","propertyCharacterChanged","deceasedSeller","nonGenuineCooperative"))
+            require(!bool(input,key,false),key+" requires separate property-sale or reinstatement rules.")
+    }
+    private static LocalDate declarationDue(int year) {
+        LocalDate date=LocalDate.of(year,5,2)
+        while(date.getDayOfWeek()==DayOfWeek.SATURDAY||date.getDayOfWeek()==DayOfWeek.SUNDAY)date=date.plusDays(1)
+        return date
+    }
+}

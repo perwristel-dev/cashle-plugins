@@ -1,0 +1,11 @@
+{
+  "label": "Stocks and Shares ISA",
+  "sections.growth": "Värdetillväxt och utdelning",
+  "sections.trades": "Planerade försäljningar och återköp",
+  "sections.tax": "Skatteunderlag och avslut",
+  "sections.liquidity": "Likviditet och uttag",
+  "sections.options": "Fler alternativ",
+  "Vuxens brittiska Stocks and Shares ISA. Inkomst och kapitalvinster är skattefria. £20 000 årligt sammanlagt insättningstak delas med andra ISAs; ange externa ISA-insättningar. Endast en modellerad ISA per ägare. Detta är en icke flexibel ISA: uttag återställer inte årets insättningsutrymme. Inga pensions-, Junior- eller Lifetime ISA-regler.": "Vuxens brittiska Stocks and Shares ISA. Inkomst och kapitalvinster är skattefria. £20 000 årligt sammanlagt insättningstak delas med andra ISAs; ange externa ISA-insättningar. Endast en modellerad ISA per ägare. Detta är en icke flexibel ISA: uttag återställer inte årets insättningsutrymme. Inga pensions-, Junior- eller Lifetime ISA-regler.",
+  "Årets insättningar till andra ISAs (GBP)": "Årets insättningar till andra ISAs (GBP)",
+  "Ange årets externa ISA-insättningar.": "Ange årets externa ISA-insättningar."
+}

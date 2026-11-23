@@ -1,0 +1,149 @@
+import dev.cashle.sdk.account.tax.SharePoolPolicy.Pool
+import dev.cashle.sdk.account.tax.SharePoolPolicy.Sale
+import dev.cashle.tax.InvestmentPosition
+import dev.cashle.tax.InvestmentWithdrawalResult
+
+investmentAccount('cashlab.vp', 1) {
+    pluginId 'cashle.finance.vp'
+    dsl 'vp'
+    aliases ['investment']
+    country 'SE'
+    kind 'SEvp'
+    taxPolicy 'vp'
+    messages 'dev.cashle.accounts.vp.VpPlugin'
+    prepaidTax true
+    supportsPlannedSales true
+
+    taxInput { entered, active, messages ->
+        entered.costBasis != null ? entered : entered + [costBasis: entered.getOrDefault('balance', 0d)]
+    }
+}
+
+accountTaxPolicy('vp') {
+    pluginId 'cashle.finance.vp.policy'
+    country 'SE'
+    ruleYear 2025
+    messages 'dev.cashle.accounts.vp.VpPlugin'
+    annualOnly 'cashlab.vp'
+    annualBases 'capitalIncome'
+    retainedAccount true
+    residentSourceFacts true
+    reinvestedDividendsIncreaseBasis true
+    dividendsTaxableOnReceipt true
+    internalSalesRealizeTax true
+    preliminaryTaxRate { double configuredRate -> configuredRate }
+    sourceDefaults([securitiesClassification: 'qualifying-shares'])
+
+    withdraw { request ->
+        def position = request.position()
+        double resolved = request.resolvedCostBasis()
+        require(Double.isNaN(resolved) || (Double.isFinite(resolved) && resolved >= 0d &&
+            resolved <= position.costBasis() + 1e-7d), 'vp.policy.resolvedBasis')
+        double amount = Math.min(request.amount(), position.marketValue())
+        double basis = resolved
+        if (Double.isNaN(basis)) {
+            basis = position.marketValue() == 0d ? 0d : position.costBasis() * amount / position.marketValue()
+        }
+        double gain = Math.max(0d, amount - basis)
+        double loss = Math.max(0d, basis - amount)
+        def remaining = request.closeAccount() ? new InvestmentPosition(0d, 0d, 0d) :
+            new InvestmentPosition(Math.max(0d, position.marketValue() - amount),
+                Math.max(0d, position.costBasis() - basis), position.unusedShielding())
+        new InvestmentWithdrawalResult(remaining, gain, loss, gain)
+    }
+
+    quoteWithdrawalForNet { snapshot, double desiredNet, double rate ->
+        require(snapshot != null, 'vp.policy.snapshot')
+        require(Double.isFinite(desiredNet) && desiredNet >= 0d, 'vp.policy.net')
+        require(Double.isFinite(rate) && rate >= 0d && rate <= 1d, 'vp.policy.rate')
+        require(!snapshot.closeAccount() && snapshot.amount() == 0d, 'vp.policy.quoteSnapshot')
+        require(Double.isNaN(snapshot.resolvedCostBasis()), 'vp.policy.quoteBasis')
+        quoteNet(snapshot, desiredNet, rate, false)
+    }
+
+    annualAssessment { accounts, money, options ->
+        requireInput('vp.policy.ruleYear') { money.ruleYear() == 2025 }
+        requireInput('vp.policy.duplicate') { accounts*.id().toSet().size() == accounts.size() }
+        double gains = accounts.sum(0d) { it.realizedGain() }
+        double losses = accounts.sum(0d) { it.realizedLoss() }
+        double dividends = accounts.sum(0d) { it.dividends() }
+        double netGain = money.inRuleMoney(gains) - money.inRuleMoney(losses)
+        double income = money.inRuleMoney(dividends) + (netGain >= 0d ? netGain : netGain * 0.70d)
+        basis 'capitalIncome', income * money.nominalPerRuleUnit(), 'vp.policy.income'
+    }
+
+    foreignInvestmentAssetTypes 'listed-shares'
+    foreignInvestmentBases { facts, money ->
+        require(money.ruleYear() == 2025, 'vp.policy.ruleYear')
+        require(money.nativePerPlanUnit() == 1d && money.planCurrency() == money.taxCurrency() &&
+            (money.taxCurrency() == null || money.taxCurrency() == 'SEK'), 'vp.policy.foreignMoney')
+        def options = facts.policyOptions()
+        require(!'fund'.equalsIgnoreCase(Objects.toString(options.securitiesClassification, '')) &&
+            options.getOrDefault('foreignInvestmentAssetType', 'listed-shares') == 'listed-shares', 'vp.policy.foreignAsset')
+        assessAnnual([facts], money).bases()
+    }
+
+    sharePool {
+        def poolError = { Pool pool ->
+            if (!Double.isFinite(pool.quantity()) || pool.quantity() < 0d) return 'vp.pool.quantity'
+            if (!Double.isFinite(pool.costBasis()) || pool.costBasis() < 0d) return 'vp.pool.basis'
+            pool.quantity() == 0d && pool.costBasis() != 0d ? 'vp.pool.empty' : null
+        }
+
+        buy { Pool pool, double quantity, double cost ->
+            def error = poolError(pool)
+            require(error == null, error)
+            require(Double.isFinite(quantity) && quantity > 0d, 'vp.pool.acquired')
+            require(Double.isFinite(cost) && cost >= 0d, 'vp.pool.acquisitionCost')
+
+            def purchased = new Pool(pool.quantity() + quantity, pool.costBasis() + cost)
+            error = poolError(purchased)
+            require(error == null, error)
+            purchased
+        }
+        sell { Pool pool, double quantity, double proceeds ->
+            def error = poolError(pool)
+            require(error == null, error)
+            require(Double.isFinite(quantity) && quantity > 0d && quantity <= pool.quantity(), 'vp.pool.sold')
+            require(Double.isFinite(proceeds) && proceeds >= 0d, 'vp.pool.proceeds')
+
+            boolean soldAll = quantity == pool.quantity()
+            double basis = soldAll ? pool.costBasis() : pool.costBasis() * (quantity / pool.quantity())
+            double difference = proceeds - basis
+            def remaining = soldAll ? new Pool(0d, 0d) :
+                new Pool(pool.quantity() - quantity, Math.max(0d, pool.costBasis() - basis))
+            new Sale(basis, Math.max(0d, difference), Math.max(0d, -difference), remaining)
+        }
+        allocatedBasis { Pool pool, double quantity ->
+            def error = poolError(pool)
+            require(error == null, error)
+            require(Double.isFinite(quantity) && quantity >= 0d, 'vp.pool.quantity')
+            pool.quantity() == 0d ? 0d : pool.costBasis() * (quantity / pool.quantity())
+        }
+        validateOpening { holdings ->
+            def identified = holdings.findAll { it.securityId() != null }
+            require(identified.isEmpty() || identified.size() == holdings.size(), 'vp.pool.complete')
+            for (def holding : identified) {
+                if (holding.futureOpening()) {
+                    require(holding.freshOpening(), 'vp.pool.future')
+                } else {
+                    require(holding.quantity() != 0d || holding.costBasis() == 0d, 'vp.pool.empty')
+                }
+            }
+        }
+        validateHoldings { holdings ->
+            def prices = [:]
+            for (def holding : holdings) {
+                if (holding.securityId() == null || (holding.futureOpening() && !holding.active() && !holding.initialized())) continue
+                require(holding.active() && holding.initialized(), 'vp.pool.active')
+                if (holding.quantity() == 0d) {
+                    require(Math.abs(holding.marketValue()) <= 1e-7d, 'vp.pool.count')
+                    continue
+                }
+                double price = holding.marketValue() / holding.quantity()
+                Double previous = prices.putIfAbsent(holding.securityId(), price)
+                require(previous == null || Math.abs(price - previous) <= Math.max(1e-7d, Math.abs(previous) * 1e-9d), 'vp.pool.price')
+            }
+        }
+    }
+}

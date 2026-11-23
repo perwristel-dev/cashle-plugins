@@ -1,0 +1,14 @@
+{
+  "label": "Australisk aktiedepå",
+  "Andel franked utdelning": "Andel franked utdelning",
+  "Ange anskaffningsdag.": "Ange anskaffningsdag.",
+  "Ange giltiga franking-andelar och bolagsskattesats.": "Ange giltiga franking-andelar och bolagsskattesats.",
+  "Bekräfta en identifierad post.": "Bekräfta en identifierad post.",
+  "Bolagsskattesats för franking": "Bolagsskattesats för franking",
+  "En daterad homogen post. Blandade anskaffningar ska ligga i separata konton.": "En daterad homogen post. Blandade anskaffningar ska ligga i separata konton.",
+  "En daterad identifierad post utan wash-sale-arrangemang": "En daterad identifierad post utan wash-sale-arrangemang",
+  "En identifierad anskaffningspost. Uttag säljer proportionellt inom just den posten; flera datum behöver separata konton. Ingen extra insättning eller återinvesterad utdelning. Utdelning betalas till kontanter. 50 % CGT-rabatt kräver mer än tolv månader, räknat utan anskaffnings- och försäljningsdag. Årets förluster används före rabatten. Ange franking-antaganden och verifiera rätten till credits i skatteprofilen.": "En identifierad anskaffningspost. Uttag säljer proportionellt inom just den posten; flera datum behöver separata konton. Ingen extra insättning eller återinvesterad utdelning. Utdelning betalas till kontanter. 50 % CGT-rabatt kräver mer än tolv månader, räknat utan anskaffnings- och försäljningsdag. Årets förluster används före rabatten. Ange franking-antaganden och verifiera rätten till credits i skatteprofilen.",
+  "Startår för dessa realiserade vinster (0 om inga)": "Startår för dessa realiserade vinster (0 om inga)",
+  "Tidigare realiserade bruttovinster med CGT-rabatt detta år": "Tidigare realiserade bruttovinster med CGT-rabatt detta år",
+  "Ursprunglig anskaffningsdag": "Ursprunglig anskaffningsdag"
+}

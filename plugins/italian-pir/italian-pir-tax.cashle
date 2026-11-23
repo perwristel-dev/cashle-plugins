@@ -1,0 +1,104 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.InvestmentCarry
+import dev.cashle.tax.InvestmentRules
+import dev.cashle.tax.TaxPolicyField
+import dev.cashle.tax.TaxStateField
+
+accountTaxPolicy('pir') {
+    pluginId 'cashle.finance.it-pir.tax'
+    messages 'dev.cashle.accounts.it_pir.ItalianPirTaxPolicy'
+    country 'IT'
+    ruleYear 2025
+
+    openingStateInNativeCurrency true
+    maxAccountsPerPerson 1
+    resetAcquiredDateWhenEmptyDeposit false
+
+    policyFields([
+        pirEligibilityConfirmed: new TaxPolicyField('Provider certifies ordinary PIR legal asset/allocation/residence requirements', 'boolean'),
+        pirAllWithdrawnLotsFiveYears: new TaxPolicyField('Provider certifies every disposed/withdrawn contribution lot held five years', 'boolean'),
+        pirResolvedRecaptureTax: new TaxPolicyField('Provider-resolved early-disposal recapture including interest, nominal EUR', 'number')
+    ])
+    stateFields([
+        cumulativeContributions: new TaxStateField('Lifetime external contributions, never reduced by withdrawals', true),
+        yearContributions: new TaxStateField('External contributions in current tax year', true),
+        recaptureTax: new TaxStateField('Provider-resolved PIR recapture tax and interest for current year', true)
+    ])
+
+    def stateAmount = { values, key ->
+        double value = values.getOrDefault(key, 0d)
+        InvestmentRules.nonnegative(value, key)
+        value
+    }
+    def requireEligibility = { options, checks ->
+        checks.require(checks.bool(options, 'pirEligibilityConfirmed', false),
+            'A provider must certify ordinary PIR asset composition, concentration, residence and legal eligibility; account opening alone proves no contribution-lot holding period.')
+    }
+    def depositCapacity = { deposit, checks ->
+        requireEligibility(deposit.policyOptions(), checks)
+        double accrued = stateAmount(deposit.state(), 'cumulativeContributions')
+        double annual = stateAmount(deposit.state(), 'yearContributions')
+        double annualLimit = 40000d * deposit.money().nominalPerRuleUnit()
+        double accruedLimit = 200000d * deposit.money().nominalPerRuleUnit()
+        checks.require(accrued + 1e-7d >= deposit.remainingPrincipal() && annual <= accrued + 1e-7d,
+            'Historical contributions must cover remaining contributed principal and current-year contributions; market value cannot substitute for these counters.')
+        checks.require(accrued <= accruedLimit + 1e-7d && annual <= annualLimit + 1e-7d,
+            'Existing PIR historical contribution counters exceed statutory ceilings.')
+        Math.max(0d, Math.min(annualLimit - annual, accruedLimit - accrued))
+    }
+    def checkWithdrawal = { request, checks ->
+        def options = request.policyOptions()
+        requireEligibility(options, checks)
+        checks.require(stateAmount(request.state(), 'cumulativeContributions') + 1e-7d >= request.position().costBasis(),
+            'Provide actual lifetime wrapper contributions covering the remaining contributed principal.')
+        checks.require(request.date() != null, 'PIR withdrawal needs its actual date.')
+        boolean mature = checks.bool(options, 'pirAllWithdrawnLotsFiveYears', false)
+        checks.require(mature || options.containsKey('pirResolvedRecaptureTax'),
+            'Early PIR disposal requires provider-resolved recapture tax and interest; opening date cannot establish five-year holding for every contribution lot.')
+        if (!mature) {
+            checks.require(request.closeAccount(),
+                'This resolved PIR recapture profile supports a single full early closure, not repeated partial recaptures.')
+            checks.requiredAmount(options, 'pirResolvedRecaptureTax')
+        }
+        mature
+    }
+
+    maximumDeposit { deposit -> depositCapacity(deposit, delegate) }
+    stateAfterDeposit { deposit ->
+        require(deposit.amount() <= depositCapacity(deposit, delegate) + 1e-7d,
+            'Deposit exceeds ordinary PIR annual/lifetime or PEA combined contribution ceiling.')
+        def result = new LinkedHashMap(deposit.state())
+        result.put('cumulativeContributions', stateAmount(result, 'cumulativeContributions') + deposit.amount())
+        result.put('yearContributions', stateAmount(result, 'yearContributions') + deposit.amount())
+        Map.copyOf(result)
+    }
+    withdraw { request ->
+        checkWithdrawal(request, delegate)
+        withdrawal(request, false, false, true)
+    }
+    stateAfterWithdrawal { request ->
+        boolean mature = checkWithdrawal(request, delegate)
+        def values = new LinkedHashMap(request.state())
+        if (!mature) {
+            values.put('recaptureTax', stateAmount(values, 'recaptureTax') +
+                requiredAmount(request.policyOptions(), 'pirResolvedRecaptureTax'))
+        }
+        Map.copyOf(values)
+    }
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        def carries = new LinkedHashMap()
+        double recapture = 0d
+        accounts.each { account ->
+            requireEligibility(account.policyOptions(), delegate)
+            require(account.distributedDividends() == 0d,
+                'PEA/PIR dividends must remain inside the wrapper; external distributions require a dated withdrawal assessment and cannot be treated as tax-free cash.')
+            def values = new LinkedHashMap(account.state())
+            values.put('yearContributions', 0d)
+            recapture += stateAmount(values, 'recaptureTax')
+            values.put('recaptureTax', 0d)
+            carries.put(account.id(), new InvestmentCarry(0d, 0d, values))
+        }
+        new InvestmentAnnualAssessment([:], recapture, carries)
+    }
+}

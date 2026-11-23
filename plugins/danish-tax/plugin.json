@@ -1,0 +1,28 @@
+{
+  "id": "cashle.tax.dk",
+  "archive": "cashle-tax-dk-source.zip",
+  "requires": [
+    "cashle.tax",
+    "cashle.tax.support"
+  ],
+  "ui": "ui.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui-en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui-sv.json"
+    }
+  ],
+  "sources": [
+    {
+      "path": "danish-tax.cashle",
+      "resources": [
+        "dev/cashle/tax/denmark/DanishTaxSource_en.properties",
+        "dev/cashle/tax/denmark/DanishTaxSource_sv.properties"
+      ]
+    }
+  ]
+}

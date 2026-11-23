@@ -1,0 +1,13 @@
+{
+  "name": "Danish Aktiesparekonto (ASK)",
+  "description": {
+    "sv": "Danskt aktiesparkonto med årlig beskattning av värdeförändringen.",
+    "en": "Danish investment savings account with annual mark-to-market tax."
+  },
+  "country": "DK",
+  "category": "accounts",
+  "releases": [
+    "21ac0e78fa17707778e66a74871c62138ae821b621b9648f52f920930a3b1d66",
+    "83908b9c6b2f950f22c596ba86855ea0b85888678383517b78249ab5dd600fe3"
+  ]
+}

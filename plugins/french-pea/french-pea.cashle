@@ -1,0 +1,10 @@
+investmentAccount('cashlab.fr-pea', 1) {
+    pluginId 'cashle.finance.fr-pea'
+    dsl 'frPea'
+    messages 'dev.cashle.accounts.fr_pea.FrenchPeaPlugin'
+    country 'FR'
+    kind 'FRpea'
+    taxPolicy 'pea'
+    prepaidTax false
+    transfers true
+}

@@ -1,0 +1,21 @@
+{
+  "label": "Piano individuale di risparmio (PIR ordinario)",
+  "sections.growth": "Growth and dividends",
+  "sections.trades": "Planned sales and repurchases",
+  "sections.tax": "Tax basis and closure",
+  "sections.liquidity": "Liquidity and withdrawals",
+  "sections.options": "More options",
+  "Ordinarie PIR 2025: 40 000 EUR insättning per år, 200 000 EUR totalt; uttag återställer inte historiskt utrymme. Leverantören måste verifiera instrument-, allokerings-, koncentrations- och hemvistvillkor. Fem års innehav bedöms per bidrags-/värdepapperspost; öppningsdatum räcker inte. Ett moget uttag kräver uttrycklig leverantörsbekräftelse för samtliga uttagna poster. Tidig avveckling kräver exakt leverantörsberäknad återföringsskatt inklusive ränta och fullständigt avslut. Ingen generell PIR-skattelättnad antas på enbart öppningsdatum.": "Ordinary PIR 2025: EUR 40,000 annual and EUR 200,000 total contributions; withdrawals do not restore historical room. The provider must verify instrument, allocation, concentration and residence conditions. Five-year holding is assessed per contribution/security lot; opening date alone is insufficient. A mature withdrawal requires explicit provider confirmation for every withdrawn lot. Early closure requires exact provider-calculated tax recapture including interest and full closure. No general PIR tax relief is assumed from the opening date alone.",
+  "Faktisk anskaffningsdag / första insättningsdag": "Actual acquisition date / first deposit date",
+  "Leverantören har verifierat samtliga ordinarie PIR-villkor": "The provider has verified all ordinary PIR conditions",
+  "Leverantören verifierar fem års innehav för varje uttagen post": "The provider verifies five years of ownership for every withdrawn lot",
+  "Faktisk återföringsskatt inklusive ränta vid tidigt fullständigt avslut (EUR)": "Actual recapture tax including interest on early full closure (EUR)",
+  "Faktiska sammanlagda insättningar sedan öppning (EUR)": "Actual total contributions since opening (EUR)",
+  "Årets insättningar före prognosstart (EUR)": "Contributions this year before the forecast starts (EUR)",
+  "Årets redan upplupna leverantörsberäknade återföringsskatt (EUR)": "Provider-calculated recapture tax already accrued this year (EUR)",
+  "Ange faktisk anskaffningsdag för den enda aktieposten.": "Enter the actual acquisition date for the single share lot.",
+  "Ange verkliga livstidsinsättningar; de får inte understiga återstående insatt kapital.": "Enter actual lifetime contributions. They must cover the remaining contributed capital.",
+  "PIR-utdelning måste återinvesteras inom kontot.": "Reinvest PIR dividends within the account.",
+  "Leverantörens PIR-behörighetsbekräftelse krävs.": "Confirm that the provider has certified PIR eligibility.",
+  "Ange exakt leverantörsberäknad skatt/ränta för ett tidigt avslut.": "Enter the exact provider-calculated tax and interest for early closure."
+}

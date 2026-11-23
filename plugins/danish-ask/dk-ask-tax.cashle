@@ -1,0 +1,56 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.InvestmentCarry
+import dev.cashle.tax.InvestmentRules
+
+import java.time.DayOfWeek
+import java.time.LocalDate
+
+accountTaxPolicy('ask') {
+    pluginId 'cashle.finance.dk-ask.tax'
+    country 'DK'
+    ruleYear 2026
+    messages 'dev.cashle.accounts.dk_ask.DanishAskTaxPolicy'
+
+    existingYearFacts true
+    maxAccountsPerPerson 1
+    bankCollectedTax true
+    collectBankTaxOnClosure true
+
+    bankTaxCollectionDate { int taxYear ->
+        LocalDate remittance = LocalDate.of(taxYear + 1, 2, 22)
+        while (remittance.dayOfWeek in [DayOfWeek.SATURDAY, DayOfWeek.SUNDAY]) {
+            remittance = remittance.plusDays(1)
+        }
+        remittance.minusWeeks(1)
+    }
+
+    withdraw { request -> withdrawal(request, false, false, true) }
+
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        double tax = 0d
+        def carry = new LinkedHashMap()
+        def bankTaxes = new LinkedHashMap()
+        for (def account : accounts) {
+            double gain = money.inRuleMoney(account.closingValue() - account.openingValue() -
+                account.externalDeposits() + account.withdrawals() + account.distributedDividends())
+            double current = gain * 0.17d - money.inRuleMoney(account.negativeTaxCarry())
+            double positiveTax = Math.max(0d, current)
+            tax += positiveTax
+            bankTaxes.put(account.id(), nominal(positiveTax, money))
+            double negativeTax = account.closed() ? 0d : nominal(Math.max(0d, -current), money)
+            carry.put(account.id(), new InvestmentCarry(0d, negativeTax))
+        }
+        new InvestmentAnnualAssessment([:], nominal(tax, money), carry, bankTaxes)
+    }
+
+    maximumDeposit { deposit ->
+        def money = deposit.money()
+        validate([], money)
+        double priorYearEndValue = deposit.priorYearEndValue()
+        double netDeposits = deposit.netDeposits()
+        InvestmentRules.nonnegative(priorYearEndValue, 'Prior-year ending value')
+        require(Double.isFinite(netDeposits), 'Net deposits must be finite.')
+        Math.max(0d, nominal(174200d, money) - priorYearEndValue - netDeposits)
+    }
+}

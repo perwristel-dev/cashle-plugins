@@ -1,0 +1,28 @@
+{
+  "id": "cashle.tax.es",
+  "archive": "cashle-tax-es-source.zip",
+  "requires": [
+    "cashle.tax",
+    "cashle.tax.support"
+  ],
+  "ui": "ui.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui-en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui-sv.json"
+    }
+  ],
+  "sources": [
+    {
+      "path": "spanish-tax.cashle",
+      "resources": [
+        "dev/cashle/tax/spain/SpanishTaxSource_en.properties",
+        "dev/cashle/tax/spain/SpanishTaxSource_sv.properties"
+      ]
+    }
+  ]
+}

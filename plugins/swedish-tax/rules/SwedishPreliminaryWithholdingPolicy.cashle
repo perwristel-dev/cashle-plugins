@@ -1,0 +1,96 @@
+package cashle.plugins.sweden.tax
+
+import groovy.transform.CompileStatic
+
+import dev.cashle.tax.PreliminaryWithholdingPolicy
+import dev.cashle.tax.PreliminaryWithholdingPolicy.Context
+import dev.cashle.tax.PreliminaryWithholdingPolicy.Plan
+import dev.cashle.tax.PreliminaryWithholdingPolicy.Window
+import dev.cashle.core.i18n.Messages
+import java.util.function.Function
+
+/** Published Swedish 2025 payroll tables and the forecast's explicit reserve convention. */
+@CompileStatic
+final class SwedishPreliminaryWithholdingPolicy implements PreliminaryWithholdingPolicy {
+    private static final String COMBINED_SHORT_PERIOD_PAYER="\u0000combined-short-period"
+    private final Function<String, Messages> catalog
+
+    SwedishPreliminaryWithholdingPolicy(Function<String, Messages> catalog) { this.catalog = catalog }
+
+    @Override String id() { 'SE-preliminary-2025' }
+
+    @Override Plan plan(String basis,String frequency,Map<String,Object> options,String language) {
+        if(!"salary".equals(basis)&&!"employment".equals(basis)&&!"pension".equals(basis))return Plan.enteredRate()
+        String component="pension".equals(basis)?"pension":"salary"
+        Object method=options.get("preliminaryMethod")
+        if("percent".equals(method)||"lump-table".equals(method))
+            return new Plan(Window.TRANSACTION,"",component,options)
+        // The combined forecast applies the annual table to a one-off receipt.
+        if ("once".equals(frequency) && (method == null || "combined".equals(method))) frequency = "annual"
+        if("daily".equals(frequency)||"once".equals(frequency))
+            return new Plan(Window.TRANSACTION,"",component,Map.<String,Object>of("unsupportedFrequency",frequency))
+        boolean explicit="table".equals(method),shortPeriod="weekly".equals(frequency)||"biweekly".equals(frequency)
+        String payer=explicit?String.valueOf(options.getOrDefault("preliminaryPayer","")).strip():shortPeriod?COMBINED_SHORT_PERIOD_PAYER:"combined"
+        if(explicit&&payer.isBlank())throw new IllegalArgumentException(catalog.apply(language).text("withholding.payerName"))
+        int period=period(frequency,language)
+        return new Plan(explicit||shortPeriod?Window.DAY:Window.MONTH,payer+":"+period,component,Map.<String,Object>of("period",period))
+    }
+
+    @Override void validateMovement(Plan plan,double amount,String language) {
+        Object frequency = plan.options().get("unsupportedFrequency")
+        if(frequency instanceof String)period((String)frequency,language)
+        if(amount<0d&&plan.window()==Window.DAY)
+            throw new IllegalArgumentException(catalog.apply(language).text("withholding.tableCorrection"))
+        if(amount<0d&&"lump-table".equals(plan.options().get("preliminaryMethod")))
+            throw new IllegalArgumentException(catalog.apply(language).text("withholding.lumpCorrection"))
+    }
+
+    @Override double withholding(Context context,Plan plan,Map<String,Double> amounts) {
+        double movement=amounts.getOrDefault(plan.component(),0d)
+        if("percent".equals(plan.options().get("preliminaryMethod"))) {
+            Object value=plan.options().get("preliminaryRate")
+            double rate = value instanceof Number ? ((Number)value).doubleValue() : Double.NaN
+            if(!Double.isFinite(rate)||rate<0d||rate>1d)
+                throw new IllegalArgumentException(catalog.apply(context.language()).text("withholding.rate"))
+            return movement*rate
+        }
+        int cohort=context.birthYear()-(context.taxYear()-2025)
+        if("lump-table".equals(plan.options().get("preliminaryMethod"))) {
+            Object value=plan.options().get("preliminaryAnnualIncome")
+            double annual = value instanceof Number ? ((Number)value).doubleValue() : Double.NaN
+            if(!Double.isFinite(annual)||annual<movement)
+                throw new IllegalArgumentException(catalog.apply(context.language()).text("withholding.annualIncome"))
+            return movement*SwedishPreliminaryTax2025.lumpSumRate(context.money().inRuleMoney(annual),SwedishPreliminaryTax2025.column(cohort,plan.component()))
+        }
+        Object rawRules = context.assessmentOptions().get("rules")
+        Map<?,?> rules=rawRules instanceof Map ? (Map<?,?>)rawRules : Map.of()
+        Object selected=context.assessmentOptions().get("preliminaryTableNumber")
+        int table=selected==null?SwedishPreliminaryTax2025.tableNumber(number(rules,"municipalRate",0.3241d),number(rules,"burialFeeRate",0.00293d),Boolean.TRUE.equals(rules.get("communityMember")),number(rules,"communityFeeRate",0d)):((Number)selected).intValue()
+        double salary=Math.max(0d,amounts.getOrDefault("salary",0d)),pension=Math.max(0d,amounts.getOrDefault("pension",0d))
+        double total=context.money().inRuleMoney(salary+pension)
+        int period=((Number)plan.options().get("period")).intValue()
+        double salaryTax=periodTax(total,table,SwedishPreliminaryTax2025.column(cohort,"salary"),period)
+        double pensionTax=periodTax(total,table,SwedishPreliminaryTax2025.column(cohort,"pension"),period)
+        return (salary>pension?salaryTax:pension>salary?pensionTax:Math.max(salaryTax,pensionTax))*context.money().nominalPerRuleUnit()
+    }
+    @Override double cashReserve(double withheld) { withheld * 1.1d }
+
+    private int period(String frequency,String language) {
+        switch (frequency) {
+            case "annual": return 2
+            case "quarterly": return 1
+            case "weekly": return 3
+            case "biweekly": return 4
+            case "once": throw new IllegalArgumentException(catalog.apply(language).text("withholding.once"))
+            case "daily": throw new IllegalArgumentException(catalog.apply(language).text("withholding.daily"))
+            default: return 0
+        }
+    }
+    private static double periodTax(double amount,int table,int column,int period) {
+        if(period==3)return SwedishPreliminaryTax2025.weekly(amount,table,column)
+        if(period==4)return SwedishPreliminaryTax2025.biweekly(amount,table,column)
+        int months=period==2?12:period==1?3:1
+        return SwedishPreliminaryTax2025.monthly(amount/months,table,column)*months
+    }
+    private static double number(Map<?,?> values,String key,double fallback){Object value=values.get(key);return value==null?fallback:((Number)value).doubleValue();}
+}

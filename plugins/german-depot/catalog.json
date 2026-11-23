@@ -1,0 +1,13 @@
+{
+  "name": "German share depot",
+  "description": {
+    "sv": "Tysk värdepappersdepå för investeringar i noterade aktier.",
+    "en": "German securities depot for listed-share investments."
+  },
+  "country": "DE",
+  "category": "accounts",
+  "releases": [
+    "a222781ba399211d701808892f5a07770bf3c91b8ac1026eda26822437c5b13f",
+    "fe788e931d2bcc86b65ee4cf876f1ced15b06e5d7dca8d085115a19a2975cf6f"
+  ]
+}

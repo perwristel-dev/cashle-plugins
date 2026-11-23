@@ -1,0 +1,34 @@
+// Owned au-brokerage DSL calculation regression; synthetic values, version 1.
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.au-brokerage' from '../australian-brokerage.cashle'
+    id 'cashle.finance.au-brokerage.tax-policy' from '../australian-brokerage.cashle'
+    id 'cashle.finance.income'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.au' from '../../australian-tax/australian-tax.cashle'
+}
+finance {
+    language 'en'
+    plan { from '2026-07-01'; until '2027-12-01'; currency 'AUD'; inflation 0d }
+    person('self') { name 'Synthetic Australian investor'; birthYear 1980; birthMonth 1 }
+    tax {
+        country 'AU'
+        preliminaryRate 0d
+        options([ruleYear:2026, residency:'full-year', openingCapitalLoss:0d, medicareProfile:'ordinary-single',
+                 hospitalCover:'full-year', frankingEligibilityConfirmed:true, frankingRefundable:true,
+                 nonRefundableOffset:0d, workExpenses:0d, mlsIncomeAdditions:0d, mlsBaseAdditions:0d,
+                 settlementMonth:11, settlementDay:21, paymentTimingConfirmed:true,
+                 declaredMedicareLevy:0d, declaredMedicareSurcharge:0d])
+    }
+    salary('salary') { name 'Salary'; amount 60000d; frequency 'once'; taxTreatment 'taxable'; taxBasis 'salary' }
+    auBrokerage('portfolio') {
+        name 'AU portfolio'
+        balance 15000d
+        settings([costBasis:10000d, closeEnabled:true, closeDate:'2026-09-01',
+                  policyOptions:[acquiredDate:'2020-01-01', basisMethod:'identified-lot', singleLotConfirmed:true,
+                                 frankedFraction:0d, companyTaxRate:0.3d],
+                  initialYear:[openingValue:15000d, quarterOpeningValues:[null, null, null, null]]])
+    }
+}
+collect { }

@@ -1,0 +1,13 @@
+{
+  "name": "Swedish securities account (VP)",
+  "description": {
+    "sv": "Svenskt värdepapperskonto som följer anskaffningsvärde och skattepliktiga försäljningar.",
+    "en": "Swedish securities account that tracks acquisition cost and taxable sales."
+  },
+  "country": "SE",
+  "category": "accounts",
+  "releases": [
+    "42947bc4f91edb4420bf0ca7f1ca5ef3ad5be7418eef8f2cc12002121e37ea9b",
+    "a3f570fe6477241866d5022afc5e8a7297f2b86d4c284bf904d4b8c0c62c1e63"
+  ]
+}

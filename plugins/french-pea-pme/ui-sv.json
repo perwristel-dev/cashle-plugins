@@ -1,0 +1,17 @@
+{
+  "Ange faktisk anskaffningsdag för den enda aktieposten.": "Ange faktisk anskaffningsdag för den enda aktieposten.",
+  "Ange faktisk insättning i annat PEA/PEA-PME, även 0.": "Ange faktisk insättning i annat PEA/PEA-PME, även 0.",
+  "Ange verkliga livstidsinsättningar; de får inte understiga återstående insatt kapital.": "Ange verkliga livstidsinsättningar; de får inte understiga återstående insatt kapital.",
+  "Det andra, externa PEA/PEA-PME-kontots livstidsinsättningar (EUR)": "Det andra, externa PEA/PEA-PME-kontots livstidsinsättningar (EUR)",
+  "Endast första insättning från 2018 stöds.": "Endast första insättning från 2018 stöds.",
+  "Faktisk anskaffningsdag / första insättningsdag": "Faktisk anskaffningsdag / första insättningsdag",
+  "Faktiska sammanlagda insättningar sedan öppning (EUR)": "Faktiska sammanlagda insättningar sedan öppning (EUR)",
+  "Frankrike, inkomster 2025: kvalificerat PEA/PEA-PME med endast noterade godkända tillgångar och faktisk första insättning från 2018. Femårsgränsen räknas från första insättningen. Före fem år krävs fullständigt avslut; vinsten belastas med 12,8 % plus 17,2 % sociala avgifter. Efter fem år är vinsten fri från inkomstskatt men 17,2 % sociala avgifter tas på proportionell vinstandel vid uttag. Historiska blandade sociala skattesatser, onoterad utdelning och undantag för tidiga partiella uttag ingår inte. Insättningsgräns PEA 150 000 EUR och totalt PEA+PEA-PME 225 000 EUR; uttag återställer inte utrymme. Ange verkliga livstidsinsättningar, inte marknadsvärde. Högst ett modellerat konto i PEA-familjen per ägare; det andra kontots fasta externa insättningar anges separat.": "Frankrike, inkomster 2025: kvalificerat PEA/PEA-PME med endast noterade godkända tillgångar och faktisk första insättning från 2018. Femårsgränsen räknas från första insättningen. Före fem år krävs fullständigt avslut; vinsten belastas med 12,8 % plus 17,2 % sociala avgifter. Efter fem år är vinsten fri från inkomstskatt men 17,2 % sociala avgifter tas på proportionell vinstandel vid uttag. Historiska blandade sociala skattesatser, onoterad utdelning och undantag för tidiga partiella uttag ingår inte. Insättningsgräns PEA 150 000 EUR och totalt PEA+PEA-PME 225 000 EUR; uttag återställer inte utrymme. Ange verkliga livstidsinsättningar, inte marknadsvärde. Högst ett modellerat konto i PEA-familjen per ägare; det andra kontots fasta externa insättningar anges separat.",
+  "Inkludera kända framtida insättningar. Endast ett PEA-familjekonto får modelleras per ägare.": "Inkludera kända framtida insättningar. Endast ett PEA-familjekonto får modelleras per ägare.",
+  "Jag har verifierat enbart godkända noterade PEA-tillgångar": "Jag har verifierat enbart godkända noterade PEA-tillgångar",
+  "PEA-PME": "PEA-PME",
+  "PEA-utdelning måste återinvesteras inom kontot.": "PEA-utdelning måste återinvesteras inom kontot.",
+  "Verifiera godkända noterade PEA-tillgångar.": "Verifiera godkända noterade PEA-tillgångar.",
+  "Årets insättningar före prognosstart (EUR)": "Årets insättningar före prognosstart (EUR)",
+  "Årets tidigare vinst från tidigt avslut (EUR)": "Årets tidigare vinst från tidigt avslut (EUR)"
+}

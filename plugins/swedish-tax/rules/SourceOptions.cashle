@@ -1,0 +1,47 @@
+package cashle.plugins.sweden.tax
+
+import groovy.transform.CompileStatic
+import dev.cashle.tax.*
+import dev.cashle.core.i18n.Messages
+import java.util.*
+import java.time.*
+import static dev.cashle.tax.support.Inputs.*
+@CompileStatic
+final class SourceOptions {
+
+
+    private static final Map<String,Object> SE_DEFAULTS=Map.<String,Object>of("sourceKind","unknown","workCountry","","pensionKind","private","employmentProfile","ordinary","foreignEmploymentExemption","none","foreignEmploymentExemptionConfirmed",false,"treatyCouponRate",0.3d,"securitiesClassification","unknown","securitiesTreatyExemptionConfirmed",false)
+
+    public static void sweden(Map<String,Object> options,boolean active,Messages messages) {validateSE(merge(SE_DEFAULTS,options,messages),active,messages);}
+
+    private static void validateSE(Map<String,Object> o,boolean active,Messages messages) {
+        choice(o,"employmentProfile",Set.of("ordinary","special"),messages);choice(o,"pensionKind",Set.of("private","public"),messages)
+        choice(o,"foreignEmploymentExemption",Set.of("none","six-month","one-year"),messages);choice(o,"sourceKind",Set.of("unknown","bankInterest","dividendIncome","securitiesGains","propertyRentalIncome"),messages)
+        choice(o,"securitiesClassification",Set.of("unknown","qualifying-shares","fund","excluded"),messages)
+        if(!(o.get("workCountry") instanceof String))throw new IllegalArgumentException(messages.text("source.workCountry"))
+        Object coupon=o.get("treatyCouponRate")
+        if(!"".equals(coupon) && (!(coupon instanceof Number) || !Double.isFinite(((Number)coupon).doubleValue()) || ((Number)coupon).doubleValue()<0 || ((Number)coupon).doubleValue()>0.3d))throw new IllegalArgumentException(messages.text("source.couponRate"))
+        if(!(o.get("securitiesTreatyExemptionConfirmed") instanceof Boolean))throw new IllegalArgumentException(messages.text("source.treatyConfirmation"))
+        if(!"none".equals(o.get("foreignEmploymentExemption")) && !(o.get("foreignEmploymentExemptionConfirmed") instanceof Boolean))throw new IllegalArgumentException(messages.text("source.foreignWorkConfirmation"))
+        if(active) {
+            String work=(String)o.get("workCountry");if(!work.isEmpty() && !work.matches("[A-Z]{2}"))throw new IllegalArgumentException(messages.text("source.workCountry"))
+            if("special".equals(o.get("employmentProfile")))throw new IllegalArgumentException(messages.text("source.specialWork"))
+            if(!"none".equals(o.get("foreignEmploymentExemption")) && !Boolean.TRUE.equals(o.get("foreignEmploymentExemptionConfirmed")))throw new IllegalArgumentException(messages.text("source.confirmExemption"))
+        }
+    }
+
+    private static void choice(Map<String,Object> options, String key, Set<String> allowed, Messages messages) {
+        Object value = options.get(key)
+        if (!(value instanceof String) || !((String)value).isEmpty() && !allowed.contains(value))
+            throw new IllegalArgumentException(messages.text("source.invalidChoice").replace("{key}",key))
+    }
+
+    private static Map<String,Object> merge(Map<String,Object> defaults, Map<?,?> saved, Messages messages) {
+        Map<String,Object> result = new LinkedHashMap<>(defaults)
+        for (def entry : saved.entrySet()) {
+            if (!(entry.getKey() instanceof String)) throw new IllegalArgumentException(messages.text("source.invalidKey"))
+            result.put((String)entry.getKey(), entry.getValue())
+        }
+        return result
+    }
+}

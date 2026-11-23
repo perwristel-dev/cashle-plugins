@@ -1,0 +1,61 @@
+// Direct DSL equivalent of the versioned vp-shared-same-day-purchase saved case.
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.vp' from '../swedish-vp.cashle'
+    id 'cashle.finance.vp.policy' from '../swedish-vp.cashle'
+    id 'cashle.finance.flows'
+    id 'cashle.tax'
+}
+
+finance {
+    language 'en'
+    plan { from '2025-01-01'; until '2026-01-01'; currency 'SEK'; inflation 0d }
+    person('self') { name 'Pensionär'; birthYear 1967; birthMonth 1 }
+    tax {
+        country 'SE'
+        preliminaryRate 30d
+        options([ruleYear:2025, municipality:'0184', municipalRate:0.2975d,
+                 residentMonths:12, burialFeeRate:0.00293d,
+                 communityMember:false, communityFeeRate:0d])
+    }
+
+    def depotA = vp('depotA') {
+        name 'Depå A'
+        balance 100000d
+        settings([costBasis:50000d, security:[id:'same-share', quantity:100d], reinvestDividends:true])
+    }
+    def depotB = vp('depotB') {
+        name 'Depå B'
+        balance 100000d
+        settings([costBasis:100000d, security:[id:'same-share', quantity:100d], reinvestDividends:true])
+    }
+
+    transfer('marchWithdrawal') {
+        name 'Uttag från depå A'
+        source depotA
+        destination '__cash__'
+        amount 50000d
+        frequency 'once'
+        start '2025-03-01'
+        settings([necessaryPercent:100d])
+    }
+    transfer('purchaseB') {
+        name 'Köp B'
+        destination depotB
+        amount 20000d
+        frequency 'once'
+        start '2025-04-01'
+        settings([necessaryPercent:100d])
+    }
+    transfer('withdrawalA') {
+        name 'Uttag A'
+        source depotA
+        destination '__cash__'
+        amount 40000d
+        frequency 'once'
+        start '2025-04-01'
+        settings([necessaryPercent:100d])
+    }
+}
+
+collect { }

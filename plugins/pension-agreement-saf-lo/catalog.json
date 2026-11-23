@@ -1,0 +1,13 @@
+{
+  "name": "Avtalspension SAF-LO",
+  "description": {
+    "sv": "Villkor och premier för Avtalspension SAF-LO.",
+    "en": "Eligibility and contributions for the SAF-LO occupational pension."
+  },
+  "country": "SE",
+  "category": "income",
+  "releases": [
+    "4e40a884d141d9597868ad2dafda7a5500dee7cfe301a3945b3281ea22b7bdcb",
+    "95bd6d2522c2a093fc667e312d26c0eb81c8735945fc4abca0939529c053405a"
+  ]
+}

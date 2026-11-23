@@ -1,0 +1,18 @@
+plugins { id 'cashle.finance'; id 'cashle.finance.pension.public'; id 'cashle.tax'; id 'cashle.tax.se'; id 'cashle.pension.types' }
+finance {
+    plan {
+        from '2027-01-01'; until '2027-03-01'; inflation 0d
+        settings([generalAssumptions:['swedish-pension':[baseAmountIncrease:0d, lifelongDivisionYears:20d]],
+                  milestones:[[id:'retirement:self', builtin:'retirement', personId:'self',
+                               rule:[type:'age', personId:'self', years:67, months:0]]]])
+    }
+    person('self') { birthYear 1960; birthMonth 1 }
+    tax {
+        country 'SE'
+        preliminaryRate 0d
+        options([ruleYear:2025, residentMonths:12, municipality:'0180', municipalRate:0.306d,
+                 burialFeeRate:0.00293d, communityMember:false])
+    }
+    publicPension('Pension') { settings([inputMode:'statement', incomeCapital:240000d, premiumCapital:0d, incomeIndex:0d, growthRate:0d]) }
+}
+collect { }

@@ -1,0 +1,36 @@
+{
+  "id": "cashle.finance.no-ask",
+  "archive": "cashle-account-no-ask-source.zip",
+  "requires": [
+    "cashle.finance",
+    "cashle.account.support",
+    "cashle.account.tax.support"
+  ],
+  "ui": "ui.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui-en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui-sv.json"
+    }
+  ],
+  "sources": [
+    {
+      "path": "norwegian-ask.cashle",
+      "resources": [
+        "dev/cashle/accounts/no_ask/NorwegianAskPlugin_en.properties",
+        "dev/cashle/accounts/no_ask/NorwegianAskPlugin_sv.properties"
+      ]
+    },
+    {
+      "path": "norwegian-ask-tax.cashle",
+      "resources": [
+        "dev/cashle/accounts/no_ask/NorwegianAskTaxPolicy_en.properties",
+        "dev/cashle/accounts/no_ask/NorwegianAskTaxPolicy_sv.properties"
+      ]
+    }
+  ]
+}

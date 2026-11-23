@@ -1,0 +1,3 @@
+# Preserve the original Skatteverket table bytes for provenance checks.
+plugins/swedish-tax/**/preliminary-tax-monthly-2025.txt -text
+plugins/swedish-tax/**/preliminary-tax-biweekly-2025.txt -text

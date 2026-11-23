@@ -1,0 +1,262 @@
+import dev.cashle.tax.InvestmentAccountYear
+import dev.cashle.tax.PropertySaleAssessment
+import dev.cashle.tax.StatefulTaxAssessment
+import dev.cashle.tax.TaxAssessment
+import dev.cashle.tax.TaxMoneyBasis
+import dev.cashle.tax.TaxStateField
+import dev.cashle.tax.support.PropertyInputs
+import java.time.LocalDate
+
+import static dev.cashle.tax.support.Inputs.*
+import static dev.cashle.tax.support.DatedPropertyInputs.count
+import static dev.cashle.tax.support.DatedPropertyInputs.date
+import static dev.cashle.tax.support.DatedPropertyInputs.days
+import static dev.cashle.tax.support.DatedPropertyInputs.money
+import static dev.cashle.tax.support.DatedPropertyInputs.noticeCalendar
+import static dev.cashle.tax.support.DatedPropertyInputs.scope
+import static dev.cashle.tax.support.DatedPropertyInputs.taxYear
+
+// Australia 2026–27 resident ordinary income, CGT, LITO and Medicare.
+int referenceYear = 2026
+def publicBases = ['salary', 'capitalIncome', 'dividendIncome', 'frankingCredits',
+    'capitalGains', 'capitalGainsDiscountEligible', 'investmentCapitalLoss'].asImmutable()
+def bases = (publicBases + ['capitalLossBroughtForward']).asImmutable()
+def amounts = (bases + ['nonRefundableOffset', 'mlsIncomeAdditions', 'mlsBaseAdditions',
+    'declaredMedicareLevy', 'declaredMedicareSurcharge', 'workExpenses']).toSet().asImmutable()
+def allowed = (amounts + ['ruleYear', 'residency', 'birthYear', 'medicareProfile', 'hospitalCover',
+    'frankingEligibilityConfirmed', 'frankingRefundable', 'settlementDate', 'settlementMonth',
+    'settlementDay', 'paymentTimingConfirmed', 'noticeDatesByYear', 'noticeAmountsByYear', 'settlementCalendar']).asImmutable()
+def bands = [
+    [18200d, 45000d, 0.15d], [45000d, 135000d, 0.30d],
+    [135000d, 190000d, 0.37d], [190000d, Double.POSITIVE_INFINITY, 0.45d],
+].collect { it.asImmutable() }.asImmutable()
+def validatedAmounts = ['workExpenses', 'nonRefundableOffset', 'mlsIncomeAdditions', 'mlsBaseAdditions',
+    'declaredMedicareLevy', 'declaredMedicareSurcharge'].asImmutable()
+def finite = { value -> value instanceof Number && Double.isFinite(value.doubleValue()) }
+def nonnegative = { value -> finite(value) && value.doubleValue() >= 0d }
+def hospitalCover = ['full-year', 'none'].asImmutable()
+
+countryTaxPolicy('AU') {
+    pluginId 'cashle.tax.au'
+    currency 'AUD'
+    ruleYear referenceYear
+    incomeBases bases
+    sourceBases publicBases
+    messages 'dev.cashle.tax.australia.AustralianTaxSource'
+    requiresTaxPlan true
+    stateFields([capitalLossCarry: new TaxStateField('Unused capital losses', true)])
+
+    validateProfile { options, context, messages ->
+        def errors = []
+        if (!finite(options.ruleYear) || options.ruleYear.doubleValue() != referenceYear)
+            errors.add(messages.text('profile.ruleYear'))
+        if (!'full-year'.equals(options.residency)) errors.add(messages.text('profile.residency'))
+        if (!nonnegative(options.openingCapitalLoss)) errors.add(messages.text('profile.openingCapitalLoss'))
+        if (context.people().size() > 1 && options.openingCapitalLoss instanceof Number && options.openingCapitalLoss.doubleValue() > 0d)
+            errors.add(messages.text('profile.personalCapitalLoss'))
+        if (!(options.medicareProfile in ['ordinary-single', 'declared-assessment']))
+            errors.add(messages.text('profile.medicareProfile'))
+        if ('ordinary-single'.equals(options.medicareProfile) && !(options.hospitalCover in hospitalCover))
+            errors.add(messages.text('profile.hospitalCover'))
+        if (!Boolean.TRUE.equals(options.paymentTimingConfirmed)) errors.add(messages.text('profile.paymentTiming'))
+        if (context.people().any { person ->
+            def birthYear = person.get('birthYear')
+            finite(birthYear) && birthYear.doubleValue() == Math.rint(birthYear.doubleValue()) && birthYear.intValue() < 1962
+        }) errors.add(messages.text('profile.birthYear'))
+        for (String key : validatedAmounts) {
+            if (!nonnegative(options.get(key))) errors.add(messages.text('profile.nonnegativeAmount').replace('{field}', key))
+        }
+        errors
+    }
+
+    assessmentOptions { options ->
+        def inputs = options.findAll { key, value -> value != null && !''.equals(value) }
+        def loss = inputs.remove('openingCapitalLoss')
+        inputs.put('initialState', [capitalLossCarry: loss == null ? 0 : loss])
+        inputs
+    }
+
+    optionsInRuleMoney { options, prices -> prices.convertFields(options, amounts) }
+
+    taxYearStart { int year -> LocalDate.of(year, 7, 1) }
+
+    settlementDate { int year, options ->
+        if (options.containsKey('settlementDate')) return LocalDate.parse(options.settlementDate.toString())
+        require(bool(options, 'paymentTimingConfirmed', false),
+            'Declare Australian notice payment timing as a forecast assumption or provide actual settlementDate.')
+        double month = number(options, 'settlementMonth', 0d)
+        double day = number(options, 'settlementDay', 0d)
+        require(month == Math.rint(month) && month >= 1d && month <= 12d &&
+            day == Math.rint(day) && day >= 1d && day <= 31d, 'Invalid declared notice payment month/day.')
+        LocalDate.of(year + (month <= 6d ? 2 : 1), (int) month, (int) day)
+    }
+
+    assessAnnualStateful { options, int birthYear, int birthMonth, int year, annualBases, state, annualAssessor ->
+        def inputs = new LinkedHashMap(options)
+        inputs.put('capitalLossBroughtForward',
+            number(inputs, 'capitalLossBroughtForward', 0d) + state.getOrDefault('capitalLossCarry', 0d))
+        def assessment = annualAssessor.assess(inputs, birthYear, birthMonth, year, annualBases)
+        new StatefulTaxAssessment(assessment, [capitalLossCarry: assessment.components().get('investmentCapitalLossRemaining')])
+    }
+
+    assess { options ->
+        keys(options, allowed)
+        require(number(options, 'ruleYear', 0d) == referenceYear, 'Select explicit ruleYear:2026 (1 July 2026 to 30 June 2027).')
+        require('full-year'.equals(options.residency), 'Only full-year Australian residents are supported.')
+        double birth = number(options, 'birthYear', 0d)
+        require(birth == Math.rint(birth) && birth >= 1962d && birth <= 2008d,
+            'Supported ordinary adults have birthYear 1962–2008; SAPTO profiles need separate rules.')
+        for (String key : amounts) require(number(options, key, 0d) >= 0d, "$key must be nonnegative.")
+        double credits = number(options, 'frankingCredits', 0d)
+        require(credits == 0d || bool(options, 'frankingEligibilityConfirmed', false),
+            'Confirm qualified-person/holding-period and related-payment eligibility for the declared franking credits.')
+        double ordinaryGain = number(options, 'capitalGains', 0d)
+        double discountGain = number(options, 'capitalGainsDiscountEligible', 0d)
+        double loss = number(options, 'investmentCapitalLoss', 0d) + number(options, 'capitalLossBroughtForward', 0d)
+        double ordinaryLoss = Math.min(loss, ordinaryGain)
+        double discountLoss = Math.min(Math.max(0d, loss - ordinaryLoss), discountGain)
+        double netGain = ordinaryGain - ordinaryLoss + (discountGain - discountLoss) * 0.5d
+        double salary = number(options, 'salary', 0d)
+        double expenses = number(options, 'workExpenses', 0d)
+        require(expenses <= salary,
+            'Supported work expenses cannot exceed salary; employment-loss profiles need separate rules.')
+        double workDeduction = Math.max(Math.min(1000d, salary), expenses)
+        double taxable = salary - workDeduction + number(options, 'capitalIncome', 0d) +
+            number(options, 'dividendIncome', 0d) + credits + netGain
+        double gross = 0d
+        for (def band : bands) {
+            double lower = band[0]
+            double upper = band[1]
+            double rate = band[2]
+            gross += Math.max(0d, Math.min(taxable, upper) - lower) * rate
+        }
+        double lito = taxable <= 37500d ? 700d : taxable <= 45000d ?
+            Math.max(0d, 700d - (taxable - 37500d) * 0.05d) : Math.max(0d, 325d - (taxable - 45000d) * 0.015d)
+        double beforeCredits = Math.max(0d, gross - lito - number(options, 'nonRefundableOffset', 0d))
+        require(bool(options, 'frankingRefundable', true),
+            'Qualified franking credits for supported resident individuals are refundable; other credit classes need separate rules.')
+        double incomeTax = Math.max(0d, beforeCredits - credits)
+        double refund = Math.max(0d, credits - beforeCredits)
+        double medicare
+        double surcharge
+        if ('ordinary-single'.equals(options.medicareProfile)) {
+            require(options.hospitalCover in hospitalCover,
+                'Choose full-year qualifying hospital cover or no cover; partial-year needs a declared Medicare assessment.')
+            medicare = taxable <= 28011d ? 0d : taxable <= 35013d ?
+                Math.min(taxable * 0.02d, (taxable - 28011d) * 0.1d) : taxable * 0.02d
+            double mlsIncome = taxable + number(options, 'mlsIncomeAdditions', 0d)
+            double rate = mlsIncome <= 105000d ? 0d : mlsIncome <= 123000d ? 0.01d : mlsIncome <= 164000d ? 0.0125d : 0.015d
+            surcharge = 'full-year'.equals(options.hospitalCover) ? 0d : (taxable + number(options, 'mlsBaseAdditions', 0d)) * rate
+        } else {
+            require('declared-assessment'.equals(options.medicareProfile),
+                'Declare ordinary-single Medicare profile or supply verified levy/surcharge amounts (families, exemptions or partial cover).')
+            require(options.containsKey('declaredMedicareLevy') && options.containsKey('declaredMedicareSurcharge'),
+                'Supply actual declared Medicare levy and surcharge.')
+            medicare = number(options, 'declaredMedicareLevy', 0d)
+            surcharge = number(options, 'declaredMedicareSurcharge', 0d)
+        }
+        new TaxAssessment(incomeTax, medicare + surcharge, components('taxableIncome', taxable,
+            'workExpenseDeduction', workDeduction, 'incomeTaxBeforeOffsets', gross, 'lowIncomeTaxOffset', Math.min(gross, lito),
+            'netCapitalGain', netGain, 'frankingCredit', credits, 'refundableCredit', refund, 'medicareLevy', medicare,
+            'medicareSurcharge', surcharge, 'investmentCapitalLossRemaining', Math.max(0d, loss - ordinaryLoss - discountLoss)), refund)
+    }
+
+    foreignInvestmentBases { InvestmentAccountYear account, TaxMoneyBasis prices ->
+        Objects.requireNonNull(account)
+        Objects.requireNonNull(prices)
+        require(prices.ruleYear() == referenceYear, 'Foreign investment money basis must match the destination rule year.')
+        require(prices.nativePerPlanUnit() == 1d && (prices.planCurrency() == null || prices.planCurrency().equals(prices.taxCurrency())),
+            "Foreign investment facts must already be in the destination's native currency; use inflationOnly().")
+        require(prices.taxCurrency() == null || 'AUD'.equals(prices.taxCurrency()), 'Foreign investment currency must match the destination.')
+        def options = account.policyOptions()
+        require(!'fund'.equalsIgnoreCase(Objects.toString(options.get('securitiesClassification'), '')),
+            'Foreign fund taxation is unsupported; a fund cannot use ordinary listed-share rules.')
+        require('listed-shares'.equals(Objects.toString(options.get('foreignInvestmentAssetType'), 'listed-shares')),
+            'Foreign investment taxation supports ordinary listed shares only; funds, pensions and other asset classifications need separate rules.')
+        String treatment = Objects.toString(options.get('foreignDividendTreatment'), 'ordinary')
+        require(account.dividends() == 0d || treatment in ['ordinary', 'foreign'], "Unsupported foreignDividendTreatment: $treatment")
+        String key = 'foreignVerifiedAustralianDiscountGains'
+        boolean confirmed = bool(options, 'foreignHoldingPeriodConfirmed', false)
+        require(!confirmed || account.realizedGain() == 0d || options.containsKey(key),
+            "Confirmed foreign holding periods require verified disposal gain amounts: $key")
+        double discountEligible = number(options, key, 0d)
+        require(discountEligible >= 0d && discountEligible <= account.realizedGain(),
+            "$key must be between zero and gross realized gains.")
+        require(confirmed || discountEligible == 0d, 'Preferential foreign disposal gains require foreignHoldingPeriodConfirmed.')
+        boolean lossRelief = bool(options, 'foreignLossReliefConfirmed', false) || bool(options, 'singleLotConfirmed', false)
+        Map.of('dividendIncome', account.dividends(), 'frankingCredits', 0d,
+            'capitalGains', account.realizedGain() - discountEligible, 'capitalGainsDiscountEligible', discountEligible,
+            'investmentCapitalLoss', lossRelief ? account.realizedLoss() : 0d)
+    }
+
+    propertySales {
+        overridesAnnualNotice false
+        inputsInRuleMoney { inputs, prices -> prices.convertFields(inputs, dev.cashle.tax.support.DatedPropertyInputs.MONEY) }
+
+        assess { inputs ->
+            scope(inputs, 'AUD')
+            require(bool(inputs, 'mainResidenceFactsConfirmed', false),
+                'Confirm resident main-residence facts, land no more than 2 hectares and no overlapping residence claims.')
+            LocalDate acquired = date(inputs, 'acquiredDate')
+            LocalDate contract = date(inputs, 'contractDate')
+            LocalDate completion = date(inputs, 'completionDate')
+            require(!acquired.isBefore(LocalDate.of(1985, 9, 20)), 'Pre-CGT acquisitions require separate rules.')
+            require(!completion.isBefore(contract), 'Completion must not precede contract.')
+            String method = (String) inputs.get('costBaseMethod')
+            require(method in ['actual', 'first-income-market-value'],
+                'Choose actual cost base or verified mandatory first-income market-value reset.')
+            LocalDate ownershipStart = date(inputs, 'acquiredSettlementDate')
+            require(!ownershipStart.isBefore(acquired) && ownershipStart.isBefore(completion),
+                'Acquisition settlement must follow acquisition contract and precede disposal completion.')
+            double raw = PropertyInputs.gain(inputs)
+            LocalDate effective = acquired
+            LocalDate residenceStart = ownershipStart
+            if (method == 'first-income-market-value') {
+                require(bool(inputs, 'firstIncomeResetEligibilityConfirmed', false),
+                    'Confirm first income use after 20 August 1996 and full main-residence exemption immediately before that use.')
+                effective = date(inputs, 'firstIncomeDate')
+                require(!effective.isBefore(LocalDate.of(1996, 8, 21)) && !effective.isBefore(acquired) && !effective.isAfter(contract),
+                    'Invalid first-income reset date.')
+                residenceStart = effective
+                raw = money(inputs, 'salePrice', Double.NaN) - money(inputs, 'saleExpenses', 0d) -
+                    money(inputs, 'marketValueAtFirstIncome', Double.NaN) - money(inputs, 'postResetCosts', 0d)
+            }
+            long total = days(residenceStart, completion)
+            require(total > 0, 'Main residence apportionment period must be positive.')
+            double qualifying = count(inputs, 'mainResidenceEligibleDays', total)
+            String choice = (String) inputs.get('absenceRuleChoice')
+            require(choice in ['none', 'six-year', 'no-income-indefinite'], 'Declare main-residence absence election explicitly.')
+            if (choice != 'none') {
+                require(bool(inputs, 'absenceEligibilityConfirmed', false),
+                    'Confirm property was main residence before each absence and no other main residence is claimed during the election.')
+                def periods = inputs.get('absencePeriods')
+                require(periods instanceof List && !periods.isEmpty(),
+                    'Provide verified nonoverlapping absencePeriods; base residence days must exclude these periods.')
+                LocalDate prior = null
+                for (def period : periods) {
+                    require(period instanceof Map, 'Absence period must be a map.')
+                    LocalDate from = date(period, 'from')
+                    LocalDate to = date(period, 'to')
+                    require(!from.isBefore(residenceStart) && !to.isAfter(completion) && to.isAfter(from) &&
+                        (prior == null || !from.isBefore(prior)), 'Absence periods must be ordered, nonoverlapping and within ownership.')
+                    boolean income = bool(period, 'incomeProducing', false)
+                    require(period.containsKey('incomeProducing'), 'Declare income production for each absence.')
+                    require(choice != 'no-income-indefinite' || !income, 'Indefinite absence exemption requires no income production.')
+                    LocalDate limit = income && to.isAfter(from.plusYears(6)) ? from.plusYears(6) : to
+                    qualifying += days(from, limit)
+                    prior = to
+                }
+                require(qualifying <= total, 'Residence and absence eligible days overlap or exceed ownership.')
+            }
+            double exemptFraction = qualifying / (double) total
+            double taxable = raw * (1d - exemptFraction)
+            boolean discounted = contract.isAfter(effective.plusYears(1))
+            def gainBases = taxable < 0d ? [investmentCapitalLoss: -taxable] :
+                [(discounted ? 'capitalGainsDiscountEligible' : 'capitalGains'): taxable]
+            new PropertySaleAssessment(taxYear(contract, 7, 1), Math.max(0d, taxable) * (discounted ? 0.5d : 1d), 0d,
+                gainBases, components('gain', raw, 'mainResidenceExemptFraction', exemptFraction, 'discountEligible', discounted ? 1 : 0))
+        }
+
+        calendar { inputs -> noticeCalendar(inputs, taxYear(date(inputs, 'contractDate'), 7, 1)) }
+    }
+}

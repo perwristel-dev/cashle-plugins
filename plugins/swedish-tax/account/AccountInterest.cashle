@@ -1,0 +1,236 @@
+package cashle.plugins.sweden.account
+
+import groovy.transform.CompileStatic
+import groovy.transform.EqualsAndHashCode
+import groovy.transform.TupleConstructor
+import java.math.MathContext
+import java.math.RoundingMode
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
+
+@CompileStatic
+final class AccountInterest {
+    private static final BigDecimal NOTICE_THRESHOLD = BigDecimal.valueOf(30_000)
+    private static final BigDecimal DAYS_IN_YEAR = BigDecimal.valueOf(365)
+
+    static LocalDate overThresholdStart(int taxYear) {
+        followingInterestDay(LocalDate.of(taxYear + 1, 2, 12))
+    }
+
+    static LocalDate remainingStart(int taxYear) {
+        followingInterestDay(LocalDate.of(taxYear + 1, 5, 3))
+    }
+
+    private static LocalDate followingInterestDay(LocalDate due) {
+        if (due.dayOfWeek == DayOfWeek.SATURDAY) return due.plusDays(3)
+        if (due.dayOfWeek == DayOfWeek.SUNDAY) return due.plusDays(2)
+        due.plusDays(1)
+    }
+
+    /** Adjust credit and cost bases only after the final decision becomes known. */
+    static InterestEvents resolve(FinalNotice notice, LocalDate asOf) {
+        BigDecimal tax = notice.netTax
+        if (asOf.isBefore(notice.decisionDate) || tax.signum() == 0) {
+            return new InterestEvents([], [], [])
+        }
+        LocalDate february = overThresholdStart(notice.taxYear)
+        List<BasisAdjustment> adjustments = []
+        List<Overdue> overdue = []
+        if (tax.signum() > 0) {
+            BigDecimal aboveThreshold = tax.subtract(NOTICE_THRESHOLD).max(BigDecimal.ZERO)
+            // Reserve the full tax for credit interest. Cost interest phases in over two dates.
+            adjustments.add(new BasisAdjustment(february, tax.negate(), aboveThreshold.negate()))
+            adjustments.add(new BasisAdjustment(remainingStart(notice.taxYear), BigDecimal.ZERO,
+                    tax.subtract(aboveThreshold).negate()))
+            overdue.add(new Overdue(notice.dueDate.plusDays(1), true))
+        } else {
+            BigDecimal refund = tax.negate()
+            adjustments.add(new BasisAdjustment(february, refund, refund))
+        }
+        LocalDate postingEffective = notice.postingDate.plusDays(1)
+        adjustments.add(new BasisAdjustment(postingEffective, tax, tax))
+        new InterestEvents([new Movement(postingEffective, tax.negate())], adjustments, overdue)
+    }
+
+    static InterestState accrue(InterestState prior, BigDecimal principal, BigDecimal rate,
+                                LocalDate from, LocalDate until) {
+        if (principal.signum() < 0 || rate.signum() < 0 || until.isBefore(from)) {
+            throw new IllegalArgumentException('Principal, rate and period must be nonnegative')
+        }
+        long days = ChronoUnit.DAYS.between(from, until)
+        BigDecimal accrued = principal.multiply(rate).multiply(BigDecimal.valueOf(days))
+                .divide(DAYS_IN_YEAR, MathContext.DECIMAL128)
+        new InterestState(prior.unposted.add(accrued))
+    }
+
+    static InterestPosting book(InterestState prior) {
+        BigDecimal whole = prior.unposted.setScale(0, RoundingMode.DOWN)
+        new InterestPosting(whole, new InterestState(prior.unposted.subtract(whole)))
+    }
+
+    static InterestDelta difference(List<InterestEntry> booked, List<InterestEntry> recalculated, LocalDate through) {
+        BigDecimal credit = BigDecimal.ZERO
+        BigDecimal cost = BigDecimal.ZERO
+        for (InterestEntry entry : recalculated) {
+            if (entry.date.isAfter(through)) continue
+            credit = credit.add(entry.credit)
+            cost = cost.add(entry.cost)
+        }
+        for (InterestEntry entry : booked) {
+            if (entry.date.isAfter(through)) continue
+            credit = credit.subtract(entry.credit)
+            cost = cost.subtract(entry.cost)
+        }
+        new InterestDelta(credit, cost)
+    }
+
+    /** Project interest between effective dates and book whole kronor on reconciliations. */
+    static InterestResult replay(LocalDate from, LocalDate until, AccountOpening opening,
+                                 List<Movement> movements, List<InterestRates> rates, List<Overdue> overdue,
+                                 List<LocalDate> reconciliations, List<BasisAdjustment> adjustments = []) {
+        if (!from.isBefore(until)) throw new IllegalArgumentException('Timeline end must follow its start')
+        TreeMap<LocalDate, BigDecimal> changes = new TreeMap<>()
+        for (Movement movement : movements) {
+            if (movement.effectiveDate.isBefore(from) || !movement.effectiveDate.isBefore(until)) {
+                throw new IllegalArgumentException('Movement lies outside the timeline')
+            }
+            changes.merge(movement.effectiveDate, movement.amount, BigDecimal.&add)
+        }
+        TreeMap<LocalDate, InterestRates> rateByDate = new TreeMap<>()
+        for (InterestRates rate : rates) {
+            if (rateByDate.putIfAbsent(rate.from, rate) != null) throw new IllegalArgumentException('Duplicate rate date')
+        }
+        if (rateByDate.floorEntry(from) == null) throw new IllegalArgumentException('An initial rate must be supplied')
+        TreeMap<LocalDate, Overdue> statusByDate = new TreeMap<>()
+        for (Overdue status : overdue) {
+            if (statusByDate.putIfAbsent(status.from, status) != null) throw new IllegalArgumentException('Duplicate overdue date')
+        }
+        TreeMap<LocalDate, List<BasisAdjustment>> basisByDate = new TreeMap<>()
+        for (BasisAdjustment adjustment : adjustments) {
+            List<BasisAdjustment> day = basisByDate.get(adjustment.from)
+            if (day == null) {
+                day = []
+                basisByDate.put(adjustment.from, day)
+            }
+            day.add(adjustment)
+        }
+        Set<LocalDate> pending = new HashSet<>()
+        for (LocalDate date : reconciliations) {
+            if (date.isBefore(from) || !date.isBefore(until) || !pending.add(date)) {
+                throw new IllegalArgumentException('Invalid reconciliation date')
+            }
+        }
+        TreeSet<LocalDate> boundaries = new TreeSet<>()
+        boundaries.add(from)
+        boundaries.add(until)
+        boundaries.addAll(changes.keySet())
+        boundaries.addAll(rateByDate.subMap(from, false, until, false).keySet())
+        boundaries.addAll(statusByDate.subMap(from, false, until, false).keySet())
+        boundaries.addAll(basisByDate.subMap(from, false, until, false).keySet())
+        for (LocalDate date : pending) boundaries.add(date.plusDays(1))
+
+        BigDecimal balance = opening.balance
+        BigDecimal creditAdjustment = BigDecimal.ZERO
+        BigDecimal costAdjustment = BigDecimal.ZERO
+        for (List<BasisAdjustment> entries : basisByDate.headMap(from, false).values()) {
+            for (BasisAdjustment adjustment : entries) {
+                creditAdjustment = creditAdjustment.add(adjustment.creditDelta)
+                costAdjustment = costAdjustment.add(adjustment.costDelta)
+            }
+        }
+        InterestState credit = new InterestState(opening.creditRemainder)
+        InterestState cost = new InterestState(opening.costRemainder)
+        List<InterestEntry> postings = []
+        LocalDate cursor = from
+        Overdue initial = statusByDate.lowerEntry(from)?.value
+        boolean highCost = initial != null && initial.highCost
+        while (cursor.isBefore(until)) {
+            balance = balance.add(changes.getOrDefault(cursor, BigDecimal.ZERO))
+            List<BasisAdjustment> adjustmentsToday = basisByDate.get(cursor)
+            if (adjustmentsToday != null) {
+                for (BasisAdjustment adjustment : adjustmentsToday) {
+                    creditAdjustment = creditAdjustment.add(adjustment.creditDelta)
+                    costAdjustment = costAdjustment.add(adjustment.costDelta)
+                }
+            }
+            InterestRates rate = rateByDate.floorEntry(cursor).value
+            Overdue status = statusByDate.get(cursor)
+            if (status != null) highCost = status.highCost
+            LocalDate next = boundaries.higher(cursor)
+            BigDecimal creditBasis = balance.add(creditAdjustment).max(BigDecimal.ZERO)
+            BigDecimal costBasis = balance.add(costAdjustment).negate().max(BigDecimal.ZERO)
+            if (creditBasis.signum() > 0 && costBasis.signum() > 0) {
+                throw new IllegalArgumentException('Interest eligibility cannot create simultaneous credit and debt on one account')
+            }
+            if (costBasis.signum() == 0) highCost = false
+            if (creditBasis.signum() > 0) credit = accrue(credit, creditBasis, rate.credit, cursor, next)
+            if (costBasis.signum() > 0) cost = accrue(cost, costBasis, highCost ? rate.highCost : rate.lowCost, cursor, next)
+            LocalDate last = next.minusDays(1)
+            if (pending.contains(last)) {
+                InterestPosting received = book(credit)
+                InterestPosting charged = book(cost)
+                credit = received.state
+                cost = charged.state
+                balance = balance.add(received.wholeKronor).subtract(charged.wholeKronor)
+                if (received.wholeKronor.signum() != 0 || charged.wholeKronor.signum() != 0) {
+                    postings.add(new InterestEntry(last, received.wholeKronor, charged.wholeKronor))
+                }
+            }
+            cursor = next
+        }
+        new InterestResult(balance, credit.unposted, cost.unposted, List.copyOf(postings))
+    }
+}
+
+@CompileStatic
+@TupleConstructor(defaults = false)
+final class InterestEvents {
+    final List<Movement> movements
+    final List<BasisAdjustment> adjustments
+    final List<Overdue> overdue
+}
+
+@CompileStatic
+@TupleConstructor(defaults = false)
+final class BasisAdjustment {
+    final LocalDate from
+    final BigDecimal creditDelta
+    final BigDecimal costDelta
+}
+
+@CompileStatic
+final class InterestState {
+    final BigDecimal unposted
+
+    InterestState(BigDecimal unposted) {
+        if (unposted.signum() < 0) throw new IllegalArgumentException('Unposted interest cannot be negative')
+        this.unposted = unposted
+    }
+}
+
+@CompileStatic
+@TupleConstructor(defaults = false)
+final class InterestPosting {
+    final BigDecimal wholeKronor
+    final InterestState state
+}
+
+@CompileStatic
+@TupleConstructor(defaults = false)
+@EqualsAndHashCode
+final class InterestResult {
+    final BigDecimal balance
+    final BigDecimal creditRemainder
+    final BigDecimal costRemainder
+    final List<InterestEntry> postings
+}
+
+@CompileStatic
+@TupleConstructor(defaults = false)
+final class InterestDelta {
+    final BigDecimal credit
+    final BigDecimal cost
+
+    boolean isEmpty() { credit.signum() == 0 && cost.signum() == 0 }
+}

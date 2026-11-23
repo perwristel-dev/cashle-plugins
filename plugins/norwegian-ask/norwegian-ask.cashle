@@ -1,0 +1,21 @@
+investmentAccount('cashlab.no-ask', 1) {
+    pluginId 'cashle.finance.no-ask'
+    dsl 'noAsk'
+    country 'NO'
+    kind 'NOask'
+    taxPolicy 'ask'
+    messages 'dev.cashle.accounts.no_ask.NorwegianAskPlugin'
+    prepaidTax true
+    transfers true
+
+    taxInput { entered, active, messages ->
+        if (active) {
+            def rate = entered.get('shieldingRate')
+            if (!(rate instanceof Number) || !Double.isFinite(rate.doubleValue()) ||
+                    rate.doubleValue() < 0d || rate.doubleValue() > 100d) {
+                throw new IllegalArgumentException(messages.text('tax.input.shieldingRate'))
+            }
+        }
+        entered
+    }
+}

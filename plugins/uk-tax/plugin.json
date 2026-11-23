@@ -1,0 +1,28 @@
+{
+  "id": "cashle.tax.gb",
+  "archive": "cashle-tax-gb-source.zip",
+  "requires": [
+    "cashle.tax",
+    "cashle.tax.support"
+  ],
+  "ui": "ui.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui-en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui-sv.json"
+    }
+  ],
+  "sources": [
+    {
+      "path": "uk-tax.cashle",
+      "resources": [
+        "dev/cashle/tax/britain/BritishTaxSource_en.properties",
+        "dev/cashle/tax/britain/BritishTaxSource_sv.properties"
+      ]
+    }
+  ]
+}

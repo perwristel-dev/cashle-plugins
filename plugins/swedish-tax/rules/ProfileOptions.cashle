@@ -1,0 +1,36 @@
+package cashle.plugins.sweden.tax
+
+import groovy.transform.CompileStatic
+import dev.cashle.tax.*
+import java.util.*
+import java.time.*
+import static dev.cashle.tax.support.Inputs.*
+@CompileStatic
+final class ProfileOptions {
+
+
+
+    public static Map<String,Object> sweden(Map<String,Object> raw) {
+        Map<String,Object> rules=filtered(raw)
+        for(String key:List.of("municipality","ruleYear","foreignTaxCreditEnabled","foreignTaxCreditYear","foreignTaxPaidAmount","foreignTaxAttributableOrdinaryTax","foreignTaxCreditConfirmed"))rules.remove(key)
+        if(!Boolean.TRUE.equals(raw.get("communityMember")))rules.put("communityFeeRate",0)
+        else if(raw.containsKey("communityFeeRate"))rules.put("communityFeeRate",raw.get("communityFeeRate"))
+        Map<String,Object> result=new LinkedHashMap<>();result.put("rules",rules)
+        Object table = rules.remove("preliminaryTableNumber")
+        if (table != null) result.put("preliminaryTableNumber", table)
+        Object paid=raw.get("foreignTaxPaidAmount"),attributed=raw.get("foreignTaxAttributableOrdinaryTax")
+        if(paid instanceof Number && ((Number)paid).doubleValue()>0 && attributed instanceof Number && ((Number)attributed).doubleValue()>0) {
+            Map<String,Object> credit=new LinkedHashMap<>();Object year=raw.get("foreignTaxCreditYear");if(year!=null && !"".equals(year))credit.put("taxYear",year)
+            credit.put("paidAmount",paid);credit.put("attributableOrdinaryTax",attributed);credit.put("entitlementConfirmed",true);result.put("foreignTaxCredit",credit)
+        }
+        return result
+    }
+
+    private static Map<String,Object> filtered(Map<String,Object> input) {
+        Map<String,Object> result = new LinkedHashMap<>()
+        input.forEach((key,value) -> {
+            if (value != null && !(value instanceof String && ((String)value).isEmpty())) result.put(key,value)
+        })
+        return result
+    }
+}

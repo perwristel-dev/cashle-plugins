@@ -1,0 +1,13 @@
+{
+  "name": "Norwegian tax",
+  "description": {
+    "sv": "Norsk inkomstskatt och skatteinställningar för fastigheter.",
+    "en": "Norwegian income tax and property tax settings."
+  },
+  "country": "NO",
+  "category": "tax",
+  "releases": [
+    "92ddb89781ed0a45a2b9b9a55c8641efab560692cec9db6fdbf5a4c92a78c464",
+    "d884e4f2dc81c78c31ff229b7992c92dcd111903b1babeef3ba519e5eb87f0ef"
+  ]
+}

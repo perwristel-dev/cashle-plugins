@@ -1,0 +1,15 @@
+{
+  "label": "Brittisk aktiedepå (Section 104)",
+  "sections.growth": "Värdetillväxt och utdelning",
+  "sections.trades": "Planerade försäljningar och återköp",
+  "sections.tax": "Skatteunderlag och avslut",
+  "sections.liquidity": "Likviditet och uttag",
+  "sections.options": "Fler alternativ",
+  "En aktieklass i en verifierad Section 104-pool. Proportionella uttag får använda poolens genomsnitt endast när inga köp samma dag eller under 30 dagar efter försäljningen kräver annan matchning, även i externa depåer. Bekräfta detta för hela prognosen. Extra insättningar och återinvesterade utdelningar är avstängda; utdelningen går till kontanter. Omedelbara återköp och andra matchningsprofiler stöds inte.": "En aktieklass i en verifierad Section 104-pool. Proportionella uttag får använda poolens genomsnitt endast när inga köp samma dag eller under 30 dagar efter försäljningen kräver annan matchning, även i externa depåer. Bekräfta detta för hela prognosen. Extra insättningar och återinvesterade utdelningar är avstängda; utdelningen går till kontanter. Omedelbara återköp och andra matchningsprofiler stöds inte.",
+  "Ursprunglig anskaffningsdag": "Ursprunglig anskaffningsdag",
+  "En daterad homogen post. Blandade anskaffningar ska ligga i separata konton.": "En daterad homogen post. Blandade anskaffningar ska ligga i separata konton.",
+  "Verifierad Section 104-pool utan köp samma dag/30 dagar efter försäljning": "Verifierad Section 104-pool utan köp samma dag/30 dagar efter försäljning",
+  "Om verkliga eller planerade affärer bryter villkoret ska denna kontoprofil inte användas.": "Om verkliga eller planerade affärer bryter villkoret ska denna kontoprofil inte användas.",
+  "Bekräfta Section 104-villkor och frånvaro av matchningsköp.": "Bekräfta Section 104-villkor och frånvaro av matchningsköp.",
+  "Ange anskaffningsdag.": "Ange anskaffningsdag."
+}

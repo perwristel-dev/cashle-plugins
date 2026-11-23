@@ -1,0 +1,13 @@
+{
+  "name": "Australian brokerage",
+  "description": {
+    "sv": "Australisk aktiepost, uttag och utdelningar med skatteavräkning.",
+    "en": "Australian share lot, withdrawals and franked dividends."
+  },
+  "country": "AU",
+  "category": "accounts",
+  "releases": [
+    "412b7dd577d33c7b1f041b343565ef966e0c7afc856effb87835a30d26566820",
+    "659ceef666233c83ab598d42d6e3665c82e767f91edc491f3ffdb79144804445"
+  ]
+}

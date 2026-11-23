@@ -1,0 +1,4 @@
+{
+  "label": "Beleggingsrekening (Box 3)",
+  "help": "Nederländerna 2026: vanligt investeringskonto utan skattefri kontoschablon. Marknadsvärdet den 1 januari räknas med ägarens samlade Box 3-förmögenhet. Utdelningar och försäljningsvinster läggs inte på lön eller separat schablonmässig kapitalinkomst. Ange årets verkliga ingångsvärde för befintliga konton vid prognosstart mitt under året. Externa bankmedel, övrig förmögenhet och skulder krävs i skatteprofilen. Motorn använder preliminär schablonavkastning; verklig-avkastningsmotbevisning och kvalificerade gröna undantag ingår inte."
+}

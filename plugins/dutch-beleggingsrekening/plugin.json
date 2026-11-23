@@ -1,0 +1,29 @@
+{
+  "id": "cashle.finance.nl-beleggingsrekening",
+  "archive": "cashle-finance-nl-beleggingsrekening-source.zip",
+  "requires": [
+    "cashle.finance",
+    "cashle.account.support",
+    "cashle.account.tax.support"
+  ],
+  "ui": "ui.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui-en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui-sv.json"
+    }
+  ],
+  "sources": [
+    {
+      "path": "dutch-beleggingsrekening.cashle",
+      "resources": [
+        "dev/cashle/accounts/nl_beleggingsrekening/DutchInvestmentSource_en.properties",
+        "dev/cashle/accounts/nl_beleggingsrekening/DutchInvestmentSource_sv.properties"
+      ]
+    }
+  ]
+}

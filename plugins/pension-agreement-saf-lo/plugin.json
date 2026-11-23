@@ -1,0 +1,20 @@
+{
+  "id": "cashle.pension.agreement.SAF-LO",
+  "sources": [
+    {
+      "path": "saf-lo.cashle",
+      "providers": [
+        "cashle.pension.agreement.SAF-LO"
+      ],
+      "imports": {
+        "cashle.pension.agreement.rules": [
+          "SwedishAgreementRules.groovy"
+        ]
+      }
+    }
+  ],
+  "ui": "agreement-entry.js",
+  "requires": [
+    "cashle.pension.agreement.rules"
+  ]
+}

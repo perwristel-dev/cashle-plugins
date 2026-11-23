@@ -1,0 +1,31 @@
+// EUR 1,000 of ordinary capital income produces EUR 260 of tax.
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.it' from '../italian-tax.cashle'
+}
+
+finance {
+    plan { from '2025-01-01'; until '2026-01-02'; currency 'EUR'; inflation 0d }
+    person('self') { name 'Example resident'; birthYear 1990; birthMonth 1 }
+    tax {
+        country 'IT'
+        preliminaryRate 0d
+        options([
+            ruleYear: 2025, residency: 'full-year', region: 'configured-flat-region',
+            municipality: 'configured-town', regionalRate: 0.0123d, municipalRate: 0.008d,
+            flatLocalRatesConfirmed: true, municipalExemption: 0d, employeeSocialContributions: 0d,
+            employmentProfile: 'resolved-inps', employmentContract: 'indefinite',
+            settlementDate: '2026-05-01'
+        ])
+    }
+    customIncome('interest') {
+        name 'Interest income'
+        amount 1000d
+        frequency 'once'
+        settings([taxTreatment: 'taxable', taxBasis: 'capitalIncome'])
+    }
+}
+collect {}

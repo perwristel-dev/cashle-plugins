@@ -1,0 +1,214 @@
+import dev.cashle.tax.InvestmentAccountYear
+import dev.cashle.tax.PropertySaleAssessment
+import dev.cashle.tax.PropertyTaxCalendar
+import dev.cashle.tax.TaxAssessment
+import dev.cashle.tax.TaxMoneyBasis
+import java.time.LocalDate
+
+import static dev.cashle.tax.support.Inputs.bool
+import static dev.cashle.tax.support.Inputs.components
+import static dev.cashle.tax.support.Inputs.keys
+import static dev.cashle.tax.support.Inputs.number
+import static dev.cashle.tax.support.Inputs.require
+import static dev.cashle.tax.support.PropertyInputs.MONEY
+import static dev.cashle.tax.support.PropertyInputs.date
+import static dev.cashle.tax.support.PropertyInputs.gain
+import static dev.cashle.tax.support.PropertyInputs.noReplacementRollover
+import static dev.cashle.tax.support.PropertyInputs.scope
+
+int referenceYear = 2026
+def incomeKeys = ['salary', 'box3InvestmentsJan1', 'capitalIncome'].asImmutable()
+def nativeWealth = ['externalSavingsJan1', 'externalInvestmentsJan1', 'externalDebtsJan1'].asImmutable()
+def allowed = (['ruleYear', 'residency', 'birthYear', 'wealthFactsConfirmed', 'box3Mode',
+    'box3SavingsRate', 'box3DebtRate', 'settlementDate', 'noticeDatesByYear', 'noticeAmountsByYear',
+    'settlementCalendar', 'initialState'] + incomeKeys + nativeWealth).toSet().asImmutable()
+def finite = { value -> value instanceof Number && Double.isFinite(value.doubleValue()) }
+def range = { value, double minimum, double maximum ->
+    finite(value) && value.doubleValue() >= minimum && value.doubleValue() <= maximum
+}
+def truthy = { value ->
+    value != null && !Boolean.FALSE.equals(value) &&
+        !(value instanceof Number && (value.doubleValue() == 0d || Double.isNaN(value.doubleValue()))) &&
+        !(value instanceof String && value.isEmpty())
+}
+def amount = { options, String key ->
+    double value = number(options, key, 0d)
+    require(value >= 0d, "$key must be nonnegative.")
+    value
+}
+
+countryTaxPolicy('NL') {
+    pluginId 'cashle.tax.nl'
+    currency 'EUR'
+    ruleYear referenceYear
+    incomeBases incomeKeys
+    nativeMonetaryOptions nativeWealth
+    requiresTaxPlan true
+    messages 'dev.cashle.tax.netherlands.DutchTaxSource'
+
+    validateProfile { options, context ->
+        def errors = []
+        if (!(options.ruleYear instanceof Number) || options.ruleYear.doubleValue() != referenceYear ||
+                !'full-year'.equals(options.residency)) {
+            errors.add('profile.ruleYearResidency')
+        }
+        if (context.people().any { person ->
+            def value = person.birthYear
+            finite(value) && value.doubleValue() == Math.rint(value.doubleValue()) &&
+                (value.intValue() < 1960 || value.intValue() > 2007)
+        }) errors.add('profile.birthYear')
+        def notice = options.settlementDate
+        def notices = options.noticeDatesByYear
+        def recurring = options.settlementCalendar
+        if (!(notice instanceof String && notice.matches('\\d{4}-\\d{2}-\\d{2}')) &&
+                !(notices instanceof Map && !notices.isEmpty()) &&
+                !(recurring instanceof Map && Boolean.TRUE.equals(recurring.confirmed))) {
+            errors.add('profile.settlementDate')
+        }
+        if (!truthy(options.wealthFactsConfirmed)) errors.add('profile.wealthFacts')
+        if (!'provisional-deemed'.equals(options.box3Mode)) errors.add('profile.box3Mode')
+        for (String key : nativeWealth) {
+            if (!finite(options.get(key)) || options.get(key).doubleValue() < 0d) errors.add('profile.externalWealth')
+        }
+        for (String key : ['box3SavingsRate', 'box3DebtRate']) {
+            if (!range(options.get(key), 0d, 1d)) errors.add('profile.returns')
+        }
+        errors
+    }
+
+    assessmentOptions { options ->
+        options.findAll { key, value ->
+            value != null && !''.equals(value) && !(value instanceof Map && value.isEmpty())
+        }
+    }
+
+    optionsInRuleMoney { options, TaxMoneyBasis prices ->
+        def converted = prices.convertFields(options, incomeKeys.toSet())
+        def wealth = nativeWealth.toSet()
+        prices.convertFields(converted, wealth, wealth)
+    }
+
+    // Ordinary bank interest contributes cash; the opening balance is taxed through Box 3.
+    accumulationBases { String basis ->
+        require(incomeKeys.contains(basis), "Unsupported tax basis: $basis")
+        'capitalIncome'.equals(basis) ? Set.of() : Set.of(basis)
+    }
+
+    classifyMovement { String basis, double value ->
+        require(Double.isFinite(value), 'Tax source movement must be finite.')
+        require(incomeKeys.contains(basis), "Unsupported tax basis: $basis")
+        'capitalIncome'.equals(basis) ? Map.of() : Map.of(basis, value)
+    }
+
+    annualInputs { options, int birthYear, int birthMonth, int year, bases ->
+        def inputs = new LinkedHashMap(options)
+        inputs.remove('capitalIncome')
+        inputs.put('ruleYear', referenceYear)
+        inputs.put('birthYear', birthYear - year + referenceYear)
+        bases.each { basis, value ->
+            if (!'capitalIncome'.equals(basis)) {
+                require(incomeKeys.contains(basis), "Unsupported tax basis: $basis")
+                inputs.put(basis, number(inputs, basis, 0d) + value)
+            }
+        }
+        inputs
+    }
+
+    settlementDate { int year, options ->
+        require(options.containsKey('settlementDate'),
+            'Netherlands needs an explicit annual payment date from the assessment notice (settlementDate); no fixed May calendar applies.')
+        LocalDate.parse(options.settlementDate.toString())
+    }
+
+    assess { options ->
+        keys(options, allowed)
+        require(number(options, 'ruleYear', 0d) == referenceYear, 'Select explicit ruleYear:2026.')
+        require('full-year'.equals(options.residency), 'Only full-year Dutch residence is supported.')
+        double birth = number(options, 'birthYear', 0d)
+        require(birth == Math.rint(birth) && birth >= 1960d && birth <= 2007d,
+            'Dutch employee profile requires age below AOW age throughout the year.')
+        require(bool(options, 'wealthFactsConfirmed', false),
+            'Confirm complete individual January 1 Box 3 external wealth and debt facts, including second/rental homes, and no fiscal-partner reallocations.')
+        require('provisional-deemed'.equals(options.box3Mode),
+            'Select provisional-deemed explicitly; actual-return counterevidence and final savings/debt rates are unsupported.')
+        for (String key : nativeWealth) require(options.containsKey(key), "Provide explicit $key, including zero.")
+        if (options.containsKey('capitalIncome')) number(options, 'capitalIncome', 0d)
+
+        double savings = amount(options, 'externalSavingsJan1')
+        double investments = amount(options, 'box3InvestmentsJan1') + amount(options, 'externalInvestmentsJan1')
+        double debts = Math.max(0d, amount(options, 'externalDebtsJan1') - 3800d)
+        double savingsRate = number(options, 'box3SavingsRate', Double.NaN)
+        double debtRate = number(options, 'box3DebtRate', Double.NaN)
+        require(savingsRate >= 0d && savingsRate <= 1d && debtRate >= 0d && debtRate <= 1d,
+            'Enter explicit forecast savings/debt return rates; the 2026 final rates are established in early 2027.')
+        double net = Math.max(0d, savings + investments - debts)
+        double deemed = Math.max(0d, savings * savingsRate + investments * 0.06d - debts * debtRate)
+        double box3 = net == 0d ? 0d : deemed * Math.max(0d, net - 59357d) / net
+
+        double salary = amount(options, 'salary')
+        double first = Math.min(salary, 38883d)
+        double box1 = first * 0.3575d + Math.max(0d, Math.min(salary, 78426d) - 38883d) * 0.3756d +
+            Math.max(0d, salary - 78426d) * 0.495d
+        double general = Math.max(0d, 3115d - Math.max(0d, salary + box3 - 29736d) * 0.06398d)
+        double labour
+        if (salary <= 11965d) labour = salary * 0.08324d
+        else if (salary <= 25845d) labour = 996d + (salary - 11965d) * 0.31009d
+        else if (salary <= 45592d) labour = 5300d + (salary - 25845d) * 0.01950d
+        else labour = Math.max(0d, 5685d - (salary - 45592d) * 0.06510d)
+        labour = Math.min(5685d, labour)
+
+        // Split the combined credit using the published first-band tax and insurance shares.
+        double credit = general + labour
+        double taxCredit = credit * 0.081d / 0.3575d
+        double insuranceCredit = credit * 0.2765d / 0.3575d
+        double national = Math.max(0d, first * 0.2765d - insuranceCredit)
+        double incomeTax = Math.max(0d, (box1 - first * 0.2765d) + box3 * 0.36d - taxCredit)
+        new TaxAssessment(incomeTax, national, components('box1BeforeCredits', box1, 'generalCredit', general,
+            'labourCredit', labour, 'box3NetWealth', net, 'box3DeemedReturn', deemed, 'box3Income', box3,
+            'box3Tax', box3 * 0.36d, 'provisionalDeemedAssessment', 1))
+    }
+
+    foreignInvestmentBases { InvestmentAccountYear account, TaxMoneyBasis prices ->
+        Objects.requireNonNull(account)
+        Objects.requireNonNull(prices)
+        require(prices.ruleYear() == referenceYear, 'Foreign investment money basis must match the destination rule year.')
+        require(prices.nativePerPlanUnit() == 1d &&
+                (prices.planCurrency() == null || prices.planCurrency().equals(prices.taxCurrency())),
+            "Foreign investment facts must already be in the destination's native currency; use inflationOnly().")
+        require(prices.taxCurrency() == null || 'EUR'.equals(prices.taxCurrency()),
+            'Foreign investment currency must match the destination.')
+        def options = account.policyOptions()
+        require(!'fund'.equalsIgnoreCase(Objects.toString(options.get('securitiesClassification'), '')),
+            'Foreign fund taxation is unsupported; a fund cannot use ordinary listed-share rules.')
+        require('listed-shares'.equals(Objects.toString(options.get('foreignInvestmentAssetType'), 'listed-shares')),
+            'Foreign investment taxation supports ordinary listed shares only; funds, pensions and other asset classifications need separate rules.')
+        double opening = account.openingValue()
+        require(Double.isFinite(opening), 'Foreign investment basis must remain finite: box3InvestmentsJan1')
+        Map.of('box3InvestmentsJan1', opening)
+    }
+
+    propertySales {
+        overridesAnnualNotice false
+        inputsInRuleMoney { input, TaxMoneyBasis prices -> prices.convertFields(input, MONEY) }
+
+        assess { input ->
+            scope(input, 'EUR')
+            noReplacementRollover(input)
+            def use = input.get('propertyUse')
+            require(use in ['main-home', 'second-home', 'rental-home'], 'Select main-home, second-home, or rental-home explicitly.')
+            boolean mainHome = 'main-home'.equals(use)
+            if (!mainHome) {
+                require(bool(input, 'box3PropertyReported', false),
+                    "Confirm the property's January 1 Box 3 value and associated debt are included in external wealth options. Selling does not itself generate capital-income tax.")
+            }
+            new PropertySaleAssessment(date(input, 'contractDate').year, 0d, 0d, Map.of(),
+                components('gain', gain(input), 'mainHome', mainHome ? 1 : 0, 'box3Property', mainHome ? 0 : 1))
+        }
+
+        calendar { input ->
+            // The ordinary annual notice includes Box 3. Disposal creates no separate bill.
+            LocalDate contract = date(input, 'contractDate')
+            new PropertyTaxCalendar(contract.year, Map.of('contractDate', contract, 'taxRecognitionDate', contract), Set.of())
+        }
+    }
+}

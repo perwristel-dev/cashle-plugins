@@ -1,0 +1,25 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.is' from '../icelandic-tax.cashle'
+}
+
+finance {
+    plan { from '2026-01-01'; until '2027-01-02'; currency 'ISK'; inflation 0d }
+    person('self') { name 'Example resident'; birthYear 1986; birthMonth 1 }
+    tax {
+        country 'IS'
+        preliminaryRate 0d
+        options([ruleYear: 2026, residency: 'full-year', municipalRate: 0.1494d, period: 'annual', pensionContribution: 0d, additionalPensionContribution: 0d])
+    }
+    salary('job') {
+        name 'Example salary'
+        owner 'self'
+        amount 498122d
+        frequency 'monthly'
+        taxTreatment 'taxable'
+    }
+}
+collect {}

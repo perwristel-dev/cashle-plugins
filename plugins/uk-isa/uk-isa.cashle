@@ -1,0 +1,10 @@
+investmentAccount('cashlab.gb-isa', 1) {
+    pluginId 'cashle.finance.gb-isa'
+    dsl 'gbIsa'
+    messages 'dev.cashle.accounts.gb_isa.BritishIsaPlugin'
+    country 'GB'
+    kind 'GBisa'
+    taxPolicy 'isa'
+    prepaidTax false
+    transfers true
+}

@@ -1,0 +1,21 @@
+{
+  "label": "Piano individuale di risparmio (PIR ordinario)",
+  "sections.growth": "Värdetillväxt och utdelning",
+  "sections.trades": "Planerade försäljningar och återköp",
+  "sections.tax": "Skatteunderlag och avslut",
+  "sections.liquidity": "Likviditet och uttag",
+  "sections.options": "Fler alternativ",
+  "Ordinarie PIR 2025: 40 000 EUR insättning per år, 200 000 EUR totalt; uttag återställer inte historiskt utrymme. Leverantören måste verifiera instrument-, allokerings-, koncentrations- och hemvistvillkor. Fem års innehav bedöms per bidrags-/värdepapperspost; öppningsdatum räcker inte. Ett moget uttag kräver uttrycklig leverantörsbekräftelse för samtliga uttagna poster. Tidig avveckling kräver exakt leverantörsberäknad återföringsskatt inklusive ränta och fullständigt avslut. Ingen generell PIR-skattelättnad antas på enbart öppningsdatum.": "Ordinarie PIR 2025: 40 000 EUR insättning per år, 200 000 EUR totalt; uttag återställer inte historiskt utrymme. Leverantören måste verifiera instrument-, allokerings-, koncentrations- och hemvistvillkor. Fem års innehav bedöms per bidrags-/värdepapperspost; öppningsdatum räcker inte. Ett moget uttag kräver uttrycklig leverantörsbekräftelse för samtliga uttagna poster. Tidig avveckling kräver exakt leverantörsberäknad återföringsskatt inklusive ränta och fullständigt avslut. Ingen generell PIR-skattelättnad antas på enbart öppningsdatum.",
+  "Faktisk anskaffningsdag / första insättningsdag": "Faktisk anskaffningsdag / första insättningsdag",
+  "Leverantören har verifierat samtliga ordinarie PIR-villkor": "Leverantören har verifierat samtliga ordinarie PIR-villkor",
+  "Leverantören verifierar fem års innehav för varje uttagen post": "Leverantören verifierar fem års innehav för varje uttagen post",
+  "Faktisk återföringsskatt inklusive ränta vid tidigt fullständigt avslut (EUR)": "Faktisk återföringsskatt inklusive ränta vid tidigt fullständigt avslut (EUR)",
+  "Faktiska sammanlagda insättningar sedan öppning (EUR)": "Faktiska sammanlagda insättningar sedan öppning (EUR)",
+  "Årets insättningar före prognosstart (EUR)": "Årets insättningar före prognosstart (EUR)",
+  "Årets redan upplupna leverantörsberäknade återföringsskatt (EUR)": "Årets redan upplupna leverantörsberäknade återföringsskatt (EUR)",
+  "Ange faktisk anskaffningsdag för den enda aktieposten.": "Ange faktisk anskaffningsdag för den enda aktieposten.",
+  "Ange verkliga livstidsinsättningar; de får inte understiga återstående insatt kapital.": "Ange verkliga livstidsinsättningar; de får inte understiga återstående insatt kapital.",
+  "PIR-utdelning måste återinvesteras inom kontot.": "PIR-utdelning måste återinvesteras inom kontot.",
+  "Leverantörens PIR-behörighetsbekräftelse krävs.": "Leverantörens PIR-behörighetsbekräftelse krävs.",
+  "Ange exakt leverantörsberäknad skatt/ränta för ett tidigt avslut.": "Ange exakt leverantörsberäknad skatt/ränta för ett tidigt avslut."
+}

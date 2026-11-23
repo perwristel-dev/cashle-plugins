@@ -1,0 +1,20 @@
+{
+  "label": "Conto titoli ordinario (dichiarativo)",
+  "sections.growth": "Värdetillväxt och utdelning",
+  "sections.trades": "Planerade försäljningar och återköp",
+  "sections.tax": "Skatteunderlag och avslut",
+  "sections.liquidity": "Likviditet och uttag",
+  "sections.options": "Fler alternativ",
+  "Italien 2025: en homogen post noterade aktier med faktiskt anskaffningsvärde, endast deklarativ årsbeskattning. Vinster/utdelning 26 %. Aktieförluster möter aktievinster, aldrig utdelning/ränta, och kan föras i fyra år. Amministrato med kronologisk förlustordning, statsobligationer, fonder och pensionskonton ingår inte. Stämpelskatt 0,2 % beräknas separat från leverantörens faktiska beskattningsvärde och innehavsdagar; inga uttag får automatiskt användas för att gissa värdet. Årsavgiften bokas på årets faktiska årsbeskedsdag 31 december, eller vid avslut med verifierat avslutsunderlag; annan rapporteringsfrekvens ingår inte. Ytterligare köp och återinvesterad utdelning kräver separata anskaffningsposter.": "Italien 2025: en homogen post noterade aktier med faktiskt anskaffningsvärde, endast deklarativ årsbeskattning. Vinster/utdelning 26 %. Aktieförluster möter aktievinster, aldrig utdelning/ränta, och kan föras i fyra år. Amministrato med kronologisk förlustordning, statsobligationer, fonder och pensionskonton ingår inte. Stämpelskatt 0,2 % beräknas separat från leverantörens faktiska beskattningsvärde och innehavsdagar; inga uttag får automatiskt användas för att gissa värdet. Årsavgiften bokas på årets faktiska årsbeskedsdag 31 december, eller vid avslut med verifierat avslutsunderlag; annan rapporteringsfrekvens ingår inte. Ytterligare köp och återinvesterad utdelning kräver separata anskaffningsposter.",
+  "Faktisk anskaffningsdag / första insättningsdag": "Faktisk anskaffningsdag / första insättningsdag",
+  "Verifierad årlig leverantörsrapportering för stämpelskatt": "Verifierad årlig leverantörsrapportering för stämpelskatt",
+  "Årsbesked (annan rapporteringsfrekvens stöds inte)": "Årsbesked (annan rapporteringsfrekvens stöds inte)",
+  "Skatteregim": "Skatteregim",
+  "Regime dichiarativo": "Regime dichiarativo",
+  "Leverantörens faktiska stämpelskattepliktiga värde (EUR)": "Leverantörens faktiska stämpelskattepliktiga värde (EUR)",
+  "Leverantörens faktiska innehavsdagar under året": "Leverantörens faktiska innehavsdagar under året",
+  "Ange faktisk anskaffningsdag för den enda aktieposten.": "Ange faktisk anskaffningsdag för den enda aktieposten.",
+  "Bekräfta årligt leverantörsbesked för stämpelskatt.": "Bekräfta årligt leverantörsbesked för stämpelskatt.",
+  "Välj deklarativ årsregim.": "Välj deklarativ årsregim.",
+  "Ange faktiskt stämpelskatteunderlag och innehavsdagar.": "Ange faktiskt stämpelskatteunderlag och innehavsdagar."
+}

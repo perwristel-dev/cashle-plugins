@@ -1,0 +1,11 @@
+{
+  "label": "Canadian brokerage account (ACB)",
+  "Kanada – aktiedepå (ACB)": "Canadian brokerage account (ACB)",
+  "Kanada 2026: en pool identiska börsnoterade aktier med genomsnittlig adjusted cost base (ACB). Samtliga identiska aktier för samma person måste ingå i poolen; separata mäklare får inte separata anskaffningsunderlag. Realiserad kapitalförlust får bara kvittas mot kapitalvinst och kan föras framåt. Endast avyttringar utan superficial-lossvillkor stöds; inget automatiskt återköp. Utdelningsklass skiljer utländsk utdelning från eligible/non-eligible kanadensisk utdelning.": "Canada 2026: one pool of identical listed shares using average adjusted cost base (ACB). All identical shares for the same person must be included; separate brokers do not create separate cost bases. Realized capital losses may only offset capital gains and may be carried forward. Only disposals without superficial-loss conditions are supported; no automatic repurchase. Dividend class distinguishes foreign dividends from eligible/non-eligible Canadian dividends.",
+  "Verifierad utdelningsklass": "Verified dividend class",
+  "Välj": "Select",
+  "Utländsk utdelning / vanlig kapitalinkomst": "Foreign dividends / ordinary capital income",
+  "Eligible Canadian dividends": "Eligible Canadian dividends",
+  "Non-eligible Canadian dividends": "Non-eligible Canadian dividends",
+  "Inga superficial loss-köp inom 30 dagar före/efter förlustförsäljningar av mig/närstående (verifierat)": "No superficial-loss purchases by me or an affiliated person within 30 days before or after loss sales (verified)"
+}

@@ -1,0 +1,31 @@
+// Owned nl-beleggingsrekening DSL calculation regression; synthetic values, version 1.
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.nl-beleggingsrekening' from '../dutch-beleggingsrekening.cashle'
+    id 'cashle.finance.nl-beleggingsrekening.policy' from '../dutch-beleggingsrekening.cashle'
+    id 'cashle.tax.nl' from '../../dutch-tax/dutch-tax.cashle'
+}
+finance {
+    language 'en'
+    plan { from '2026-01-01'; until '2027-10-01'; currency 'EUR'; inflation 0d }
+    person('self') { name 'Synthetic Dutch investor'; birthYear 1980; birthMonth 1 }
+    tax {
+        country 'NL'
+        preliminaryRate 0d
+        options([ruleYear:2026, residency:'full-year', wealthFactsConfirmed:true, box3Mode:'provisional-deemed',
+                 box3SavingsRate:0.0128d, box3DebtRate:0.027d, externalSavingsJan1:0d,
+                 externalInvestmentsJan1:0d, externalDebtsJan1:0d,
+                 settlementCalendar:[month:9, day:30, yearOffset:1, confirmed:true]])
+    }
+    salary('salary') { name 'Salary'; amount 60000d; frequency 'once'; taxTreatment 'taxable'; taxBasis 'salary' }
+    nlBeleggingsrekening('portfolio') {
+        name 'Beleggingsrekening'
+        balance 15000d
+        settings([costBasis:10000d, closeEnabled:true, closeDate:'2026-06-01',
+                  initialYear:[openingValue:15000d, quarterOpeningValues:[null, null, null, null]]])
+    }
+}
+collect { }

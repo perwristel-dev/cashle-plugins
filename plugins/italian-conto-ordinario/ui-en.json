@@ -1,0 +1,20 @@
+{
+  "label": "Conto titoli ordinario (dichiarativo)",
+  "sections.growth": "Growth and dividends",
+  "sections.trades": "Planned sales and repurchases",
+  "sections.tax": "Tax basis and closure",
+  "sections.liquidity": "Liquidity and withdrawals",
+  "sections.options": "More options",
+  "Italien 2025: en homogen post noterade aktier med faktiskt anskaffningsvärde, endast deklarativ årsbeskattning. Vinster/utdelning 26 %. Aktieförluster möter aktievinster, aldrig utdelning/ränta, och kan föras i fyra år. Amministrato med kronologisk förlustordning, statsobligationer, fonder och pensionskonton ingår inte. Stämpelskatt 0,2 % beräknas separat från leverantörens faktiska beskattningsvärde och innehavsdagar; inga uttag får automatiskt användas för att gissa värdet. Årsavgiften bokas på årets faktiska årsbeskedsdag 31 december, eller vid avslut med verifierat avslutsunderlag; annan rapporteringsfrekvens ingår inte. Ytterligare köp och återinvesterad utdelning kräver separata anskaffningsposter.": "Italy 2025: one homogeneous lot of listed shares with actual acquisition cost, annual declarative taxation only. Gains and dividends are taxed at 26%. Share losses offset share gains, never dividends or interest, and can be carried forward for four years. Amministrato with chronological loss ordering, government bonds, funds and pension accounts are excluded. The 0.2% stamp tax is calculated separately from the provider’s actual taxable value and holding days; withdrawals are never used to guess that value. The annual charge is booked on December 31 or at closure with verified closure data; other reporting frequencies are excluded. Further purchases and reinvested dividends require separate lots.",
+  "Faktisk anskaffningsdag / första insättningsdag": "Actual acquisition date / first deposit date",
+  "Verifierad årlig leverantörsrapportering för stämpelskatt": "Verified annual provider reporting for stamp duty",
+  "Årsbesked (annan rapporteringsfrekvens stöds inte)": "Annual statement (other reporting frequencies are not supported)",
+  "Skatteregim": "Tax regime",
+  "Regime dichiarativo": "Regime dichiarativo",
+  "Leverantörens faktiska stämpelskattepliktiga värde (EUR)": "Provider’s actual value subject to stamp duty (EUR)",
+  "Leverantörens faktiska innehavsdagar under året": "Actual holding days reported by the provider during the year",
+  "Ange faktisk anskaffningsdag för den enda aktieposten.": "Enter the actual acquisition date for the single share lot.",
+  "Bekräfta årligt leverantörsbesked för stämpelskatt.": "Confirm annual provider reporting for stamp duty.",
+  "Välj deklarativ årsregim.": "Choose the annual declarative regime.",
+  "Ange faktiskt stämpelskatteunderlag och innehavsdagar.": "Enter the actual stamp duty basis and holding days."
+}

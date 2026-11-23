@@ -1,0 +1,31 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.au' from '../australian-tax.cashle'
+}
+
+finance {
+    plan { from '2026-07-01'; until '2027-07-02'; currency 'AUD'; inflation 0d }
+    person('self') { name 'Example resident'; birthYear 1986; birthMonth 1 }
+    tax {
+        country 'AU'
+        preliminaryRate 0d
+        options([
+            ruleYear: 2026, residency: 'full-year', openingCapitalLoss: 0d,
+            medicareProfile: 'ordinary-single', hospitalCover: 'full-year',
+            workExpenses: 0d, nonRefundableOffset: 0d, mlsIncomeAdditions: 0d, mlsBaseAdditions: 0d,
+            declaredMedicareLevy: 0d, declaredMedicareSurcharge: 0d,
+            paymentTimingConfirmed: true, settlementMonth: 11, settlementDay: 21
+        ])
+    }
+    salary('job') {
+        name 'Example salary'
+        owner 'self'
+        amount 5000d
+        frequency 'monthly'
+        taxTreatment 'taxable'
+    }
+}
+collect {}

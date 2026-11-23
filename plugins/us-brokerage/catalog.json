@@ -1,0 +1,13 @@
+{
+  "name": "US brokerage",
+  "description": {
+    "sv": "Amerikansk aktiepost med skatteregler för kort- och långsiktiga kapitalvinster.",
+    "en": "US share lot with rules for short- and long-term capital gains."
+  },
+  "country": "US",
+  "category": "accounts",
+  "releases": [
+    "aa90d1fac087860b99112fdea6c6b5c443599b2668654833c1608a9d11db1d00",
+    "7a31022a23214d8dcf95ea4072ee490da9d6157453dd222018946bfa7c1968fe"
+  ]
+}

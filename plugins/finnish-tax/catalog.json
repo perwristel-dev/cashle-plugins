@@ -1,0 +1,13 @@
+{
+  "name": "Finnish tax",
+  "description": {
+    "sv": "Finländsk inkomstskatt, utländska aktier och privatbostadsförsäljning på fastlandet.",
+    "en": "Mainland Finnish income tax, foreign shares and private-home sales."
+  },
+  "country": "FI",
+  "category": "tax",
+  "releases": [
+    "b3a55a8a2227696e6d22eb78a273cf1ff74c1ec08d6c221f8a408c84f4a5f443",
+    "04ea0bb9c76bc265722420c1fe322eb147d9198785aa13a8e02a74eecfb6564a"
+  ]
+}

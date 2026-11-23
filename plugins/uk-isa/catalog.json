@@ -1,0 +1,13 @@
+{
+  "name": "UK Stocks and Shares ISA",
+  "description": {
+    "sv": "Brittiskt aktiesparande för vuxna med ett årligt insättningsutrymme.",
+    "en": "UK adult investment ISA with an annual contribution allowance."
+  },
+  "country": "GB",
+  "category": "accounts",
+  "releases": [
+    "b620befff9c94de92280eef007aa3825c2d54e84df8a264d4e45f7333cf2eb01",
+    "9ad4b4b5a7f1b91ad9a30869c2a160d967c42f6b1cef01f1853a3a1e679426c7"
+  ]
+}

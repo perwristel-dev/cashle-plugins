@@ -1,0 +1,13 @@
+{
+  "name": "French PEA-PME",
+  "description": {
+    "sv": "Franskt aktiesparande för investeringar i kvalificerade mindre företag.",
+    "en": "French equity savings plan for eligible smaller companies."
+  },
+  "country": "FR",
+  "category": "accounts",
+  "releases": [
+    "1661356516f542f4442be4fed8716590d444a6ffca6072c2c3ce129afe84c6e7",
+    "a2422a9c4d986c4f38ed9c27eea4c335e0d8ffd5137a68395a1fe88f557b4108"
+  ]
+}

@@ -1,0 +1,10 @@
+investmentAccount('cashlab.it-conto-ordinario', 1) {
+    pluginId 'cashle.finance.it-conto-ordinario'
+    dsl 'itContoOrdinario'
+    messages 'dev.cashle.accounts.it_conto_ordinario.ItalianOrdinaryPlugin'
+    country 'IT'
+    kind 'ITcontoOrdinario'
+    taxPolicy 'conto-ordinario'
+    prepaidTax true
+    transfers false
+}

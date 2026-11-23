@@ -1,0 +1,12 @@
+{
+  "label": "Cuenta de valores (acciones cotizadas)",
+  "sections.growth": "Värdetillväxt och utdelning",
+  "sections.trades": "Planerade försäljningar och återköp",
+  "sections.tax": "Skatteunderlag och avslut",
+  "sections.liquidity": "Likviditet och uttag",
+  "sections.options": "Fler alternativ",
+  "Spanien 2025: en homogen anskaffningspost noterade aktier. Uttag säljer proportionellt ur denna enda post och motsvarar FIFO för posten. Aktievinster och utdelning/ränta hanteras som separata sparbaskategorier med högst 25 % korskvittning och fyra års förlustöverföring. Återinvestering/traspasos uppskjuter inte skatt för ETF eller aktier; kvalificerade fondbyten ingår inte. Skatten räknas på ägarens samlade sparbas, inte som en platt kontoskatt.": "Spanien 2025: en homogen anskaffningspost noterade aktier. Uttag säljer proportionellt ur denna enda post och motsvarar FIFO för posten. Aktievinster och utdelning/ränta hanteras som separata sparbaskategorier med högst 25 % korskvittning och fyra års förlustöverföring. Återinvestering/traspasos uppskjuter inte skatt för ETF eller aktier; kvalificerade fondbyten ingår inte. Skatten räknas på ägarens samlade sparbas, inte som en platt kontoskatt.",
+  "Faktisk anskaffningsdag / första insättningsdag": "Faktisk anskaffningsdag / första insättningsdag",
+  "Förluster är avdragsgilla: verifierat inga återköp av samma slags noterade aktier inom två månader, eller leverantörens avdragsbesked": "Förluster är avdragsgilla: verifierat inga återköp av samma slags noterade aktier inom två månader, eller leverantörens avdragsbesked",
+  "Ange faktisk anskaffningsdag för den enda aktieposten.": "Ange faktisk anskaffningsdag för den enda aktieposten."
+}

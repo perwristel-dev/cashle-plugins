@@ -1,0 +1,13 @@
+{
+  "name": "Italian PIR",
+  "description": {
+    "sv": "Italienskt sparande med årliga och totala insättningsgränser.",
+    "en": "Italian savings plan with annual and lifetime contribution limits."
+  },
+  "country": "IT",
+  "category": "accounts",
+  "releases": [
+    "aa7f4f13395b6cdd57addd636a1637be2d0235645afb89ac4206155384e680e6",
+    "79bb2b9c9f7a060080a98b7007bba7d57bfb249cf3998680b03b5457e3f6ca4e"
+  ]
+}

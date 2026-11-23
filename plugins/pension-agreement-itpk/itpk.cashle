@@ -1,0 +1,19 @@
+import dev.cashle.pension.agreement.PensionAgreement.ContributionInput
+import dev.cashle.pension.agreement.PensionAgreement.Kind
+
+import static SwedishAgreementRules.*
+
+def itpk = localized('ITPK', 55, 5)
+pensionAgreement('ITPK') {
+    pluginId 'cashle.pension.agreement.ITPK'
+    kind Kind.DEFINED_CONTRIBUTION
+    metadata itpk('sv')
+    localizedMetadata itpk
+    eligible { ContributionInput input -> itpkEligible(input) }
+    historicalContributionBreakpoints { ContributionInput input -> thresholds(input, 30d) }
+    contribution { ContributionInput input -> itpkEligible(input) ? cappedPremium(input, .02d) : 0d }
+}
+
+static boolean itpkEligible(ContributionInput input) {
+    age(input) > 28d && age(input) < 65d
+}

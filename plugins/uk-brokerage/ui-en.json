@@ -1,0 +1,15 @@
+{
+  "label": "UK brokerage account (Section 104)",
+  "sections.growth": "Growth and dividends",
+  "sections.trades": "Planned sales and repurchases",
+  "sections.tax": "Tax basis and closure",
+  "sections.liquidity": "Liquidity and withdrawals",
+  "sections.options": "More options",
+  "En aktieklass i en verifierad Section 104-pool. Proportionella uttag får använda poolens genomsnitt endast när inga köp samma dag eller under 30 dagar efter försäljningen kräver annan matchning, även i externa depåer. Bekräfta detta för hela prognosen. Extra insättningar och återinvesterade utdelningar är avstängda; utdelningen går till kontanter. Omedelbara återköp och andra matchningsprofiler stöds inte.": "One share class in a verified Section 104 pool. Proportional withdrawals may use the pool average only when no purchases on the same day or within 30 days after sale require different matching, including in external accounts. Confirm this for the whole projection. Additional contributions and reinvested dividends are disabled; dividends go to cash. Immediate repurchases and other matching profiles are unsupported.",
+  "Ursprunglig anskaffningsdag": "Original acquisition date",
+  "En daterad homogen post. Blandade anskaffningar ska ligga i separata konton.": "One dated homogeneous lot. Mixed acquisitions must be held in separate accounts.",
+  "Verifierad Section 104-pool utan köp samma dag/30 dagar efter försäljning": "Verified Section 104 pool with no purchases on the same day or 30 days after sale",
+  "Om verkliga eller planerade affärer bryter villkoret ska denna kontoprofil inte användas.": "Do not use this account profile if actual or planned transactions violate the condition.",
+  "Bekräfta Section 104-villkor och frånvaro av matchningsköp.": "Confirm the Section 104 conditions and the absence of matching purchases.",
+  "Ange anskaffningsdag.": "Enter the acquisition date."
+}

@@ -1,0 +1,76 @@
+{
+  "authority": "Skatteverket",
+  "taxYear": 2025,
+  "regulation": "SKVFS 2024:19",
+  "retrievedOn": "2026-10-12",
+  "catalogUrl": "https://www.skatteverket.se/foretag/arbetsgivare/arbetsgivaravgifterochskatteavdrag/skattetabeller/tekniskbeskrivningforskattetabeller.4.319dc1451507f2f99e86ee.html",
+  "sources": [
+    {
+      "role": "All monthly payroll tables, machine-readable source retained verbatim",
+      "url": "https://www.skatteverket.se/download/18.262c54c219391f2e9632604/1733848831591/allmanna-tabeller-manad.txt",
+      "localFile": "preliminary-tax-monthly-2025.txt",
+      "bytes": 396703,
+      "sha256": "fcf50442cdc54e092f403f3340289c5991c3d2d6d8264d46a6f4c4aecd226c1f"
+    },
+    {
+      "role": "Corresponding official published tables, downloaded for independent row verification",
+      "url": "https://www.skatteverket.se/download/18.262c54c219391f2e9632603/1733848831501/allmanna-tabeller-manad.pdf",
+      "bytes": 891176,
+      "sha256": "7d9eb43822bbc683e1e6748e9e8efdcc6df3839cbc6b9ac6ccfcecf7726ad549"
+    },
+    {
+      "role": "2025 technical description, SKV 433 edition 35, dated 2024-12-16",
+      "url": "https://www.skatteverket.se/download/18.262c54c219391f2e9633edd/1734513198853/Teknisk%20beskrivning%20SKV433%202025%20utg%C3%A5va%2035.pdf",
+      "bytes": 951855,
+      "sha256": "b7e3a99104d77364f55a192f20ee354224b313588cc04735dd1ec7c1d94cd393"
+    },
+    {
+      "role": "Fixed-width record description: 49 characters; period 1-2, type 3, table 4-5, income bounds 6-12 and 13-19, six 5-character values 20-49",
+      "url": "https://www.skatteverket.se/download/18.262c54c219391f2e96325f9/1733848830924/postbeskrivning-allmanna-tabeller.doc",
+      "bytes": 24576,
+      "sha256": "f9a149b2a2bf36d99287ef488710c0cac4a027618a947c208cfb1b4b2de2c276"
+    }
+  ],
+  "coverage": {
+    "tableNumbers": [
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42
+    ],
+    "columns": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "rows": 7934,
+    "amountRowsPerTable": 481,
+    "amountIntervals": "1-2000, then 100-krona intervals through 20000, then 200-krona intervals through 80000",
+    "percentageIntervals": "80001 upward; complete variable intervals and final unbounded row for each table"
+  },
+  "generation": {
+    "source": "Verbatim Skatteverket TXT copied from the DECCF Swedish income tax package",
+    "sourceSha256": "fcf50442cdc54e092f403f3340289c5991c3d2d6d8264d46a6f4c4aecd226c1f",
+    "runtime": "SwedishPreliminaryTax2025 reads the fixed-width source from the packaged resource"
+  },
+  "policySources": {
+    "tableAndColumnSelection": "https://www.skatteverket.se/foretag/arbetsgivare/arbetsgivaravgifterochskatteavdrag/skattetabeller",
+    "birthCohortsAndMixedPayments": "https://www4.skatteverket.se/rattsligvagledning/edition/2026.14/449938.html",
+    "tableRounding": "https://www.riksdagen.se/sv/dokument-och-lagar/dokument/svensk-forfattningssamling/skatteforfarandeforordning-20111261_sfs-2011-1261/",
+    "percentageTaxRounding": "Skatteförfarandeförordning (2011:1261), 22 kap. 1 §: tax and fee amounts are stated in whole kronor with öre discarded. Percentage calculation keeps gross öre until the resulting tax is truncated.",
+    "annualOnlyAndAmbiguousIncomeTypes": "https://www.skatteverket.se/servicelankar/otherlanguages/englishengelska/individualsandemployees/declaringtaxesforindividuals/howtofileyourtaxreturn/incometaxreturn12025.4.5c281c7015abecc2e20911b.html"
+  }
+}
