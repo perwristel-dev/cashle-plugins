@@ -1,0 +1,15 @@
+plugins {
+    id 'cashle.finance'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.fi' from '../finnish-public-pension.cashle'
+}
+
+finance {
+    plan { from '2026-12-01'; until '2027-05-01'; currency 'EUR'; inflation 0d }
+    person('self') { name 'Example resident'; birthYear 1962; birthMonth 1 }
+    finnishPublicPension('pension') {
+        name 'Finnish old-age pension'
+        settings([monthlyRight:200d, kelaStatus:'single', payoutStart:[reference:'age', age:64, offset:0]])
+    }
+}
+collect {}

@@ -1,0 +1,21 @@
+{
+  "id": "cashle.finance.pension.fi",
+  "requires": ["cashle.finance"],
+  "ui": "ui.js",
+  "uiTranslations": [
+    {"locale": "en", "path": "ui-en.json"},
+    {"locale": "sv", "path": "ui-sv.json"},
+    {"locale": "fi", "path": "ui-fi.json"}
+  ],
+  "sources": [
+    {
+      "path": "finnish-public-pension.cashle",
+      "providers": ["cashle.finance.pension.fi"],
+      "resources": [
+        "finnish/pension/Messages_en.properties",
+        "finnish/pension/Messages_sv.properties",
+        "finnish/pension/Messages_fi.properties"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "name": "Finnish public pension",
+  "names": {
+    "en": "Finnish public pension",
+    "sv": "Finländsk allmän pension"
+  },
+  "description": {
+    "en": "Finnish earnings-related old-age pension with optional Kela national and guarantee pensions.",
+    "sv": "Finländsk arbetspension med valbar folkpension och garantipension från FPA."
+  },
+  "country": "FI",
+  "category": "income",
+  "releases": [
+    "62541ec7707fd2dcaa6c409f11fe7dec158c25b5352cc60e31bc88d2cc5e6057"
+  ]
+}

@@ -1,0 +1,155 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
+import dev.cashle.sdk.model.ScheduleSpec
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.temporal.ChronoUnit
+import java.util.function.Supplier
+
+final class FinnishOldAgeRules {
+    static final LocalDate KELA_2026 = LocalDate.of(2026, 1, 1)
+    static final LocalDate KELA_2027 = LocalDate.of(2027, 1, 1)
+    static final List<Integer> ESTIMATED_AGES = [780, 787, 793, 798, 804, 809, 815, 819, 824, 828].asImmutable()
+
+    static int minimumAgeMonths(int birthYear) {
+        if (birthYear <= 1954) return 63 * 12
+        if (birthYear <= 1961) return 63 * 12 + 3 * (birthYear - 1954)
+        if (birthYear <= 1965) return 65 * 12
+        if (birthYear >= 2010) return ESTIMATED_AGES.last()
+        int distance = birthYear - 1965
+        int interval = distance.intdiv(5)
+        int from = ESTIMATED_AGES[interval]
+        return from + Math.round((ESTIMATED_AGES[interval + 1] - from) * (distance % 5) / 5d).intValue()
+    }
+
+    static LocalDate monthlyStart(LocalDate date) {
+        date.dayOfMonth == 1 ? date : date.withDayOfMonth(1).plusMonths(1)
+    }
+
+    static long deferredMonths(LocalDate minimum, LocalDate start) {
+        Math.max(0L, ChronoUnit.MONTHS.between(minimum, start))
+    }
+
+    static double cents(double amount) {
+        Math.round(amount * 100d) / 100d
+    }
+
+    static double kelaSupplement(String status, boolean rates2027, double index, double assessablePension,
+                                 double actualPension, double otherPension, double deferral) {
+        double nationalMax = status == 'single' ? (rates2027 ? 804.93d : 787.07d) : (rates2027 ? 718.63d : 702.69d)
+        double disregard = (rates2027 ? 68.04d : 66.54d) * index
+        double minimum = cents((rates2027 ? 8.19d : 8.01d) * index)
+        double national = cents((nationalMax * index - 0.5d * Math.max(0d, assessablePension + otherPension - disregard)) * deferral)
+        if (national < minimum) national = 0d
+        double guarantee = cents((rates2027 ? 1013.39d : 990.90d) * index - national - actualPension - otherPension)
+        return national + (guarantee < minimum ? 0d : guarantee)
+    }
+
+    static boolean whole(Object value, int from, int until) {
+        value instanceof Number && from <= value && value <= until && value.doubleValue() == Math.rint(value.doubleValue())
+    }
+
+    static boolean money(Object value) {
+        value instanceof Number && Double.isFinite(value.doubleValue()) && value >= 0d
+    }
+
+    static boolean calendarDate(Map value) {
+        if (!whole(value.year, 1900, 9999) || !whole(value.month, 1, 12)) return false
+        int days = YearMonth.of(value.year.intValue(), value.month.intValue()).lengthOfMonth()
+        return value.day == null || whole(value.day, 1, days)
+    }
+}
+
+financeModule('cashlab.finnish-public-pension', 1) {
+    pluginId 'cashle.finance.pension.fi'
+    messages 'finnish.pension.Messages'
+    dsl('finnishPublicPension') { id ->
+        [name:id, owner:'self', monthlyRight:0d, alreadyReceiving:false, kelaStatus:'off',
+         otherPension:0d, payoutStart:[reference:'minimum', offset:0]]
+    }
+
+    calculation {
+        if (!enabled) return
+        String ownerId = input.owner ?: 'self'
+        def person = profile.people.find { row -> row.id == ownerId }
+        requireInput('invalid.owner') { person != null && FinnishOldAgeRules.whole(person.birthYear, 1900, 9999) && FinnishOldAgeRules.whole(person.birthMonth, 1, 12) }
+        requireInput('invalid.name') { input.name instanceof String && !input.name.isBlank() && input.name.trim().length() <= 80 }
+        requireInput('invalid.right') { FinnishOldAgeRules.money(input.monthlyRight) }
+        requireInput('invalid.receiving') { input.alreadyReceiving == null || input.alreadyReceiving instanceof Boolean }
+        String kela = input.kelaStatus ?: 'off'
+        requireInput('invalid.kela') { kela in ['off', 'single', 'partnered'] }
+        requireInput('invalid.other') { kela == 'off' || input.otherPension == null || FinnishOldAgeRules.money(input.otherPension) }
+
+        LocalDate planDate = planStart.anchor()
+        int birthYear = person.birthYear.intValue()
+        LocalDate birth = LocalDate.of(birthYear, person.birthMonth.intValue(), 1)
+        int minimumAge = FinnishOldAgeRules.minimumAgeMonths(birthYear)
+        LocalDate minimum = birth.plusMonths(minimumAge + 1)
+        LocalDate kelaMinimum = birth.plusMonths((birthYear < 1965 ? 65 * 12 : minimumAge) + 1)
+        double right = input.monthlyRight.doubleValue()
+        double other = kela == 'off' ? 0d : ((Number) (input.otherPension ?: 0d)).doubleValue()
+        boolean receiving = input.alreadyReceiving == true
+        def time = input.payoutStart ?: [reference:'minimum']
+        requireInput('invalid.start') {
+            receiving || (time instanceof Map && time.reference in ['minimum', 'now', 'age', 'date', 'retirement', 'milestone'] &&
+                (time.offset == null || FinnishOldAgeRules.whole(time.offset, -1800, 1800)) &&
+                (time.reference != 'age' || FinnishOldAgeRules.whole(time.age, 0, 125)) &&
+                (time.reference != 'date' || FinnishOldAgeRules.calendarDate(time)) &&
+                (time.reference != 'milestone' || time.milestoneId instanceof String && !time.milestoneId.isBlank()))
+        }
+        Supplier<LocalDate> requested
+        if (receiving) {
+            requested = { planDate }
+        } else {
+            int offset = ((Number) (time.offset ?: 0)).intValue()
+            switch (time.reference) {
+                case 'minimum': requested = { minimum.plusMonths(offset) }; break
+                case 'now': requested = { planDate.plusMonths(offset) }; break
+                case 'age': requested = { birth.plusYears(time.age.intValue()).plusMonths(offset + 1) }; break
+                case 'date': requested = { LocalDate.of(time.year.intValue(), time.month.intValue(), ((Number) (time.day ?: 1)).intValue()).plusMonths(offset) }; break
+                case 'retirement': requested = milestone('retirement:' + (time.personId ?: ownerId), offset); break
+                case 'milestone': requested = milestone(time.milestoneId, offset); break
+            }
+        }
+
+        double fx = exchangeRate('EUR', profile.currency ?: 'EUR')
+        def pension = owner(ownerId).account {
+            name input.name
+            classify AccountKind.INCOME, new AccountTag('cashle.household.economic-nature', 1, 'income.pension.public', [AccountKind.INCOME] as Set)
+            reportingRole ReportingRole.INCOME
+        }
+        taxableReceipt(ownerId, 'pension', 'monthly') {
+            on ScheduleSpec.every(Frequency.MONTH, FinnishOldAgeRules.monthlyStart(planDate))
+            until deathOf(ownerId)
+            debit cash
+            credit pension
+            amount {
+                LocalDate claim = requested.get()
+                if (claim == null) return 0d
+                LocalDate month = FinnishOldAgeRules.monthlyStart(claim)
+                LocalDate start = month.isBefore(minimum) ? minimum : month
+                if (today.isBefore(start)) return 0d
+
+                LocalDate yearStart = today.withDayOfYear(1)
+                LocalDate indexedDate = yearStart.isBefore(planDate) ? planDate : yearStart
+                double prices = inflationFactor(planDate, indexedDate)
+                double assessable = FinnishOldAgeRules.cents(right * prices)
+                long delay = receiving ? 0L : FinnishOldAgeRules.deferredMonths(minimum, start)
+                double earningsPension = FinnishOldAgeRules.cents(assessable * (1d + 0.004d * delay))
+                LocalDate kelaStart = start.isBefore(kelaMinimum) ? kelaMinimum : start
+                if (kela == 'off' || today.isBefore(kelaStart)) return earningsPension * fx
+                if ((residenceAt(ownerId, today)?.country() ?: 'FI') != 'FI') return earningsPension * fx
+
+                boolean rates2027 = !yearStart.isBefore(FinnishOldAgeRules.KELA_2027)
+                LocalDate ruleDate = rates2027 ? FinnishOldAgeRules.KELA_2027 : FinnishOldAgeRules.KELA_2026
+                double kelaIndex = inflationFactor(ruleDate, yearStart)
+                long kelaDelay = receiving ? 0L : FinnishOldAgeRules.deferredMonths(kelaMinimum, kelaStart)
+                double nationalDeferral = 1d + (birthYear < 1962 ? 0.006d : 0.004d) * kelaDelay
+                double supplement = FinnishOldAgeRules.kelaSupplement(kela, rates2027, kelaIndex, assessable, earningsPension, other * prices, nationalDeferral)
+                return (earningsPension + supplement) * fx
+            }
+        }
+    }
+}
