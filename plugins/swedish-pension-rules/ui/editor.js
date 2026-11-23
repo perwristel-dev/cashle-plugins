@@ -1,9 +1,9 @@
 export function createPensionEditors({
-  language, pensionText, wageDescriptor, tags, accountRateSchema, validateRate, moneyFrequencies, SchemaFields,
+  language, pensionText, wageDescriptor, tags, premiumReturnSchema, validatePremiumReturn, moneyFrequencies, SchemaFields,
   lockControls, fieldAccess, normalizeTime, agreementOptions, pensionAgreement, number, text, select, check, note,
   owner, account, pensionPlugins, pensionAssumptions, pensionDefaults, ongoingPublicStatement,
   ongoingLifetimeDcStatement, additionalSalaryCandidates, pensionSalaryCandidates, assumedEmploymentStart, schemaFromValue,
-  enumSchema, timeSchema, sharedText, en,
+  enumSchema, objectSchema, timeSchema, sharedText, en,
 }) {
   class HistoricalWages extends HTMLElement {
     #rows=[]; #context={modules:[]}; #statementDate='';
@@ -314,7 +314,7 @@ export function createPensionEditors({
           const when = field.when;
           if (statement.has(field.key)) return { ...field, when: (data, context) => data.inputMode === 'statement' && (!when || when(data, context)) };
           if (['growthRate', 'incomeIndex'].includes(field.key)) return { ...field, when: (data, context) => (!Number.isFinite(data[field.key]) || data[field.key] <= -100 || data[field.key] > 100) && (!when || when(data, context)) };
-          if (field.key === 'premiumYield') return { ...field, when: data => validateRate(data.premiumYield).length > 0 };
+          if (field.key === 'premiumYield') return { ...field, when: data => validatePremiumReturn(data.premiumYield).length > 0 };
           if (field.key === 'premiumDivisionYears') return { ...field, when: data => data.kind === 'public' && ((!Number.isFinite(data.premiumDivisionYears) || data.premiumDivisionYears < 0) || (ongoingPublicStatement(data) && data.ongoingPremiumMonthly > 0 && data.premiumDivisionYears <= 0)) };
           if (field.key === 'continuePremiums') return { ...field, when: data => data.continuePremiums === true && !data.salaryId };
           if (field.key === 'continueAfterPayout') return { ...field, when: data => data.continueAfterPayout === true && (!data.salaryId || data.continuePremiums !== true || data.duration <= 0) };
@@ -454,7 +454,7 @@ export function createPensionEditors({
             : 'public',
       ),
     );
-    schema.properties.premiumYield = accountRateSchema(false);
+    schema.properties.premiumYield = premiumReturnSchema({ objectSchema, enumSchema });
     schema.properties.inputMode = enumSchema(['estimate', 'statement']);
     if (schema.properties.payoutStart) { const time = timeSchema(); time.properties.reference = enumSchema(['age', 'now', 'date', 'retirement', 'life', 'independence', 'milestone', 'end']); time.properties.age = { type: 'number', integer: true, min: 0, max: 125 }; schema.properties.payoutStart = time; }
     delete schema.properties.pensionId;

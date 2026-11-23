@@ -1,5 +1,5 @@
 export function createPensionModel({
-  createPensionWithdrawal, pensionAssumptionsFor, validateRate, FINANCIAL_RATES, createAccountReturnPreset,
+  createPensionWithdrawal, pensionAssumptionsFor, validatePremiumReturn, FINANCIAL_RATES, createAccountReturnPreset,
   normalizeRate, pensionableIncomes, wageDescriptor, moneyFrequencies, sourceDate, sourceResidenceChanges,
   sourceRegistryFor, getPlan, en, sv, pensionText, timeSummary, activePeople, agreementOptions, pensionAgreement, tags,
 }) {
@@ -352,7 +352,7 @@ export function createPensionModel({
       errors.push(
         'Beskedets datum måste vara ett giltigt datum som inte ligger i framtiden.',
       );
-    if (d.kind === 'public') errors.push(...validateRate(d.premiumYield).map(error => `Premiepensionens avkastning: ${error}`));
+    if (d.kind === 'public') errors.push(...validatePremiumReturn(d.premiumYield).map(error => `Premiepensionens avkastning: ${error}`));
     if (d.kind === 'public' && d.inputMode === 'statement' && validDate(d.statementDate)) {
       const seen=new Set();let credited=0;
       for(const row of [1,2]) {
