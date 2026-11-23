@@ -1,10 +1,19 @@
 # Finnish tax source plugin
 
 This bundle supplies Cashle's 2026 mainland Finnish tax policy and editors. It
-covers earned income, foreign listed shares and private-home sales. The source
-recognizes only one class of earned income per person and assessment. Foreign
-investment losses can carry for ten years. The separate property loss carry
-lasts five years.
+covers earned income, foreign listed shares and private-home sales. Salary and
+pension can be assessed together. Other benefits require a separate assessment.
+Foreign investment losses can carry for ten years. The separate property loss
+carry lasts five years.
+
+Annual wages in the year a social-insurance age limit is reached are treated as
+earned before the cutoff. The forecast uses calendar-year totals, so a person who
+continues working past a birthday that ends a contribution can see excess
+contributions in that year. The health insurance increment uses taxable earned
+income less wages subject to the daily allowance contribution.
+[Vero health insurance examples](https://www.vero.fi/syventavat-vero-ohjeet/ohje-hakusivu/338472/vakuutetun-sairausvakuutusmaksu2/) ·
+[Vero 2026 deductions](https://www.vero.fi/henkiloasiakkaat/vahennykset/mita-voi-vahentaa/verohallinto-laskee-nama-vahennykset-automaattisesti/) ·
+[ETK age limits for pension insurance](https://www.etk.fi/suomen-elakejarjestelma/elaketurva/tyoelaketurvan-kattavuus-ja-vakuuttaminen/palkansaajat/)
 
 Build the source ZIP with `node plugins/finnish-tax/build.mjs` from the repository
 root. Upload `cashle-tax-fi-source.zip` to your personal plugin repository in

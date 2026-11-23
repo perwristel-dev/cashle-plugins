@@ -40,15 +40,15 @@ export default function (context) {
   ];
   const finnishTax = {
     validateSources(sources) {
-      const classes = new Set(sources.map(source => source.basis).filter(basis => ['salary', 'pension', 'benefits'].includes(basis)));
-      return classes.size > 1 ? [taxText('Finlands skattemotor stöder en inkomstklass per plan: lön, pension eller förmån. Separata scenarier krävs för olika inkomstklasser.')] : [];
+      const bases = new Set(sources.map(source => source.basis));
+      return bases.has('benefits') && (bases.has('salary') || bases.has('pension')) ? [taxText('Finlands skattemodell kan inte kombinera förmåner med lön eller pension.')] : [];
     },
     propertyTax: { fields: fiFields, help: 'Finland: undantaget kräver verifierad sammanhängande användning som stadigvarande bostad. Skattemotorn prövar också faktisk respektive schablonmässig anskaffningsutgift.' },
     translate: taxText,
     translations,
     sourceTax: { language: 'groovy-cashle-plugin', provider: 'cashle.tax.fi', source: 'finnish-tax.cashle' },
     id: 'FI', supportedBases: ['salary', 'pension', 'capitalIncome', 'benefits'], label: 'Finland', currency: 'EUR', ruleYear: 2026,
-    description: 'Finska regler 2026 för fastlandet. En inkomstklass per år: lön, pension eller förmån. Löneklassens försäkring stöds för födda 1962–2007. Ange kvalificerande barn enligt skattereglerna.',
+    description: 'Finska regler 2026 för fastlandet. Lön och pension kan ingå samma år. Vid en åldersgräns räknas årets lön som intjänad före gränsen.',
     defaultOptions: { ...nordicDefaults, territory: '', municipalRate: null, churchRate: 0, children: 0, singleParent: false, productionExpenses: 0 },
     fields: [...nordicFields, profileChoice('territory', 'Skatteområde', [['', 'Välj'], ['mainland', 'Fastlandsfinland']]), profileNumber('municipalRate', 'Kommunalskatt', { percent: true, max: .3, help: 'Ange den faktiska lokala skattesatsen för regelåret.' }),
       profileNumber('churchRate', 'Kyrkoskatt', { percent: true, max: .1, help: 'Ange 0 om kyrkoskatt inte gäller.' }), profileNumber('children', 'Antal kvalificerande barn', { integer: true }), { key: 'singleParent', kind: 'check', label: 'Ensamförälder enligt skattereglerna' }, profileNumber('productionExpenses', 'Faktiska årliga kostnader för inkomstens förvärvande', { money: true, help: '0 använder det automatiska standardavdraget. Ange endast avdragsgilla arbetskostnader.' })],
