@@ -1,0 +1,13 @@
+plugins {
+    id 'cashle.finance'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.public.fr' from '../french-public-pension.cashle'
+}
+finance {
+    plan { from '2026-07-01'; until '2027-01-01'; currency 'EUR'; inflation 0d }
+    person('self') { birthYear 1964; birthMonth 1 }
+    frenchPublicPension('Assurance retraite') {
+        settings([monthlyQuote:1500d, payoutStart:[reference:'date', year:2026, month:8, day:15]])
+    }
+}
+collect {}

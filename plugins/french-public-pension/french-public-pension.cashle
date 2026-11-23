@@ -1,0 +1,96 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
+import dev.cashle.sdk.model.ScheduleSpec
+
+import java.time.LocalDate
+import java.time.YearMonth
+import java.util.function.Supplier
+
+final class CnavDates {
+    static final LocalDate REFORM_START = LocalDate.of(2026, 9, 1)
+
+    static LocalDate monthStart(LocalDate date) {
+        date.dayOfMonth == 1 ? date : date.withDayOfMonth(1).plusMonths(1)
+    }
+
+    static LocalDate later(LocalDate first, LocalDate second) {
+        first.isAfter(second) ? first : second
+    }
+
+    static int ordinaryAge(YearMonth birth, boolean revised) {
+        int year = birth.year
+        if (year < 1961 || (year == 1961 && birth.monthValue < 9)) return 62 * 12
+        if (year <= 1963) return 62 * 12 + 3 * (year - 1960)
+        if (!revised) return Math.min(64 * 12, 63 * 12 + 3 * (year - 1964))
+        if (year == 1964 || (year == 1965 && birth.monthValue < 4)) return 62 * 12 + 9
+        Math.min(64 * 12, 63 * 12 + 3 * (year - 1965))
+    }
+
+    static LocalDate earliest(LocalDate birth, String route) {
+        if (route == 'inaptitude') return monthStart(birth.plusYears(62))
+        YearMonth cohort = YearMonth.from(birth)
+        LocalDate former = monthStart(birth.plusMonths(ordinaryAge(cohort, false)))
+        if (former.isBefore(REFORM_START)) return former
+        later(REFORM_START, monthStart(birth.plusMonths(ordinaryAge(cohort, true))))
+    }
+}
+
+financeModule('cashlab.french-public-pension', 1) {
+    pluginId 'cashle.finance.pension.public.fr'
+    messages 'cnav.Messages'
+    dsl('frenchPublicPension') { id ->
+        [name:id, owner:'self', monthlyQuote:0d, claimRoute:'ordinary', bornOnFirst:false,
+            payoutStart:[reference:'minimum', offset:0]]
+    }
+
+    calculation {
+        if (!enabled) return
+        String ownerId = input.owner ?: 'self'
+        def person = profile.people.find { row -> row.id == ownerId }
+        requireInput('owner') {
+            person?.birthYear instanceof Number && person.birthYear >= 1955 &&
+                person.birthMonth instanceof Number && person.birthMonth in 1..12
+        }
+        requireInput('quote') {
+            input.monthlyQuote instanceof Number && Double.isFinite(input.monthlyQuote.doubleValue()) && input.monthlyQuote >= 0d
+        }
+        requireInput('route') { input.claimRoute in ['ordinary', 'inaptitude'] }
+
+        LocalDate birth = LocalDate.of(person.birthYear.intValue(), person.birthMonth.intValue(),
+            input.bornOnFirst == true ? 1 : 2)
+        LocalDate earliest = CnavDates.earliest(birth, input.claimRoute)
+        LocalDate planDate = planStart.anchor()
+        Map time = (Map) input.payoutStart
+        int offset = ((Number) time.getOrDefault('offset', 0)).intValue()
+        Supplier<LocalDate> requested
+        if (time.reference == 'minimum') requested = { earliest.plusMonths(offset) }
+        else if (time.reference == 'age') requested = { birth.plusYears(time.age.intValue()).plusMonths(offset) }
+        else if (time.reference == 'date') requested = { LocalDate.of(time.year.intValue(), time.month.intValue(),
+            ((Number) time.getOrDefault('day', 1)).intValue()).plusMonths(offset) }
+        else if (time.reference == 'retirement') requested = milestone('retirement:' + (time.personId ?: ownerId), offset)
+        else if (time.reference == 'milestone') requested = milestone(time.milestoneId, offset)
+        else requested = { planDate.plusMonths(offset) }
+
+        double fx = exchangeRate('EUR', profile.currency ?: 'EUR')
+        double monthly = input.monthlyQuote.doubleValue()
+        def pension = owner(ownerId).account {
+            name input.name
+            classify AccountKind.INCOME, new AccountTag('cashle.household.economic-nature', 1,
+                'income.pension.public', [AccountKind.INCOME] as Set)
+            reportingRole ReportingRole.INCOME
+        }
+        taxableReceipt(ownerId, 'pension', 'monthly') {
+            on ScheduleSpec.every(Frequency.MONTH, CnavDates.monthStart(CnavDates.later(planDate, earliest)))
+            until deathOf(ownerId)
+            debit cash
+            credit pension
+            amount {
+                LocalDate claim = requested.get()
+                if (claim == null || today.isBefore(CnavDates.later(earliest, CnavDates.monthStart(claim)))) return 0d
+                monthly * fx * inflationFactor(planDate, today)
+            }
+        }
+    }
+}

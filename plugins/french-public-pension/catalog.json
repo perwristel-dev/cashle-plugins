@@ -1,0 +1,17 @@
+{
+  "name": "Retraite de base – Assurance retraite",
+  "names": {
+    "en": "French basic old-age pension",
+    "sv": "Fransk allmän ålderspension"
+  },
+  "description": {
+    "fr": "Projetez la retraite de base du régime général à partir du montant fourni par l’Assurance retraite et de la date de départ autorisée.",
+    "en": "Project the general-scheme basic pension from an Assurance retraite quote and the permitted start date.",
+    "sv": "Prognostisera allmän ålderspension utifrån ett belopp från Assurance retraite och ett tillåtet uttagsdatum."
+  },
+  "category": "accounts",
+  "country": "FR",
+  "releases": [
+    "387bc94d850d46da4fb94755b90ac0172ec327cfbc47cce3ffbfa9fe66d8b629"
+  ]
+}
