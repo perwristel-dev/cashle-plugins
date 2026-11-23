@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node build-catalog.mjs"
+    "build": "node build-catalog.mjs",
+    "test:prepare": "node scripts/prepare-dsl-tests.mjs",
+    "test": "node --test \"plugins/*/test/*.test.mjs\""
   }
 }

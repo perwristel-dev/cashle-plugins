@@ -1,0 +1,25 @@
+// Owned ISK DSL calculation regression; synthetic values, version 1.
+plugins { id 'cashle.finance'; id 'cashle.finance.isk'; id 'cashle.finance.isk.policy'; id 'cashle.finance.income'; id 'cashle.tax' }
+finance {
+    plan { from '2026-01-01'; until '2026-02-01'; currency 'SEK'; inflation 0d }
+    person('self') { name 'Synthetic investor'; birthYear 1980; birthMonth 1 }
+    tax {
+        country 'SE'
+        preliminaryRate 0d
+        options([ruleYear:2025, residentMonths:12, municipality:'0180', municipalRate:0.306d,
+                 burialFeeRate:0.0007d, communityMember:false, communityFeeRate:0d])
+    }
+    def investmentAccount = isk('investmentAccount') {
+        name 'ISK'
+        balance 1000d
+        settings([costBasis:1000d, initialYear:[openingValue:1000d,
+                  quarterOpeningValues:[1000d, null, null, null]]])
+    }
+    inheritance('topup') {
+        name 'Top up'
+        amount 500d
+        frequency 'once'
+        destination investmentAccount
+    }
+}
+collect { }
