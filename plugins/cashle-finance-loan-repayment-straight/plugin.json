@@ -1,0 +1,29 @@
+{
+  "id": "cashle.finance.loan-repayment.straight",
+  "requires": [
+    "cashle.finance.loan-repayment",
+    "cashle.dsl.groovy"
+  ],
+  "replaces": [
+    "cashle.finance.loan-repayment.straight"
+  ],
+  "sources": [
+    {
+      "path": "straight.cashle",
+      "providers": [
+        "cashle.finance.loan-repayment.straight"
+      ]
+    }
+  ],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui/en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui/sv.json"
+    }
+  ]
+}

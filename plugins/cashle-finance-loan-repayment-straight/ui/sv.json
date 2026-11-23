@@ -1,0 +1,13 @@
+{
+  "Rak amortering": "Rak amortering",
+  "Amortering": "Amortering",
+  "Lägg först till ett lån som kan amorteras.": "Lägg först till ett lån som kan amorteras.",
+  "Lånet saknar stöd för automatisk start. Välj när amorteringen ska börja.": "Lånet saknar stöd för automatisk start. Välj när amorteringen ska börja.",
+  "Lånet saknar stöd för automatisk betalningsfrekvens. Välj en frekvens.": "Lånet saknar stöd för automatisk betalningsfrekvens. Välj en frekvens.",
+  "När lånet börjar": "När lånet börjar",
+  "Samma som lånets ränta": "Samma som lånets ränta",
+  "Lån: välj ett tillgängligt lån.": "Lån: välj ett tillgängligt lån.",
+  "Återstående löptid: ange hela betalningsperioder, högst 1000 år.": "Återstående löptid: ange hela betalningsperioder, högst 1000 år.",
+  "Återstående löptid": "Återstående löptid",
+  "Löptidens enhet": "Löptidens enhet"
+}

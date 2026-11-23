@@ -1,0 +1,14 @@
+{
+  "Amorteringsbelopp": "Fixed repayment",
+  "Amortering": "Repayment",
+  "Lägg först till ett lån som kan amorteras.": "Add a loan that can be repaid first.",
+  "Lånet saknar stöd för automatisk start. Välj när amorteringen ska börja.": "The loan does not expose its start date. Choose when repayments begin.",
+  "Lånet saknar stöd för automatisk betalningsfrekvens. Välj en frekvens.": "The loan does not expose its interest frequency. Choose a frequency.",
+  "När lånet börjar": "When the loan starts",
+  "Samma som lånets ränta": "Same as the loan’s interest",
+  "Lån: välj ett tillgängligt lån.": "Loan: choose an available loan.",
+  "Återstående löptid: ange hela betalningsperioder, högst 1000 år.": "Remaining term: enter whole payment periods, up to 1,000 years.",
+  "Återstående löptid": "Remaining term",
+  "Löptidens enhet": "Term unit",
+  "Amorteringsbelopp per betalningsperiod": "Repayment amount per payment period"
+}

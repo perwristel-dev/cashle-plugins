@@ -1,0 +1,33 @@
+{
+  "id": "cashle.finance.loan-repayment.annuity",
+  "requires": [
+    "cashle.finance.loan-repayment",
+    "cashle.dsl.groovy"
+  ],
+  "replaces": [
+    "cashle.finance.loan-repayment.annuity"
+  ],
+  "sources": [
+    {
+      "path": "annuity.cashle",
+      "providers": [
+        "cashle.finance.loan-repayment.annuity"
+      ],
+      "resources": [
+        "dev/cashle/finance/repayment/annuity/messages_en.properties",
+        "dev/cashle/finance/repayment/annuity/messages_sv.properties"
+      ]
+    }
+  ],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui/en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui/sv.json"
+    }
+  ]
+}

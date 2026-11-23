@@ -1,0 +1,315 @@
+{
+  "format": "cashle-case",
+  "version": 1,
+  "case": {
+    "schemaVersion": 1,
+    "id": "9fd2cc04-b1f5-4786-a376-1af40ed710b5",
+    "name": "Brygglån och svenskt ränteavdrag, 2025 års regler",
+    "createdAt": "2026-11-03T12:00:00Z",
+    "updatedAt": "2026-11-03T12:00:00Z",
+    "modules": [
+      {
+        "id": "817c0428-ab6e-47a8-8773-faa8214eaa7d",
+        "type": "cashlab.salary",
+        "category": "income",
+        "version": 1,
+        "enabled": true,
+        "origin": "current",
+        "data": {
+          "name": "Beskattad lön",
+          "amount": 50000,
+          "basis": "nominal",
+          "frequency": "monthly",
+          "owner": "self",
+          "taxTreatment": "taxable",
+          "start": {
+            "reference": "now",
+            "offset": 0
+          },
+          "end": {
+            "reference": "end",
+            "offset": 0
+          },
+          "change": {
+            "mode": "none",
+            "rate": 0,
+            "limitBasis": "none",
+            "limit": 0,
+            "points": [
+              {
+                "year": 1,
+                "value": 0
+              },
+              {
+                "year": 10,
+                "value": 0
+              },
+              {
+                "year": 20,
+                "value": 0
+              }
+            ],
+            "view": {
+              "range": 30,
+              "min": -10,
+              "max": 10
+            },
+            "basis": "nominal"
+          },
+          "destinationMode": "automatic",
+          "destinationAccount": "",
+          "partTime": false,
+          "partStart": {
+            "reference": "now",
+            "year": 2026,
+            "month": 1,
+            "offset": 0,
+            "personId": "self"
+          },
+          "partEnd": {
+            "reference": "retirement",
+            "year": 2026,
+            "month": 1,
+            "offset": 0,
+            "personId": "self"
+          },
+          "partPercent": 50,
+          "pension": false,
+          "pensionContribution": 0,
+          "pensionStart": {
+            "reference": "retirement",
+            "year": 2026,
+            "month": 1,
+            "offset": 0,
+            "personId": "self"
+          },
+          "pensionEnd": {
+            "reference": "end",
+            "year": 2026,
+            "month": 1,
+            "offset": 0,
+            "personId": "self"
+          },
+          "pensionType": "final",
+          "pensionFrequency": "monthly",
+          "pensionAmount": 0,
+          "pensionTaxTreatment": "taxable",
+          "repeat": false,
+          "repeatYears": 1,
+          "repeatFrom": "start",
+          "repeatScaling": 0,
+          "repeatUntil": {
+            "reference": "end",
+            "year": 2026,
+            "month": 1,
+            "offset": 0,
+            "personId": "self"
+          },
+          "notes": ""
+        }
+      },
+      {
+        "id": "dbe51496-fd59-4efc-afdf-524ead766beb",
+        "type": "cashlab.debt",
+        "category": "expenses",
+        "version": 1,
+        "enabled": true,
+        "origin": "forecast",
+        "data": {
+          "name": "Brygglån",
+          "balance": 500000,
+          "basis": "nominal",
+          "owner": "self",
+          "effectiveDate": {
+            "reference": "now",
+            "offset": 0
+          },
+          "apr": 6,
+          "paymentFrequency": "monthly",
+          "forgive": false,
+          "forgiveAt": {
+            "reference": "end",
+            "year": 2026,
+            "month": 1,
+            "offset": 0,
+            "personId": "self"
+          },
+          "notes": "",
+          "interestDeductionEligible": true,
+          "interestDeductionSecurity": "unsecured"
+        }
+      },
+      {
+        "id": "7575611c-21d2-503d-a4a4-d40f04b4d0e4",
+        "type": "cashlab.repayment-amount",
+        "category": "flows",
+        "version": 1,
+        "enabled": true,
+        "origin": "forecast",
+        "data": {
+          "name": "Amortering – Brygglån",
+          "loanId": "dbe51496-fd59-4efc-afdf-524ead766beb",
+          "source": "__cash__",
+          "start": {
+            "reference": "date",
+            "year": 2027,
+            "month": 7,
+            "offset": 0
+          },
+          "end": {
+            "reference": "end",
+            "offset": 0
+          },
+          "paymentFrequency": "monthly",
+          "remainingTerm": 10,
+          "termUnit": "years",
+          "amortizationAmount": 500000,
+          "amortizationBasis": "nominal",
+          "notes": ""
+        }
+      }
+    ],
+    "view": {
+      "page": "projections",
+      "collapsedCategories": []
+    },
+    "plan": {
+      "from": "2027-01-01",
+      "until": "2028-07-01",
+      "stopAfterLife": false,
+      "moneyDate": "2027-01-01",
+      "fundingReductionPolicy": "proportional",
+      "inflation": {
+        "mode": "fixed",
+        "rate": 0,
+        "points": [],
+        "standardDeviation": 0.5
+      },
+      "returns": {
+        "growth": {
+          "mode": "fixed",
+          "rate": 5.5,
+          "basis": "nominal",
+          "points": [],
+          "standardDeviation": 3.7
+        },
+        "yield": {
+          "mode": "fixed",
+          "rate": 0.5,
+          "basis": "nominal",
+          "points": [],
+          "standardDeviation": 0.25
+        }
+      },
+      "returnProfiles": {
+        "low": {
+          "mode": "fixed",
+          "rate": 3,
+          "basis": "nominal",
+          "points": [],
+          "standardDeviation": 0.6
+        },
+        "medium": {
+          "mode": "fixed",
+          "rate": 5,
+          "basis": "nominal",
+          "points": [],
+          "standardDeviation": 2.4
+        },
+        "high": {
+          "mode": "fixed",
+          "rate": 6,
+          "basis": "nominal",
+          "points": [],
+          "standardDeviation": 3.7
+        },
+        "very-high": {
+          "mode": "fixed",
+          "rate": 7,
+          "basis": "nominal",
+          "points": [],
+          "standardDeviation": 11
+        }
+      },
+      "loanRateStandardDeviation": 1,
+      "generalAssumptions": {
+        "swedish-pension": {
+          "baseAmountIncrease": 2,
+          "lifelongDivisionYears": 20,
+          "historicalIncomeBaseAmounts": 4
+        }
+      },
+      "milestones": [
+        {
+          "id": "retirement:self",
+          "builtin": "retirement",
+          "name": "Pensionering",
+          "personId": "self",
+          "rule": {
+            "type": "age",
+            "personId": "self",
+            "years": 67,
+            "months": 0
+          }
+        },
+        {
+          "id": "life:self",
+          "builtin": "life",
+          "name": "Förväntad livslängd",
+          "personId": "self",
+          "rule": {
+            "type": "age",
+            "personId": "self",
+            "years": 85,
+            "months": 0
+          }
+        },
+        {
+          "id": "independence:self",
+          "builtin": "independence",
+          "name": "Ekonomiskt oberoende",
+          "personId": "self",
+          "rule": {
+            "type": "unset"
+          }
+        }
+      ]
+    },
+    "profile": {
+      "mode": "individual",
+      "people": [
+        {
+          "id": "self",
+          "name": "Jag",
+          "birthMonth": 1,
+          "birthYear": 1980,
+          "icon": "person",
+          "color": "indigo"
+        }
+      ],
+      "household": {
+        "hasPartner": false,
+        "children": []
+      },
+      "currency": "SEK",
+      "locale": "sv-SE",
+      "tax": {
+        "country": "SE",
+        "options": {
+          "foreignTaxCreditYear": 2026,
+          "foreignTaxPaidAmount": 0,
+          "foreignTaxAttributableOrdinaryTax": 0,
+          "afterEmigrationLiability": "limited",
+          "ruleYear": 2025,
+          "municipality": "0180",
+          "municipalRate": 0.306,
+          "residentMonths": 12,
+          "burialFeeRate": 0.0007,
+          "communityMember": false,
+          "communityFeeRate": 0
+        },
+        "preliminaryRate": 30
+      }
+    }
+  }
+}

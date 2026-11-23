@@ -1,0 +1,15 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.debt'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.loan-repayment.annuity' from '../annuity.cashle'
+}
+finance {
+    plan { from '2028-01-01'; until '2028-03-01'; inflation 0d }
+    income 'Salary', 1000d
+    debt('Loan') { balance 1000d; interest 0d }
+    loanRepaymentAnnuity('Repayment') {
+        settings([loanId: 'Loan', remainingTerm: 10, termUnit: 'months'])
+    }
+}
+collect { }

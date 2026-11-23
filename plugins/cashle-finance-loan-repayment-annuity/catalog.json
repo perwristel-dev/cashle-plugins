@@ -1,0 +1,15 @@
+{
+  "name": "Annuitet",
+  "names": {
+    "en": "Annuity",
+    "sv": "Annuitet"
+  },
+  "description": {
+    "sv": "Beräkna amorteringen så att ränta och amortering tillsammans ger en jämn betalning.",
+    "en": "Calculate principal so that interest and principal make a level payment."
+  },
+  "category": "flows",
+  "releases": [
+    "9f7b01d2e40731bce608014fa428c976ff410f35878541d05e0a26c25e2c8b74"
+  ]
+}

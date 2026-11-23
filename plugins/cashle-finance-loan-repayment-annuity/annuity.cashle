@@ -1,0 +1,115 @@
+import dev.cashle.core.i18n.Messages
+import dev.cashle.finance.repayment.RepaymentFlow
+import dev.cashle.sdk.composition.ModuleInput
+import dev.cashle.sdk.finance.AnnuityInterest
+import groovy.transform.CompileStatic
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
+
+financeModule('cashlab.repayment-annuity', 1) {
+    pluginId 'cashle.finance.loan-repayment.annuity'
+
+    dsl('loanRepaymentAnnuity') { String name ->
+        RepaymentFlow.defaults(name) + [remainingTerm: 10, termUnit: 'years']
+    }
+
+    factory { ModuleInput entry ->
+        new RepaymentFlow(entry, { RepaymentFlow.Terms terms ->
+            def messages = terms.context().messages(AnnuityPayments, 'dev.cashle.finance.repayment.annuity.messages')
+            if (entry.enabled() && !terms.context().claimExclusive(terms.debt().principal(), 'cashle.finance.loan-repayment.annuity.v1'))
+                throw new IllegalArgumentException(messages.text('exclusive'))
+            if (terms.frequencyInput() != 'loan-interest')
+                throw new IllegalArgumentException(messages.text('frequency'))
+            def interest = terms.context().findAnnuityInterest(terms.loanId())
+                .orElseThrow { new IllegalArgumentException(messages.text('projection')) }
+            int periods = RepaymentFlow.wholeInstallments(terms)
+            def plan = new AnnuityPayments(terms, interest, periods, messages)
+            new RepaymentFlow.Payments(interest.paymentSchedule(terms.start()),
+                plan::installment, plan::commitment)
+        } as java.util.function.Function)
+    }
+}
+
+@CompileStatic
+class AnnuityPayments {
+    private final RepaymentFlow.Terms terms
+    private final AnnuityInterest interest
+    private final int periods
+    private final Messages messages
+
+    AnnuityPayments(RepaymentFlow.Terms terms, AnnuityInterest interest, int periods, Messages messages) {
+        this.terms = terms
+        this.interest = interest
+        this.periods = periods
+        this.messages = messages
+    }
+
+    double installment(double arrears) {
+        LocalDate day = terms.today(), start = terms.start().get()
+        if (!terms.active() || start == null) return 0d
+        LocalDate first = interest.nextPaymentDate(start)
+        if (first == null || day != interest.nextPaymentDate(day) || day.isBefore(first)) return 0d
+        portion(terms.outstanding(arrears), interest.accruedInterest(), day, first)
+    }
+
+    // Forecast principal only. The loan reserves interest independently.
+    double commitment(LocalDate horizon, double arrears) {
+        LocalDate today = terms.today(), start = terms.start().get()
+        if (!terms.debt().available().getAsBoolean() || start == null || horizon == null || !today.isBefore(horizon)) return 0d
+        LocalDate first = interest.nextPaymentDate(start)
+        LocalDate next = interest.nextPaymentDate(today.plusDays(1))
+        if (first == null || next == null) return 0d
+        double principal = terms.outstanding(arrears)
+        if (principal == 0d) return 0d
+        double accrued = today == interest.nextPaymentDate(today) ? 0d : interest.accruedInterest()
+        LocalDate from = today
+        while (next.isBefore(first)) {
+            from = next
+            accrued = 0d
+            next = paymentAfter(next)
+        }
+        accrued += interest.projectedInterest(from, next, principal)
+        double total = 0d
+        while (next.isBefore(horizon) && principal > 0d) {
+            double amount = portion(principal, accrued, next, first)
+            total += amount
+            principal -= amount
+            LocalDate following = paymentAfter(next)
+            accrued = interest.projectedInterest(next, following, principal)
+            next = following
+        }
+        total
+    }
+
+    private LocalDate paymentAfter(LocalDate date) {
+        LocalDate next = interest.nextPaymentDate(date.plusDays(1))
+        if (next == null || !next.isAfter(date))
+            throw new IllegalArgumentException(messages.text('invalidSchedule'))
+        next
+    }
+
+    private double portion(double principal, double accrued, LocalDate date, LocalDate first) {
+        long elapsed = monthsBetween(first, date)
+        if (principal == 0d || elapsed < 0L || elapsed % terms.months() != 0L) return 0d
+        int remaining = (int) Math.max(1L, periods - Math.floorDiv(elapsed, (long) terms.months()))
+        if (!Double.isFinite(accrued) || accrued < 0d)
+            throw new IllegalArgumentException(messages.text('invalidAccrued'))
+        double discount = 1d, sum = 1d
+        for (int i = 1; i < remaining; i++) {
+            LocalDate next = paymentAfter(date)
+            if (monthsBetween(date, next) != terms.months())
+                throw new IllegalArgumentException(messages.text('frequencyMismatch'))
+            double rate = interest.projectedInterest(date, next, 1d)
+            if (!Double.isFinite(rate) || rate < 0d)
+                throw new IllegalArgumentException(messages.text('invalidProjection'))
+            discount /= 1d + rate
+            sum += discount
+            date = next
+        }
+        Math.min(principal, Math.max(0d, (principal + accrued) / sum - accrued))
+    }
+
+    private static long monthsBetween(LocalDate first, LocalDate last) {
+        ChronoUnit.MONTHS.between(first.withDayOfMonth(1), last.withDayOfMonth(1))
+    }
+}

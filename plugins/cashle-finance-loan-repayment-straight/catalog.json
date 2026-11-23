@@ -1,0 +1,15 @@
+{
+  "name": "Rak amortering",
+  "names": {
+    "en": "Straight-line repayment",
+    "sv": "Rak amortering"
+  },
+  "description": {
+    "sv": "Fördela återstående skuld över löptidens betalningsperioder.",
+    "en": "Spread outstanding principal over the remaining payment periods."
+  },
+  "category": "flows",
+  "releases": [
+    "5183708cd585a084233544baaaaf1ae89519474652baaaa0484f81409cd5cdd4"
+  ]
+}

@@ -1,0 +1,20 @@
+import dev.cashle.finance.repayment.RecurringRepayment
+import dev.cashle.finance.repayment.RepaymentFlow
+import dev.cashle.sdk.composition.ModuleInput
+
+financeModule('cashlab.repayment-straight', 1) {
+    pluginId 'cashle.finance.loan-repayment.straight'
+
+    dsl('loanRepaymentStraight') { String name ->
+        RepaymentFlow.defaults(name) + [remainingTerm: 10, termUnit: 'years']
+    }
+
+    factory { ModuleInput entry ->
+        new RepaymentFlow(entry, { RepaymentFlow.Terms terms ->
+            int installments = RepaymentFlow.wholeInstallments(terms)
+            new RecurringRepayment(terms, { long installment, double outstanding, java.time.LocalDate date ->
+                outstanding / Math.max(1L, installments - installment)
+            } as RecurringRepayment.PrincipalRule).payments()
+        } as java.util.function.Function)
+    }
+}

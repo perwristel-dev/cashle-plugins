@@ -1,0 +1,33 @@
+{
+  "id": "cashle.finance.loan-repayment.amount",
+  "requires": [
+    "cashle.finance.loan-repayment",
+    "cashle.dsl.groovy"
+  ],
+  "replaces": [
+    "cashle.finance.loan-repayment.amount"
+  ],
+  "sources": [
+    {
+      "path": "amount.cashle",
+      "providers": [
+        "cashle.finance.loan-repayment.amount"
+      ],
+      "resources": [
+        "dev/cashle/finance/repayment/amount/messages_en.properties",
+        "dev/cashle/finance/repayment/amount/messages_sv.properties"
+      ]
+    }
+  ],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui/en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui/sv.json"
+    }
+  ]
+}
