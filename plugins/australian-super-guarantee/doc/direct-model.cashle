@@ -1,0 +1,15 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.balancesheet'
+    id 'cashle.cashflow'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.au.super-guarantee' from '../australian-super-guarantee.cashle'
+}
+finance {
+    plan { from '2026-07-01'; until '2027-10-01'; currency 'AUD'; inflation 0d }
+    person('self') { name 'Member'; birthYear 1962; birthMonth 6 }
+    superGuarantee('Employer super') {
+        settings openingBalance: 200000d, qualifyingAnnualEarnings: 360000d, payoutStart: [reference:'age', age:60]
+    }
+}
+collect { balancesheet { format json; output 'stdout' }; cashflow { format json; output 'stdout' } }

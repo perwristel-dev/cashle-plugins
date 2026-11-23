@@ -1,0 +1,14 @@
+{
+  "id": "cashle.finance.pension.au.super-guarantee",
+  "requires": ["cashle.finance", "cashle.dsl.groovy"],
+  "sources": [{
+    "path": "australian-super-guarantee.cashle",
+    "providers": ["cashle.finance.pension.au.super-guarantee"],
+    "resources": ["dev/cashle/pension/au/SuperGuarantee_en.properties", "dev/cashle/pension/au/SuperGuarantee_sv.properties"]
+  }],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {"locale": "en", "path": "ui/en.json"},
+    {"locale": "sv", "path": "ui/sv.json"}
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "name": "Australian Superannuation Guarantee",
+  "names": {
+    "en": "Australian Superannuation Guarantee",
+    "sv": "Australisk Superannuation Guarantee"
+  },
+  "description": {
+    "en": "Compulsory employer superannuation contributions and withdrawals from a taxed Australian account-based pension.",
+    "sv": "Obligatoriska arbetsgivaravsättningar och utbetalningar från en australisk kontoanknuten pension från en beskattad fond."
+  },
+  "country": "AU",
+  "category": "income",
+  "releases": [
+    "9e0b6a921417fc53c9ff80088b7504cabe672c0087944f33fcc83bd86a89c3d3"
+  ]
+}
