@@ -1,0 +1,59 @@
+import dev.cashle.pension.agreement.PensionAgreement.BenefitInput
+import dev.cashle.pension.agreement.PensionAgreement.ContributionInput
+import dev.cashle.pension.agreement.PensionAgreement.Kind
+
+import static SwedishAgreementRules.*
+
+def ftp2 = localized('FTP2', 65, 5)
+pensionAgreement('FTP2') {
+    pluginId 'cashle.pension.agreement.FTP2'
+    kind Kind.DEFINED_BENEFIT
+    metadata ftp2('sv')
+    localizedMetadata ftp2
+    eligible { ContributionInput input -> age(input) >= 25d + 1d / 12d && age(input) < 65d }
+    accruedServiceYears { double existing, double increment -> Math.min(30d, existing + increment) }
+    canBatchEstimatedServiceByMonth true
+    canBatchStatementServiceByMonth true
+    annualBenefit { BenefitInput input -> ftp2Benefit(input, input.serviceYears()) }
+    incrementalBenefit { BenefitInput previous, BenefitInput current ->
+        ftp2Benefit(current, current.serviceYears() - previous.serviceYears())
+    }
+}
+
+def ftpk = localized('FTPK', 55, 5)
+pensionAgreement('FTPK') {
+    pluginId 'cashle.pension.agreement.FTPK'
+    kind Kind.DEFINED_CONTRIBUTION
+    metadata ftpk('sv')
+    localizedMetadata ftpk
+    eligible { ContributionInput input -> ftpkEligible(input) }
+    historicalContributionBreakpoints { ContributionInput input -> thresholds(input, 30d) }
+    contribution { ContributionInput input -> ftpkEligible(input) ? cappedPremium(input, ftpkRate(input)) : 0d }
+}
+
+static boolean ftpkEligible(ContributionInput input) {
+    age(input) >= 28d + 1d / 12d && age(input) < 65d
+}
+
+static double ftpkRate(ContributionInput input) {
+    int rateYear = input.date().minusMonths(3).year
+    if (rateYear >= 2028) return .038d
+    if (rateYear == 2027) return .036d
+    if (rateYear == 2026) return .034d
+    if (rateYear == 2025) return .032d
+    switch (input.date().year) {
+        case 2018: return .0236d
+        case 2019: return .0254d
+        case 2020: return .0272d
+        default: return input.date().year >= 2021 ? .029d : .0218d
+    }
+}
+
+static double ftp2Benefit(BenefitInput input, double serviceYears) {
+    double base = yearlyIncomeBase(input.date(), input.baseGrowth())
+    double salary = input.salary()
+    double fullBenefit = band(salary, 0d, 7.5d * base, .10d) +
+            band(salary, 7.5d * base, 20d * base, .65d) +
+            band(salary, 20d * base, 30d * base, .325d)
+    fullBenefit * Math.min(1d, Math.max(0d, serviceYears) / 30d)
+}

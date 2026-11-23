@@ -1,0 +1,21 @@
+{
+  "id": "cashle.pension.agreement.FTP2",
+  "sources": [
+    {
+      "path": "ftp2.cashle",
+      "providers": [
+        "cashle.pension.agreement.FTP2",
+        "cashle.pension.agreement.FTPK"
+      ],
+      "imports": {
+        "cashle.pension.agreement.rules": [
+          "SwedishAgreementRules.groovy"
+        ]
+      }
+    }
+  ],
+  "ui": "agreement-entry.js",
+  "requires": [
+    "cashle.pension.agreement.rules"
+  ]
+}
