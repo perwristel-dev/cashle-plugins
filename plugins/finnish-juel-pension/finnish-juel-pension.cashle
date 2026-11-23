@@ -1,0 +1,163 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
+import dev.cashle.sdk.model.ScheduleSpec
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.temporal.ChronoUnit
+import java.util.function.Supplier
+
+final class JuELRules {
+    static final LocalDate CURRENT_ACCRUAL = LocalDate.of(2026, 1, 1)
+    static final double ACCRUAL_RATE = 0.015d
+    static final double DEFERRAL_RATE = 0.004d
+    // Confirmed life expectancy coefficients for 1947–1965. The last value is a planning assumption for later cohorts.
+    static final List<Double> COEFFICIENTS = [1d, 0.99170d, 0.98689d, 0.98351d, 0.97914d,
+        0.97552d, 0.97200d, 0.96800d, 0.96344d, 0.96102d, 0.95722d, 0.95404d, 0.94984d,
+        0.94659d, 0.94419d, 0.94692d, 0.94759d, 0.94643d, 0.94453d].asImmutable()
+    // Monthly retirement ages from ETK for the 1965, 1970, …, 2010 cohorts.
+    static final List<Integer> ESTIMATED_AGES = [780, 787, 793, 798, 804, 809, 815, 819, 824, 828].asImmutable()
+
+    static int minimumAgeMonths(int year) {
+        if (year <= 1954) return 63 * 12
+        if (year <= 1961) return 63 * 12 + 3 * (year - 1954)
+        if (year <= 1965) return 65 * 12
+        if (year >= 2010) return ESTIMATED_AGES.last()
+        int years = year - 1965
+        int index = years.intdiv(5)
+        int first = ESTIMATED_AGES[index]
+        return first + Math.round((ESTIMATED_AGES[index + 1] - first) * (years % 5) / 5d).intValue()
+    }
+
+    static int accrualEndAge(int year) { year <= 1957 ? 68 : year <= 1961 ? 69 : 70 }
+
+    static double lifeExpectancyCoefficient(int birthYear, int payoutYear) {
+        // When an occupational pension starts in a year before the cohort turns 62,
+        // the coefficient confirmed for the start year applies.
+        int cohort = Math.min(birthYear, payoutYear - 62)
+        COEFFICIENTS[Math.max(0, Math.min(cohort - 1947, COEFFICIENTS.size() - 1))]
+    }
+
+    static LocalDate monthStart(LocalDate day) {
+        day.dayOfMonth == 1 ? day : day.withDayOfMonth(1).plusMonths(1)
+    }
+
+    static LocalDate later(LocalDate first, LocalDate second) { first.isAfter(second) ? first : second }
+    static LocalDate earlier(LocalDate first, LocalDate second) { first.isBefore(second) ? first : second }
+
+    static boolean money(Object value) {
+        value instanceof Number && Double.isFinite(value.doubleValue()) && value >= 0d
+    }
+
+    static boolean whole(Object value, int min, int max) {
+        value instanceof Number && min <= value && value <= max && value.doubleValue() == Math.rint(value.doubleValue())
+    }
+
+    static boolean validStart(Object value) {
+        if (!(value instanceof Map) || (value.offset != null && !whole(value.offset, -1500, 1500))) return false
+        switch (value.reference) {
+            case 'minimum':
+            case 'now':
+            case 'retirement': return true
+            case 'milestone': return value.milestoneId instanceof String && !value.milestoneId.isBlank()
+            case 'age': return whole(value.age, 0, 125)
+            case 'date':
+                if (!whole(value.year, 1900, 9999) || !whole(value.month, 1, 12)) return false
+                int days = YearMonth.of(value.year.intValue(), value.month.intValue()).lengthOfMonth()
+                return value.day == null || whole(value.day, 1, days)
+            default: return false
+        }
+    }
+}
+
+financeModule('cashlab.finnish-juel-pension', 1) {
+    pluginId 'cashle.finance.pension.occupational.fi.juel'
+    messages 'juel.Messages'
+    dsl('finnishJuELPension') { id ->
+        [name:id, owner:'self', monthlyRight:0d, annualSalary:0d, transition:'standard',
+         protectedAgeYears:63, protectedAgeMonths:0, personalMonthlyRight:0d, payoutStart:[reference:'minimum', offset:0]]
+    }
+    calculation {
+        if (!enabled) return
+        String ownerId = input.owner ?: 'self'
+        def person = profile.people.find { row -> row.id == ownerId }
+        requireInput('invalid.owner') { person != null && JuELRules.whole(person.birthYear, 1900, 9999) && JuELRules.whole(person.birthMonth, 1, 12) }
+        requireInput('invalid.name') { input.name instanceof String && !input.name.isBlank() && input.name.trim().length() <= 80 }
+        requireInput('invalid.amount') { JuELRules.money(input.monthlyRight) && JuELRules.money(input.annualSalary) }
+        String transition = input.transition ?: 'standard'
+        requireInput('invalid.transition') { transition in ['standard', 'occupational', 'personal'] }
+
+        YearMonth born = YearMonth.of(person.birthYear.intValue(), person.birthMonth.intValue())
+        int generalAge = JuELRules.minimumAgeMonths(born.year)
+        LocalDate general = born.plusMonths(generalAge + 1).atDay(1)
+        LocalDate firstEligible = general
+        LocalDate personalStart = null
+        double openingRight = input.monthlyRight.doubleValue()
+        double protectedRight = openingRight
+        if (transition != 'standard') {
+            requireInput('invalid.age') { JuELRules.whole(input.protectedAgeYears, 17, 70) && JuELRules.whole(input.protectedAgeMonths, 0, 11) }
+            int threshold = input.protectedAgeYears.intValue() * 12 + input.protectedAgeMonths.intValue()
+            LocalDate protectedStart = born.plusMonths(threshold + 1).atDay(1)
+            if (transition == 'occupational') {
+                requireInput('invalid.occupational') { threshold <= generalAge }
+                firstEligible = protectedStart
+            } else {
+                requireInput('invalid.personal') { threshold >= 63 * 12 && threshold <= 65 * 12 }
+                requireInput('invalid.protectedRight') { JuELRules.money(input.personalMonthlyRight) && input.personalMonthlyRight >= openingRight }
+                personalStart = protectedStart
+                protectedRight = input.personalMonthlyRight.doubleValue()
+            }
+        }
+
+        LocalDate planDate = planStart.anchor()
+        LocalDate firstCoveredMonth = born.plusYears(17).plusMonths(1).atDay(1)
+        LocalDate endCoveredMonths = born.plusYears(JuELRules.accrualEndAge(born.year)).plusMonths(1).atDay(1)
+        LocalDate firstWork = JuELRules.later(JuELRules.CURRENT_ACCRUAL, JuELRules.later(JuELRules.monthStart(planDate), firstCoveredMonth))
+        def time = input.payoutStart ?: [reference:'minimum']
+        requireInput('invalid.start') { JuELRules.validStart(time) }
+        int offset = ((Number) (time.offset ?: 0)).intValue()
+        Supplier<LocalDate> requested
+        switch (time.reference) {
+            case 'minimum': requested = { firstEligible.plusMonths(offset) }; break
+            case 'now': requested = { planDate.plusMonths(offset) }; break
+            case 'age': requested = { born.plusYears(time.age.longValue()).plusMonths(offset + 1).atDay(1) }; break
+            case 'date': requested = { LocalDate.of(time.year.intValue(), time.month.intValue(), ((Number) (time.day ?: 1)).intValue()).plusMonths(offset) }; break
+            case 'retirement': requested = milestone('retirement:' + ownerId, offset); break
+            case 'milestone': requested = milestone(time.milestoneId, offset); break
+        }
+
+        LocalDate anchor = time.reference in ['retirement', 'milestone'] ? firstEligible :
+            JuELRules.later(firstEligible, JuELRules.monthStart(requested.get()))
+        double annualSalary = input.annualSalary.doubleValue()
+        double fx = exchangeRate('EUR', profile.currency ?: 'EUR')
+        def pension = owner(ownerId).account {
+            name input.name
+            classify AccountKind.INCOME, new AccountTag('cashle.household.economic-nature', 1,
+                'income.pension.occupational', [AccountKind.INCOME] as Set)
+            reportingRole ReportingRole.INCOME
+        }
+        taxableReceipt(ownerId, 'pension', 'monthly') {
+            on ScheduleSpec.every(Frequency.MONTH, JuELRules.later(JuELRules.monthStart(planDate), anchor))
+            until deathOf(ownerId)
+            debit cash
+            credit pension
+            amount {
+                LocalDate claim = requested.get()
+                if (claim == null) return 0d
+                LocalDate start = JuELRules.later(firstEligible, JuELRules.monthStart(claim))
+                if (today.isBefore(start)) return 0d
+
+                LocalDate endWork = JuELRules.earlier(start, endCoveredMonths)
+                long workMonths = Math.max(0L, ChronoUnit.MONTHS.between(firstWork, endWork))
+                double futureRight = annualSalary / 12d * workMonths * JuELRules.ACCRUAL_RATE / 12d *
+                    JuELRules.lifeExpectancyCoefficient(born.year, start.year)
+                double accrued = personalStart != null && !start.isBefore(personalStart) ? protectedRight : openingRight
+                long delay = Math.max(0L, ChronoUnit.MONTHS.between(general, start))
+                LocalDate indexDate = JuELRules.later(planDate, today.withDayOfYear(1))
+                double gross = (accrued + futureRight) * (1d + JuELRules.DEFERRAL_RATE * delay) * inflationFactor(planDate, indexDate)
+                return (Math.round(gross * 100d) / 100d) * fx
+            }
+        }
+    }
+}
