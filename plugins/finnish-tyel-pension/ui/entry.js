@@ -11,11 +11,19 @@ const incomeFields = [
   { key: 'payoutStart', kind: 'time', label: 'Önskad uttagsstart', default: { reference: 'minimum', offset: 0 },
     choices: ['minimum', 'age', 'now', 'date', 'retirement', 'milestone'], choiceLabels: { minimum: 'Lägsta pensionsålder', age: 'Ålder' },
     datePrecision: 'day', forecastEditable: true },
-  { kind: 'note', label: 'Pensionen är livsvarig. Anställningen ska upphöra innan fullt uttag börjar.' },
+  { kind: 'message', label: 'Pensionen är livsvarig. Anställningen ska upphöra innan fullt uttag börjar.' },
 ];
 
 export default context => {
-  const engineInput = data => ({ input: data });
+  const engineInput = data => {
+    const payoutStart = data.payoutStart.reference === 'age'
+      ? { ...data.payoutStart, personId: data.owner }
+      : data.payoutStart;
+    return {
+      input: { ...data, payoutStart },
+      timeReferences: [{ ...payoutStart, personId: payoutStart.personId ?? data.owner }],
+    };
+  };
   const receipt = context.schemaModule({
     id: 'finnish-tyel-pension-receipt', label: incomeLabel, pluginId, category: 'income', fields: incomeFields, sections: [],
     engineInput, summarize: () => ({ title: context.translate(incomeLabel), detail: context.translate('Livsvarig månadsutbetalning') }),

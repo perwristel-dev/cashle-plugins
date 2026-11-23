@@ -72,7 +72,7 @@ financeModule('cashlab.finnish-tyel-pension', 1) {
         else if (time.reference == 'age') requested = { born.plusYears(time.age.intValue()).plusMonths(offset + 1).atDay(1) }
         else if (time.reference == 'date') requested = { LocalDate.of(time.year.intValue(), time.month.intValue(),
             ((Number) time.getOrDefault('day', 1)).intValue()).plusMonths(offset) }
-        else if (time.reference == 'retirement') requested = milestone('retirement:' + ownerId, offset)
+        else if (time.reference == 'retirement') requested = milestone('retirement:' + (time.personId ?: ownerId), offset)
         else if (time.reference == 'milestone') requested = milestone(time.milestoneId, offset)
         else requested = { planDate.plusMonths(offset) }
 
