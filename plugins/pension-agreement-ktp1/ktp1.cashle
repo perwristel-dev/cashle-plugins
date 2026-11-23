@@ -1,0 +1,55 @@
+import dev.cashle.pension.agreement.PensionAgreement.ContributionInput
+import dev.cashle.pension.agreement.PensionAgreement.Kind
+
+import java.time.LocalDate
+
+import static SwedishAgreementRules.*
+
+def afo = localized('KTP 1 (AFO–Handels)', 55, 5)
+def abf = localized('KTP 1 (ABF–Handels)', 55, 5)
+def fremia = localized('KTP 1 (Fremia–Handels)', 55, 5)
+def forena = localized('KTP 1 (Fremia–Forena/Handels/Akademikerförbunden)', 55, 5, 1, 1, .5d,
+        'openingPendingPremium', false, ' – traditionell del', ' – traditional portion')
+def forenaDeltid = localized('KTP 1 (Fremia–Forena/Handels/Akademikerförbunden + deltidspension)', 55, 5, 1, 1, .5d,
+        'openingPendingPremium', false, ' – traditionell del', ' – traditional portion')
+
+def plans = [
+    ['KTP1-AFO-HANDELS', afo, .063d, .318d, 22, 67, LocalDate.of(2012, 1, 1), false],
+    ['KTP1-ABF-HANDELS', abf, .063d, .318d, 22, 65, LocalDate.of(2012, 1, 1), false],
+    ['KTP1-FREMIA-HANDELS', fremia, .045d, .30d, 25, 65, LocalDate.of(2011, 1, 1), false],
+    ['KTP1-FREMIA-FORENA', forena, .057d, .313d, 25, 66, LocalDate.of(2011, 7, 1), true],
+    ['KTP1-FREMIA-FORENA-DELTID', forenaDeltid, .061d, .317d, 25, 66, LocalDate.of(2011, 7, 1), true],
+]
+plans.each { String id, Closure display, double lowerRate, double upperRate, int minimumAge, int retirementAge,
+        LocalDate begins, boolean forenaTerms ->
+    pensionAgreement(id) {
+        pluginId "cashle.pension.agreement.${id}"
+        kind Kind.DEFINED_CONTRIBUTION
+        metadata display('sv')
+        localizedMetadata display
+        eligible { ContributionInput input -> ktp1Eligible(input, begins, minimumAge, retirementAge, forenaTerms) }
+        historicalContributionBreakpoints { ContributionInput input ->
+            hasSalaryCap(input, forenaTerms) ? thresholds(input, 7.5d, 30d) : thresholds(input, 7.5d)
+        }
+        contribution { ContributionInput input ->
+            if (!ktp1Eligible(input, begins, minimumAge, retirementAge, forenaTerms)) return 0d
+            double salary = input.salary()
+            double base = incomeBase(input)
+            double upperLimit = hasSalaryCap(input, forenaTerms) ? 30d * base : Double.MAX_VALUE
+            double premium = band(salary, 0d, 7.5d * base, lowerRate) + band(salary, 7.5d * base, upperLimit, upperRate)
+            premium * (1d - .015d)
+        }
+    }
+}
+
+static boolean ktp1Eligible(ContributionInput input, LocalDate begins, int minimumAge, int retirementAge, boolean forenaTerms) {
+    if (input.date().isBefore(begins)) return false
+    boolean already65At2026 = !input.birth().isAfter(LocalDate.of(1961, 1, 1))
+    int lastAge = input.date().year < 2026 || (forenaTerms && already65At2026) ? 65 : retirementAge
+    double ageInYears = age(input)
+    ageInYears >= minimumAge && ageInYears < lastAge
+}
+
+static boolean hasSalaryCap(ContributionInput input, boolean forenaTerms) {
+    forenaTerms && input.date().year >= 2026
+}

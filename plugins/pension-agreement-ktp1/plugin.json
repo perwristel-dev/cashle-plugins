@@ -1,0 +1,24 @@
+{
+  "id": "cashle.pension.agreement.KTP1",
+  "sources": [
+    {
+      "path": "ktp1.cashle",
+      "providers": [
+        "cashle.pension.agreement.KTP1-ABF-HANDELS",
+        "cashle.pension.agreement.KTP1-AFO-HANDELS",
+        "cashle.pension.agreement.KTP1-FREMIA-HANDELS",
+        "cashle.pension.agreement.KTP1-FREMIA-FORENA",
+        "cashle.pension.agreement.KTP1-FREMIA-FORENA-DELTID"
+      ],
+      "imports": {
+        "cashle.pension.agreement.rules": ["SwedishAgreementRules.groovy"]
+      }
+    }
+  ],
+  "ui": "agreement-entry.js",
+  "uiTranslations": [
+    {"locale": "en", "path": "ui-en.json"},
+    {"locale": "sv", "path": "ui-sv.json"}
+  ],
+  "requires": ["cashle.pension.agreement.rules"]
+}
