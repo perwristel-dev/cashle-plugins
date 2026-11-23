@@ -1,0 +1,107 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
+import dev.cashle.sdk.model.ScheduleSpec
+import java.time.LocalDate
+import java.time.YearMonth
+import java.util.function.Supplier
+
+final class CanadianFederalPensionDates {
+    static boolean whole(Object value, int minimum, int maximum) {
+        value instanceof Number && value >= minimum && value <= maximum && value.doubleValue() == Math.rint(value.doubleValue())
+    }
+
+    static boolean money(Object value) {
+        value instanceof Number && Double.isFinite(value.doubleValue()) && value >= 0d
+    }
+
+    static LocalDate monthStart(LocalDate date) {
+        date.dayOfMonth == 1 ? date : date.withDayOfMonth(1).plusMonths(1)
+    }
+
+    static boolean validStart(Object start) {
+        if (!(start instanceof Map) || !(start.reference in ['now', 'age', 'date', 'retirement', 'milestone']) ||
+            (start.offset != null && !whole(start.offset, -1800, 1800))) return false
+        switch (start.reference) {
+            case 'age': return whole(start.age, 0, 125)
+            case 'date':
+                return whole(start.year, 1900, 9999) && whole(start.month, 1, 12) &&
+                    (start.day == null || whole(start.day, 1, YearMonth.of(start.year.intValue(), start.month.intValue()).lengthOfMonth()))
+            case 'milestone': return start.milestoneId instanceof String && !start.milestoneId.isBlank()
+            default: return true
+        }
+    }
+}
+
+financeModule('cashlab.canadian-federal-public-service-pension', 1) {
+    pluginId 'cashle.finance.pension.federal-public-service.ca'
+    messages 'canadian.federalpension.messages'
+    dsl('canadianFederalPublicServicePension') { id ->
+        [name: id, owner: 'self', group: 'group2', serviceYears: 2d, benefit: 'unreduced',
+         annualLifetime: 0d, annualBridge: 0d, payoutStart: [reference: 'retirement', offset: 0]]
+    }
+
+    calculation {
+        if (!enabled) return
+        String personId = input.owner ?: 'self'
+        def person = profile.people.find { it.id == personId && it.id in ['self', 'partner'] }
+        requireInput('invalid.owner') {
+            CanadianFederalPensionDates.whole(person?.birthYear, 1900, 9999) &&
+                CanadianFederalPensionDates.whole(person?.birthMonth, 1, 12)
+        }
+        requireInput('invalid.name') { input.name instanceof String && !input.name.isBlank() && input.name.trim().length() <= 80 }
+        requireInput('invalid.group') { input.group in ['group1', 'group2'] }
+        requireInput('invalid.service') { CanadianFederalPensionDates.money(input.serviceYears) && input.serviceYears >= 2d && input.serviceYears <= 35d }
+        requireInput('invalid.benefit') { input.benefit in ['unreduced', 'allowance'] }
+        requireInput('invalid.amount') {
+            CanadianFederalPensionDates.money(input.annualLifetime) && CanadianFederalPensionDates.money(input.annualBridge)
+        }
+        requireInput('invalid.start') { CanadianFederalPensionDates.validStart(input.payoutStart) }
+
+        int minimumAge = input.benefit == 'allowance' ? 50 : input.serviceYears >= 30d ? 55 : 60
+        if (input.group == 'group2') minimumAge += 5
+        LocalDate planDate = planStart.anchor()
+        LocalDate birth = LocalDate.of(person.birthYear.intValue(), person.birthMonth.intValue(), 1)
+        LocalDate earliest = birth.plusYears(minimumAge).plusMonths(1)
+        LocalDate latest = LocalDate.of(birth.year + 71, 12, 1)
+        LocalDate bridgeEnd = birth.plusYears(65).plusMonths(1)
+        Map start = input.payoutStart
+        int offset = ((Number) (start.offset ?: 0)).intValue()
+        Supplier<LocalDate> requested
+        switch (start.reference) {
+            case 'now': requested = { planDate.plusMonths(offset) }; break
+            case 'age': requested = { birth.plusYears(start.age.intValue()).plusMonths(offset + 1) }; break
+            case 'date':
+                LocalDate entered = LocalDate.of(start.year.intValue(), start.month.intValue(), ((Number) (start.day ?: 1)).intValue())
+                requested = { entered.plusMonths(offset) }
+                break
+            case 'retirement': requested = milestone('retirement:' + personId, offset); break
+            case 'milestone': requested = milestone(start.milestoneId, offset); break
+        }
+
+        double lifetime = input.annualLifetime.doubleValue() / 12d
+        double bridge = input.annualBridge.doubleValue() / 12d
+        if (lifetime == 0d && bridge == 0d) return
+        double fx = exchangeRate('CAD', profile.currency ?: 'CAD')
+        def income = owner(personId).account {
+            name input.name
+            classify AccountKind.INCOME, new AccountTag('cashle.household.economic-nature', 1, 'income.pension.occupational', [AccountKind.INCOME] as Set)
+            reportingRole ReportingRole.INCOME
+        }
+        taxableReceipt(personId, 'registeredPension', 'monthly') {
+            on ScheduleSpec.every(Frequency.MONTH, CanadianFederalPensionDates.monthStart(planDate))
+            until deathOf(personId)
+            debit cash
+            credit income
+            amount {
+                LocalDate date = requested.get()
+                LocalDate month = date == null ? latest : CanadianFederalPensionDates.monthStart(date)
+                LocalDate payable = month.isBefore(earliest) ? earliest : month.isAfter(latest) ? latest : month
+                if (today.isBefore(payable)) return 0d
+                LocalDate indexDate = today.withDayOfYear(1).isBefore(planDate) ? planDate : today.withDayOfYear(1)
+                (lifetime + (today.isBefore(bridgeEnd) ? bridge : 0d)) * inflationFactor(planDate, indexDate) * fx
+            }
+        }
+    }
+}
