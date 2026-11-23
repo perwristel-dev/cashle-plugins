@@ -1,0 +1,16 @@
+{
+  "name": "Industriens Pension",
+  "names": {
+    "en": "Industriens Pension",
+    "sv": "Industriens Pension"
+  },
+  "description": {
+    "en": "Danish industry agreement contributions, pension savings and quoted retirement income.",
+    "sv": "Danska industriavtalets premier, pensionssparande och utbetalningar enligt pensionsbesked."
+  },
+  "country": "DK",
+  "category": "income",
+  "releases": [
+    "01e68d30b21bb4ba09524f1a33e9db21cda66e7d421abe7f1601619314467d8d"
+  ]
+}
