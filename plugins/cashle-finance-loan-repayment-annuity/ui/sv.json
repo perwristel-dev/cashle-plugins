@@ -1,0 +1,17 @@
+{
+  "Annuitet": "Annuitet",
+  "Amortering": "Amortering",
+  "Lägg först till ett lån som kan amorteras.": "Lägg först till ett lån som kan amorteras.",
+  "Lånet saknar stöd för automatisk start. Välj när amorteringen ska börja.": "Lånet saknar stöd för automatisk start. Välj när amorteringen ska börja.",
+  "Lånet saknar stöd för automatisk betalningsfrekvens. Välj en frekvens.": "Lånet saknar stöd för automatisk betalningsfrekvens. Välj en frekvens.",
+  "När lånet börjar": "När lånet börjar",
+  "Samma som lånets ränta": "Samma som lånets ränta",
+  "Lån: välj ett tillgängligt lån.": "Lån: välj ett tillgängligt lån.",
+  "Återstående löptid: ange hela betalningsperioder, högst 1000 år.": "Återstående löptid: ange hela betalningsperioder, högst 1000 år.",
+  "Återstående löptid": "Återstående löptid",
+  "Löptidens enhet": "Löptidens enhet",
+  "Annuitet kräver att lånet stöder prognos av upplupen ränta för ränteberäkning.": "Annuitet kräver att lånet stöder prognos av upplupen ränta för ränteberäkning.",
+  "Lånet kan bara ha ett aktivt annuitetsflöde.": "Lånet kan bara ha ett aktivt annuitetsflöde.",
+  "Annuitet kräver att lånet anger sin betalningsfrekvens.": "Annuitet kräver att lånet anger sin betalningsfrekvens.",
+  "Annuiteten betalas vid lånets ränteperiodslut och använder samma betalningsfrekvens som räntan.": "Annuiteten betalas vid lånets ränteperiodslut och använder samma betalningsfrekvens som räntan."
+}

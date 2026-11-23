@@ -1,0 +1,15 @@
+{
+  "name": "Amorteringsbelopp",
+  "names": {
+    "en": "Fixed repayment",
+    "sv": "Amorteringsbelopp"
+  },
+  "description": {
+    "sv": "Amortera med ett angivet belopp per betalningsperiod.",
+    "en": "Repay a fixed amount each payment period."
+  },
+  "category": "flows",
+  "releases": [
+    "5fcda4d0bc0f6c1cff0cc4e5745fff9f1789c88b0a177cab9bb08d42a136b5c2"
+  ]
+}
