@@ -1,0 +1,16 @@
+{
+  "name": "Folketrygdens alderspensjon",
+  "names": {
+    "en": "Norwegian public old-age pension",
+    "sv": "Norsk allmän ålderspension"
+  },
+  "description": {
+    "en": "Project NAV pension rights and lifelong monthly payments from the selected age, date or milestone.",
+    "sv": "Beräkna norsk pensionsbehållning och livsvarigt uttag från vald ålder, datum eller milstolpe."
+  },
+  "category": "accounts",
+  "country": "NO",
+  "releases": [
+    "d15dfca63d62eaa1788d667e357230ac26084570b1c88d399fe4b0075d1b7178"
+  ]
+}

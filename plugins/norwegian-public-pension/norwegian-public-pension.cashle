@@ -1,0 +1,244 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.i18n.Messages
+import dev.cashle.sdk.composition.ModuleContext
+import dev.cashle.sdk.composition.ModuleInput
+import dev.cashle.sdk.finance.FinanceContext
+import dev.cashle.sdk.finance.FinanceModule
+import dev.cashle.sdk.finance.FundingPort
+import dev.cashle.sdk.finance.MetricsPort
+import dev.cashle.sdk.finance.TaxPort
+import dev.cashle.sdk.model.AccountHandle
+import dev.cashle.sdk.model.FlowHandle
+import dev.cashle.sdk.model.ScheduleSpec
+import dev.cashle.sdk.model.Variable
+import groovy.transform.CompileStatic
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.temporal.ChronoUnit
+import java.util.function.Supplier
+
+financeModule('cashlab.norwegian-public-pension', 1) {
+    pluginId 'cashle.finance.pension.public.no'
+    dsl('norwegianPublicPension') { String id ->
+        [name: id, owner: 'self', basis: 'balance', openingBalance: 0d, pensionableAnnual: 0d,
+         navMonthly: 0d, insuranceYears: 40, guaranteeRate: 'high', fraction: 100,
+         payoutStart: [reference: 'age', age: 67, personId: 'self', offset: 0]]
+    }
+    factory { ModuleInput input -> new NorwegianPublicPension(input) }
+}
+
+@CompileStatic
+final class NorwegianDivisors {
+    private static final int FIRST_YEAR = 1963
+    private static final List<double[]> ROWS = readTable()
+
+    static double at(int birthYear, long ageMonths) {
+        int row = Math.min(ROWS.size() - 1, birthYear - FIRST_YEAR)
+        int column = (int) Math.max(0L, Math.min(156L, ageMonths - 62L * 12L))
+        return ROWS.get(row)[column]
+    }
+
+    private static List<double[]> readTable() {
+        List<double[]> rows = new ArrayList<>()
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(
+                NorwegianDivisors.getResourceAsStream('/dev/cashle/pension/no/delingstall.tsv'),
+                java.nio.charset.StandardCharsets.UTF_8))) {
+            String line
+            while ((line = reader.readLine()) != null) {
+                String[] cells = line.split('\t')
+                if (cells.length != 158 || Integer.parseInt(cells[0]) != FIRST_YEAR + rows.size())
+                    throw new IllegalStateException('Invalid NAV delingstall table')
+                double[] ages = new double[157]
+                for (int i = 0; i < ages.length; i++) ages[i] = Double.parseDouble(cells[i + 1])
+                rows.add(ages)
+            }
+        }
+        return List.copyOf(rows)
+    }
+}
+
+@CompileStatic
+final class NorwegianPublicPension implements FinanceModule {
+    private static final String NATURE = 'cashle.household.economic-nature'
+    private static final double HIGH_GUARANTEE = 253787d
+    private static final double ORDINARY_GUARANTEE = 234765d
+    private static final double MONTHLY_ACCRUAL_RATE = 0.181d / 12d
+    private static final double EARNINGS_LIMIT = 7.1d * 134419d
+    private final ModuleInput entry
+    private FinanceContext context
+    private Messages messages
+    private String owner
+    private AccountHandle pensionRights, equity, income
+    private FlowHandle payment
+    private YearMonth birth
+    private LocalDate normalStart, earlyStart, latestAccrual
+    private Supplier<LocalDate> requested, lastMonthExclusive
+    private Variable balance, award, claimed, transfer
+    private double salary, fraction, guarantee, navMonthly, exchange
+    private boolean fromNav, taxable, confirmedEarly, insured
+
+    NorwegianPublicPension(ModuleInput entry) { this.entry = entry }
+
+    @Override void declare(ModuleContext ignored) {}
+
+    @Override void declareFinance(FinanceContext finance) {
+        context = finance
+        messages = finance.messages(NorwegianPublicPension, 'dev.cashle.pension.no.messages')
+        Map<String,Object> data = entry.data()
+        owner = Objects.toString(data.get('owner'), 'self')
+        String name = Objects.toString(data.get('name'), entry.id())
+        fromNav = 'nav'.equals(data.get('basis'))
+        def entity = finance.owner(owner)
+        income = entity.account().classify(AccountKind.INCOME,
+            new AccountTag(NATURE, 1, 'income.pension.public', Set.of(AccountKind.INCOME)))
+        income.setName(name)
+        if (!fromNav) {
+            pensionRights = entity.account().classify(AccountKind.ASSET,
+                new AccountTag(NATURE, 1, 'asset.pension', Set.of(AccountKind.ASSET)))
+            pensionRights.setName(name)
+            pensionRights.setIncludeInNetWorth(false)
+            pensionRights.setInheritable(false)
+            equity = entity.account().classify(AccountKind.EQUITY,
+                new AccountTag(NATURE, 1, 'equity.contribution', Set.of(AccountKind.EQUITY)))
+        }
+    }
+
+    @Override void wireFinance(FinanceContext finance) {
+        Map<String,Object> data = entry.data()
+        List<?> people = (List<?>) finance.profile().get('people')
+        Map<?,?> person = (Map<?,?>) people.find { Object value -> owner.equals(((Map<?,?>) value).get('id')) }
+        if (!(person?.get('birthYear') instanceof Number) || !(person.get('birthMonth') instanceof Number)) throw invalid('birth')
+        birth = YearMonth.of(((Number) person.get('birthYear')).intValue(), ((Number) person.get('birthMonth')).intValue())
+        if (!fromNav && birth.getYear() < 1963) throw invalid('cohort')
+
+        normalStart = birth.plusYears(67).plusMonths(1).atDay(1)
+        earlyStart = birth.plusYears(62).plusMonths(1).atDay(1)
+        latestAccrual = LocalDate.of(birth.getYear() + 76, 1, 1)
+        String navDate = Objects.toString(data.get('navEarliest'), '')
+        confirmedEarly = !navDate.isEmpty()
+        if (confirmedEarly) {
+            LocalDate given
+            try { given = monthStart(LocalDate.parse(navDate)) }
+            catch (java.time.DateTimeException failure) { throw invalid('input') }
+            earlyStart = max(earlyStart, given)
+        }
+        LocalDate floor = !confirmedEarly && fromNav ? normalStart : earlyStart
+        Object time = data.get('payoutStart')
+        if (time instanceof Map) {
+            Map<String,Object> reference = new LinkedHashMap<>((Map<String,Object>) time)
+            if ('age'.equals(reference.get('reference'))) {
+                int age = (int) number(reference, 'age', 67d)
+                int offset = ((Number) reference.getOrDefault('offset', 0)).intValue()
+                LocalDate day = birth.plusYears(age).plusMonths(1L + offset).atDay(1)
+                requested = () -> day
+            } else requested = finance.timeDate(reference)
+        } else if (time instanceof String && !((String) time).isEmpty()) {
+            LocalDate entered = LocalDate.parse((String) time)
+            requested = () -> entered
+        } else requested = () -> normalStart
+        Supplier<LocalDate> life = finance.lifeEnd(owner)
+        lastMonthExclusive = () -> {
+            LocalDate end = life.get()
+            return end == null ? null : YearMonth.from(end).plusMonths(1).atDay(1)
+        }
+
+        double degree = number(data, 'fraction', 100d)
+        double years = number(data, 'insuranceYears', 40d)
+        if (!(degree in [20d, 40d, 50d, 60d, 80d, 100d]) || years > 40d || years != Math.rint(years)) throw invalid('input')
+        fraction = degree / 100d
+        insured = fromNav || confirmedEarly || years >= 5d
+        salary = Math.min(EARNINGS_LIMIT, number(data, 'pensionableAnnual', 0d))
+        navMonthly = number(data, 'navMonthly', 0d)
+        guarantee = years < 5d ? 0d : years / 40d * ('ordinary'.equals(data.get('guaranteeRate')) ? ORDINARY_GUARANTEE : HIGH_GUARANTEE)
+        exchange = finance.exchangeRate('NOK', Objects.toString(finance.profile().get('currency'), 'NOK'))
+        taxable = !finance.taxSettings().isEmpty()
+        def model = finance.model()
+        balance = model.variable(fromNav ? 0d : number(data, 'openingBalance', 0d))
+        claimed = model.variable(0d)
+        award = model.variable(0d)
+        transfer = model.variable(0d)
+        if (pensionRights != null) model.valueAccount(pensionRights, equity, () -> presentBalance())
+        ScheduleSpec months = ScheduleSpec.every(Frequency.MONTH, finance.from().withDayOfMonth(1)).atMonthEnd()
+        def calculation = model.action(months, () -> update(model.clock().getDate(), floor))
+        ScheduleSpec paymentMonths = ScheduleSpec.every(Frequency.MONTH, max(finance.from(), floor).withDayOfMonth(1)).atMonthEnd()
+        payment = model.flow(paymentMonths, finance.cash(), income, () -> transfer.getValue(), calculation)
+    }
+
+    private void update(LocalDate date, LocalDate floor) {
+        transfer.setValue(0d)
+        LocalDate end = lastMonthExclusive.get()
+        if (end != null && !date.isBefore(end)) {
+            balance.setValue(0d)
+            return
+        }
+        if (claimed.getValue() == 0d) {
+            LocalDate enter = requested.get()
+            boolean canStart = enter != null && !date.isBefore(max(floor, monthStart(enter)))
+            if (canStart && qualifies(date)) {
+                double divisor = fromNav ? 1d : NorwegianDivisors.at(birth.getYear(), ageMonths(date))
+                double supplement = fromNav ? 0d : Math.max(0d,
+                    guarantee * NorwegianDivisors.at(birth.getYear(), 67L * 12L) - 0.8d * balance.getValue())
+                award.setValue(fromNav ? navMonthly * fraction : (balance.getValue() + supplement) / divisor * fraction / 12d)
+                balance.setValue(balance.getValue() * (1d - fraction))
+                claimed.setValue(1d)
+            } else if (!fromNav && date.isBefore(latestAccrual) && date.getYear() >= birth.getYear() + 13) {
+                long covered = ChronoUnit.DAYS.between(max(context.from(), date.withDayOfMonth(1)), date) + 1L
+                balance.setValue(balance.getValue() + covered / (double) date.lengthOfMonth() * MONTHLY_ACCRUAL_RATE * salary)
+            }
+        }
+        transfer.setValue(award.getValue() * exchange * context.inflationFactor(context.from(), date))
+    }
+
+    private long ageMonths(LocalDate paymentDay) {
+        // The withdrawal month follows the age attained in the preceding month.
+        ChronoUnit.MONTHS.between(birth, YearMonth.from(paymentDay).minusMonths(1))
+    }
+
+    private boolean qualifies(LocalDate date) {
+        if (!insured) return false
+        if (!date.isBefore(normalStart) || confirmedEarly) return true
+        if (fromNav) return false
+        double drawn = balance.getValue() / NorwegianDivisors.at(birth.getYear(), ageMonths(date))
+        double deferred = balance.getValue() / NorwegianDivisors.at(birth.getYear(), 67L * 12L)
+        // Require the full guarantee threshold from estimated income rights alone.
+        // NAV can also confirm an earlier date using other eligible entitlements.
+        return drawn * fraction + deferred * (1d - fraction) >= HIGH_GUARANTEE
+    }
+
+    private double presentBalance() {
+        LocalDate day = context.model().clock().getDate()
+        return balance.getValue() * exchange * context.inflationFactor(context.from(), day)
+    }
+
+    @Override void funding(FundingPort port) {
+        port.receiptUntil(payment, taxable ? FundingPort.ReceiptTax.TAXABLE : FundingPort.ReceiptTax.TAX_FREE,
+            false, lastMonthExclusive)
+    }
+
+    @Override void metrics(MetricsPort port) {
+        if (pensionRights != null) port.balance(pensionRights, () -> presentBalance())
+        port.income(income, false)
+    }
+
+    @Override void tax(TaxPort port) {
+        if (taxable) port.income(owner, income, 'pension', 'monthly', 'NO', () -> context.from(), () -> true, Map.of())
+    }
+
+    private static LocalDate max(LocalDate left, LocalDate right) { left.isAfter(right) ? left : right }
+    private static LocalDate monthStart(LocalDate date) {
+        date.getDayOfMonth() == 1 ? date : YearMonth.from(date).plusMonths(1).atDay(1)
+    }
+
+    private double number(Map<String,Object> data, String key, double fallback) {
+        Object raw = data.get(key)
+        if (raw == null) return fallback
+        if (!(raw instanceof Number)) throw invalid('amount')
+        double value = ((Number) raw).doubleValue()
+        if (!Double.isFinite(value) || value < 0d) throw invalid('amount')
+        return value
+    }
+
+    private IllegalArgumentException invalid(String key) { new IllegalArgumentException(messages.text(key)) }
+}
