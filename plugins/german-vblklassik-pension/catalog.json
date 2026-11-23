@@ -1,0 +1,16 @@
+{
+  "name": "German public-sector occupational pension (VBLklassik)",
+  "names": {
+    "en": "German public-sector occupational pension (VBLklassik)",
+    "sv": "Tysk offentlig tjänstepension (VBLklassik)"
+  },
+  "description": {
+    "en": "Lifelong occupational old-age income from the mandatory VBLklassik scheme using a VBL quote.",
+    "sv": "Livsvarig tjänstepension från det obligatoriska VBLklassik enligt uppgift från VBL."
+  },
+  "country": "DE",
+  "category": "income",
+  "releases": [
+    "4582ebb5607658475a402b68c691eaf2c1abbb506468e6f142a9871a2a5f937f"
+  ]
+}

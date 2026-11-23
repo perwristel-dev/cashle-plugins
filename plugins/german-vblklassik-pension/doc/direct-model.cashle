@@ -1,0 +1,16 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.cashflow'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.vblklassik.de' from '../german-vblklassik-pension.cashle'
+}
+
+finance {
+    plan { from '2026-02-01'; until '2026-08-01'; currency 'EUR'; inflation 0d }
+    person('self') { name 'Pension recipient'; birthYear 1961; birthMonth 3 }
+    germanVblklassikPension('VBLklassik pension') {
+        settings grossMonthlyEur: 420d, firstFullPensionMonth: '2026-04',
+            payoutStart: [reference: 'date', year: 2026, month: 2, day: 15]
+    }
+}
+collect { cashflow {} }

@@ -1,0 +1,19 @@
+{
+  "id": "cashle.finance.pension.vblklassik.de",
+  "requires": ["cashle.finance"],
+  "sources": [{
+    "path": "german-vblklassik-pension.cashle",
+    "providers": ["cashle.finance.pension.vblklassik.de"],
+    "resources": [
+      "german/vblklassik/messages_en.properties",
+      "german/vblklassik/messages_sv.properties",
+      "german/vblklassik/messages_de.properties"
+    ]
+  }],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {"locale": "en", "path": "ui/en.json"},
+    {"locale": "sv", "path": "ui/sv.json"},
+    {"locale": "de", "path": "ui/de.json"}
+  ]
+}
