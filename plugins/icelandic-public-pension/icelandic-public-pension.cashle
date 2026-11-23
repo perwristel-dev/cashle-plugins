@@ -1,0 +1,194 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
+import dev.cashle.sdk.model.ScheduleSpec
+import java.time.DateTimeException
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.temporal.ChronoUnit
+import java.util.function.Supplier
+
+final class IcelandicOldAgePension {
+    static final LocalDate RULE_DATE = LocalDate.of(2026, 1, 1)
+    private static final double MONTHLY_MAXIMUM = 365592d
+    private static final double GENERAL_EXEMPTION = 523896d
+    private static final double EARNINGS_EXEMPTION = 2524800d
+    private static final double TAPER = 0.45d
+
+    // Regulation 1485/2024, Annex I. Percentage points per month relative to age 67.
+    private static final List<List<Double>> DEFERRED = [
+        [0.50d, 0.55d, 0.62d, 0.70d, 0.80d, 0.90d, 1.04d, 1.18d, 1.35d, 1.55d, 1.79d, 2.09d, 2.45d],
+        [0.50d, 0.55d, 0.62d, 0.70d, 0.80d, 0.92d, 1.04d, 1.18d, 1.34d, 1.54d, 1.78d, 2.08d, 2.44d],
+        [0.50d, 0.55d, 0.62d, 0.70d, 0.81d, 0.91d, 1.03d, 1.17d, 1.34d, 1.53d, 1.77d, 2.06d, 2.42d],
+        [0.50d, 0.55d, 0.62d, 0.73d, 0.81d, 0.91d, 1.03d, 1.16d, 1.33d, 1.52d, 1.76d, 2.05d, 2.40d],
+        [0.50d, 0.55d, 0.65d, 0.72d, 0.81d, 0.91d, 1.02d, 1.16d, 1.32d, 1.51d, 1.75d, 2.03d, 2.38d],
+        [0.50d, 0.58d, 0.65d, 0.72d, 0.80d, 0.90d, 1.02d, 1.15d, 1.31d, 1.50d, 1.74d, 2.02d, 2.36d],
+        [0.53d, 0.58d, 0.64d, 0.72d, 0.80d, 0.90d, 1.01d, 1.14d, 1.30d, 1.50d, 1.73d, 2.00d, 2.35d],
+        [0.52d, 0.58d, 0.64d, 0.71d, 0.80d, 0.89d, 1.01d, 1.14d, 1.30d, 1.49d, 1.71d, 1.99d, 2.33d],
+        [0.52d, 0.58d, 0.64d, 0.71d, 0.79d, 0.89d, 1.00d, 1.13d, 1.29d, 1.48d, 1.70d, 1.98d, 2.32d],
+        [0.52d, 0.57d, 0.64d, 0.71d, 0.79d, 0.88d, 0.99d, 1.13d, 1.28d, 1.47d, 1.69d, 1.96d, 2.30d],
+        [0.52d, 0.57d, 0.63d, 0.70d, 0.78d, 0.88d, 0.99d, 1.12d, 1.27d, 1.46d, 1.68d, 1.95d, 2.28d],
+    ]
+    private static final List<List<Double>> EARLY = [
+        [0.440d, 0.540d], [0.440d, 0.490d], [0.436d, 0.486d], [0.434d, 0.483d], [0.432d, 0.481d],
+    ]
+
+    static boolean amount(Object value) {
+        value instanceof Number && Double.isFinite(value.doubleValue()) && value.doubleValue() >= 0d
+    }
+
+    static boolean integer(Object value, int min, int max) {
+        amount(value) && value.doubleValue() == Math.rint(value.doubleValue()) && value >= min && value <= max
+    }
+
+    static LocalDate calendarDate(Map request) {
+        def day = request.day == null ? 1 : request.day
+        if (!integer(request.year, 1900, 9999) || !integer(request.month, 1, 12) ||
+            !integer(day, 1, 31)) return null
+        try {
+            return LocalDate.of(request.year.intValue(), request.month.intValue(), day.intValue())
+        } catch (DateTimeException ignored) {
+            return null
+        }
+    }
+
+    static LocalDate nextMonth(LocalDate date) {
+        date.withDayOfMonth(1).plusMonths(1)
+    }
+
+    static LocalDate firstPaymentOnOrAfter(LocalDate date) {
+        date.dayOfMonth == 1 ? date : nextMonth(date)
+    }
+
+    static LocalDate effectiveStart(LocalDate requested, LocalDate earliest, LocalDate latest) {
+        if (requested == null) return null
+        def paymentDay = firstPaymentOnOrAfter(requested)
+        if (paymentDay.isBefore(earliest)) return earliest
+        if (paymentDay.isAfter(latest)) return latest
+        paymentDay
+    }
+
+    static double normalMonthly(double years, double employment, double other) {
+        if (years < 3d) return 0d
+        double earningsAfterExemption = Math.max(0d, employment - EARNINGS_EXEMPTION)
+        double assessableIncome = Math.max(0d, earningsAfterExemption + other - GENERAL_EXEMPTION)
+        // TR applies the income reduction to the full amount, then the residence ratio.
+        Math.max(0d, MONTHLY_MAXIMUM - TAPER * assessableIncome / 12d) * Math.min(years / 40d, 1d)
+    }
+
+    static double ageFactor(int birthYear, LocalDate normalStart, LocalDate effective,
+                            boolean eligibleForDeferral) {
+        int months = (int) ChronoUnit.MONTHS.between(normalStart, effective)
+        if (months == 0) return 1d
+        if (months < 0) {
+            def row = EARLY[Math.min(birthYear, 1962) - 1958]
+            int age65Months = Math.max(0, -months - 12)
+            int age66Months = Math.min(12, -months)
+            return 1d - (age65Months * row[0] + age66Months * row[1]) / 100d
+        }
+        if (!eligibleForDeferral) return 1d
+        if (birthYear < 1952) return 1d + months * 0.005d
+        def row = DEFERRED[Math.min(birthYear, 1962) - 1952]
+        double increase = 0d
+        for (int i = 0; i < row.size() && months > i * 12; i++) {
+            increase += Math.min(12, months - i * 12) * row[i]
+        }
+        1d + increase / 100d
+    }
+}
+
+financeModule('cashlab.icelandic-public-pension', 1) {
+    pluginId 'cashle.finance.pension.is'
+    messages 'icelandic.pension.messages'
+    dsl('icelandicPublicPension') { id ->
+        [name:id, owner:'self', residenceYears:40d, annualEmploymentIncome:0d, annualOtherIncome:0d,
+         payoutStart:[reference:'age', age:67], earlyEligible:false, deferralEligible:false]
+    }
+
+    calculation {
+        if (!enabled) return
+        def profileData = profile
+        def person = (profileData.people ?: []).find { it.id == input.owner }
+        requireInput('invalid.owner') { person != null && input.owner != 'joint' }
+        requireInput('invalid.birth') {
+            IcelandicOldAgePension.integer(person.birthYear, 1900, 9900) &&
+                IcelandicOldAgePension.integer(person.birthMonth, 1, 12)
+        }
+        requireInput('invalid.name') { input.name instanceof String && !input.name.blank }
+        requireInput('invalid.residence') {
+            IcelandicOldAgePension.amount(input.residenceYears) && input.residenceYears <= 51d
+        }
+        requireInput('invalid.income') {
+            IcelandicOldAgePension.amount(input.annualEmploymentIncome) &&
+                IcelandicOldAgePension.amount(input.annualOtherIncome)
+        }
+        requireInput('invalid.eligibility') {
+            (input.earlyEligible == null || input.earlyEligible instanceof Boolean) &&
+                (input.deferralEligible == null || input.deferralEligible instanceof Boolean)
+        }
+
+        int cohort = person.birthYear
+        def birthMonth = YearMonth.of(cohort, (int) person.birthMonth)
+        def normalStart = birthMonth.plusYears(67).plusMonths(1).atDay(1)
+        def earliest = Boolean.TRUE.equals(input.earlyEligible) && cohort >= 1958 ? normalStart.minusYears(2) : normalStart
+        def latest = birthMonth.plusYears(cohort < 1952 ? 72 : 80).plusMonths(1).atDay(1)
+        def start = input.payoutStart ?: [reference:'age', age:67]
+        requireInput('invalid.start') { start instanceof Map }
+        def offset = start.offset == null ? 0 : start.offset
+        requireInput('invalid.start') {
+            offset instanceof Number && Math.rint(offset.doubleValue()) == offset.doubleValue() &&
+                offset >= -1200 && offset <= 1200
+        }
+
+        Supplier<LocalDate> requested
+        if (start.reference == 'age') {
+            requireInput('invalid.start') { IcelandicOldAgePension.integer(start.age, 0, 120) }
+            def birthdayMonth = birthMonth.plusYears(start.age.longValue()).plusMonths(offset.longValue())
+            requested = { birthdayMonth.plusMonths(1).atDay(1) }
+        } else if (start.reference == 'date') {
+            def entered = IcelandicOldAgePension.calendarDate(start)
+            requireInput('invalid.start') { entered != null }
+            requested = { entered.plusMonths(offset.longValue()) }
+        } else {
+            requireInput('invalid.start') {
+                start.reference == 'milestone' && start.milestoneId instanceof String && !start.milestoneId.blank
+            }
+            requested = milestone(start.milestoneId, offset.intValue())
+        }
+
+        def planDay = planStart.anchor()
+        def calendarStart = IcelandicOldAgePension.firstPaymentOnOrAfter(planDay)
+        if (start.reference != 'milestone') {
+            def expected = IcelandicOldAgePension.effectiveStart(requested.get(), earliest, latest)
+            if (expected.isAfter(calendarStart)) calendarStart = expected
+        }
+        def death = deathOf(input.owner)
+        Supplier<LocalDate> end = {
+            def date = death.get()
+            date == null ? null : IcelandicOldAgePension.nextMonth(date)
+        }
+        def income = owner(input.owner).account {
+            name input.name
+            classify AccountKind.INCOME, new AccountTag('cashle.household.economic-nature', 1,
+                'income.pension.public', [AccountKind.INCOME] as Set)
+            reportingRole ReportingRole.INCOME
+        }
+        double base = IcelandicOldAgePension.normalMonthly(input.residenceYears.doubleValue(),
+            input.annualEmploymentIncome.doubleValue(), input.annualOtherIncome.doubleValue())
+        def conversion = exchangeRate('ISK', profileData.currency ?: 'ISK')
+        taxableReceipt(input.owner, 'pension', 'monthly') {
+            on ScheduleSpec.every(Frequency.MONTH, calendarStart)
+            until end
+            debit cash
+            credit income
+            amount {
+                def paymentStart = IcelandicOldAgePension.effectiveStart(requested.get(), earliest, latest)
+                if (paymentStart == null || today.isBefore(paymentStart)) return 0d
+                double ageFactor = IcelandicOldAgePension.ageFactor(cohort, normalStart, paymentStart,
+                    Boolean.TRUE.equals(input.deferralEligible))
+                base * ageFactor * conversion * inflationFactor(IcelandicOldAgePension.RULE_DATE, today)
+            }
+        }
+    }
+}

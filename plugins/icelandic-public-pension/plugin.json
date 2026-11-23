@@ -1,0 +1,21 @@
+{
+  "id": "cashle.finance.pension.is",
+  "requires": ["cashle.finance"],
+  "ui": "ui.js",
+  "uiTranslations": [
+    { "locale": "en", "path": "ui-en.json" },
+    { "locale": "sv", "path": "ui-sv.json" },
+    { "locale": "is", "path": "ui-is.json" }
+  ],
+  "sources": [
+    {
+      "path": "icelandic-public-pension.cashle",
+      "providers": ["cashle.finance.pension.is"],
+      "resources": [
+        "icelandic/pension/messages_en.properties",
+        "icelandic/pension/messages_sv.properties",
+        "icelandic/pension/messages_is.properties"
+      ]
+    }
+  ]
+}

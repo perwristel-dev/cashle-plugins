@@ -1,0 +1,25 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.is' from '../icelandic-public-pension.cashle'
+    id 'cashle.tax.is' from '../../icelandic-tax/icelandic-tax.cashle'
+}
+
+finance {
+    language 'en'
+    plan { from '2026-01-01'; until '2026-04-01'; currency 'ISK'; inflation 0d }
+    person('self') { name 'Example resident'; birthYear 1959; birthMonth 1 }
+    tax {
+        country 'IS'
+        preliminaryRate 0d
+        options([ruleYear:2026, residency:'full-year', municipalRate:0.1494d,
+                 period:'annual', pensionContribution:0d, additionalPensionContribution:0d])
+    }
+    icelandicPublicPension('retirement') {
+        name 'TR old-age pension'
+        settings([residenceYears:40d, annualEmploymentIncome:0d, annualOtherIncome:0d,
+                  payoutStart:[reference:'age', age:67]])
+    }
+}
+collect {}
