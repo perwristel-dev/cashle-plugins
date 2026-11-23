@@ -1,0 +1,14 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.balancesheet'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.occupational.no' from '../norwegian-occupational-pension.cashlec'
+}
+finance {
+    plan { from '2026-04-01'; until '2026-08-01'; currency 'NOK'; inflation 0d }
+    person('self') { birthYear 1964; birthMonth 5 }
+    norwegianOccupationalPension('OTP') { settings([openingBalance:540000d, payoutStart:[reference:'age', age:60], durationYears:10d]) }
+}
+collect {
+    balancesheet { format json; output 'stdout' }
+}

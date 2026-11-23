@@ -1,0 +1,35 @@
+{
+  "id": "cashle.finance.pension.occupational.no",
+  "requires": [
+    "cashle.finance",
+    "cashle.dsl.groovy"
+  ],
+  "sources": [
+    {
+      "path": "norwegian-occupational-pension.cashle",
+      "providers": [
+        "cashle.finance.pension.occupational.no"
+      ],
+      "resources": [
+        "dev/cashle/pension/no/occupational/messages_en.properties",
+        "dev/cashle/pension/no/occupational/messages_sv.properties",
+        "dev/cashle/pension/no/occupational/messages_nb.properties"
+      ]
+    }
+  ],
+  "ui": "ui.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui-en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui-sv.json"
+    },
+    {
+      "locale": "nb",
+      "path": "ui-nb.json"
+    }
+  ]
+}

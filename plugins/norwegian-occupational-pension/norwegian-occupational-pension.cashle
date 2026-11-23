@@ -1,0 +1,226 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.i18n.Messages
+import dev.cashle.sdk.composition.ModuleContext
+import dev.cashle.sdk.composition.ModuleInput
+import dev.cashle.sdk.finance.FinanceContext
+import dev.cashle.sdk.finance.FinanceModule
+import dev.cashle.sdk.finance.FundingPort
+import dev.cashle.sdk.finance.MetricsPort
+import dev.cashle.sdk.finance.TaxPort
+import dev.cashle.sdk.model.AccountHandle
+import dev.cashle.sdk.model.FlowHandle
+import dev.cashle.sdk.model.ScheduleSpec
+import dev.cashle.sdk.model.Variable
+import groovy.transform.CompileStatic
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.temporal.ChronoUnit
+import java.util.function.Supplier
+
+financeModule('cashlab.norwegian-occupational-pension', 1) {
+    pluginId 'cashle.finance.pension.occupational.no'
+    dsl('norwegianOccupationalPension') { String id ->
+        [name: id, owner: 'self', openingBalance: 0d, pensionableAnnual: 0d,
+         employerRate: 2d, additionalRate: 0d, annualReturn: 0d,
+         payoutStart: [reference: 'age', age: 67, offset: 0], durationYears: 10d, shortenSmallBalance: false]
+    }
+    factory { ModuleInput input -> new NorwegianOccupationalPension(input) }
+}
+
+@CompileStatic
+final class NorwegianOccupationalPension implements FinanceModule {
+    private static final String NATURE = 'cashle.household.economic-nature'
+    private static final LocalDate BASE_CHANGE = LocalDate.of(2026, 5, 1)
+    private static final double NO_END = -1_000_000d
+    private final ModuleInput entry
+    private FinanceContext context
+    private Messages messages
+    private String owner
+    private AccountHandle capital, equity, income
+    private FlowHandle receipt
+    private YearMonth birth, earliestStart, automaticStart
+    private Supplier<LocalDate> requestedStart, lifeEnd
+    private Variable balance, monthlyReceipt, remainingMonths, paymentEnd
+    private double salary, employerRate, additionalRate, growth, exchange
+    private int requestedMonths
+    private boolean shortenSmallBalance, taxable
+
+    NorwegianOccupationalPension(ModuleInput entry) { this.entry = entry }
+
+    @Override void declare(ModuleContext ignored) {}
+
+    @Override void declareFinance(FinanceContext finance) {
+        context = finance
+        messages = finance.messages(NorwegianOccupationalPension, 'dev.cashle.pension.no.occupational.messages')
+        Map<String,Object> data = entry.data()
+        owner = Objects.toString(data.get('owner'), 'self')
+        if (owner == 'joint') throw invalid('owner')
+        String name = Objects.toString(data.get('name'), entry.id())
+        def entity = finance.owner(owner)
+        capital = entity.account().classify(AccountKind.ASSET,
+            new AccountTag(NATURE, 1, 'asset.pension', Set.of(AccountKind.ASSET)))
+        capital.setName(name)
+        capital.setInheritable(false)
+        equity = entity.account().classify(AccountKind.EQUITY,
+            new AccountTag(NATURE, 1, 'equity.contribution', Set.of(AccountKind.EQUITY)))
+        income = entity.account().classify(AccountKind.INCOME,
+            new AccountTag(NATURE, 1, 'income.pension.occupational', Set.of(AccountKind.INCOME)))
+        income.setName(name)
+    }
+
+    @Override void wireFinance(FinanceContext finance) {
+        Map<String,Object> data = entry.data()
+        List<?> people = (List<?>) finance.profile().get('people')
+        Map<?,?> person = (Map<?,?>) people.find { Object value -> owner.equals(((Map<?,?>) value).get('id')) }
+        if (person == null) throw invalid('owner')
+        int birthYear = integer(person.get('birthYear'), 1900, 9800, 'birth')
+        int birthMonth = integer(person.get('birthMonth'), 1, 12, 'birth')
+        birth = YearMonth.of(birthYear, birthMonth)
+        earliestStart = birth.plusYears(62)
+        automaticStart = birth.plusYears(75)
+
+        Object configuredStart = data.get('payoutStart')
+        if (!(configuredStart instanceof Map)) throw invalid('start')
+        Map<String,Object> reference = new LinkedHashMap<>((Map<String,Object>) configuredStart)
+        String kind = Objects.toString(reference.get('reference'), '')
+        int offset = integer(reference.getOrDefault('offset', 0), -1200, 1200, 'start')
+        YearMonth knownStart = null
+        if (kind == 'age') {
+            int age = integer(reference.get('age'), 0, 120, 'start')
+            knownStart = birth.plusYears(age).plusMonths(offset)
+            LocalDate day = knownStart.atDay(1)
+            requestedStart = () -> day
+        } else if (kind == 'date') {
+            int year = integer(reference.get('year'), 1900, 9999, 'start')
+            int month = integer(reference.get('month'), 1, 12, 'start')
+            int day = integer(reference.getOrDefault('day', 1), 1, 31, 'start')
+            LocalDate entered
+            try { entered = LocalDate.of(year, month, day).plusMonths(offset) }
+            catch (java.time.DateTimeException failure) { throw invalid('start') }
+            knownStart = YearMonth.from(entered)
+            LocalDate payoutDay = entered
+            requestedStart = () -> payoutDay
+        } else if (kind in ['retirement', 'milestone']) {
+            if (kind == 'retirement') reference.put('personId', owner)
+            requestedStart = finance.timeDate(reference)
+        } else throw invalid('start')
+        lifeEnd = finance.lifeEnd(owner)
+
+        salary = number(data.get('pensionableAnnual'), 0d, Double.MAX_VALUE, 'amount')
+        employerRate = number(data.get('employerRate'), 2d, 7d, 'rate') / 100d
+        additionalRate = number(data.get('additionalRate'), 0d, 18.1d, 'additional') / 100d
+        growth = number(data.get('annualReturn'), -99d, 100d, 'growth') / 100d
+        requestedMonths = 12 * integer(data.get('durationYears'), 1, 60, 'term')
+        Object shorten = data.get('shortenSmallBalance')
+        if (!(shorten instanceof Boolean)) throw invalid('term')
+        shortenSmallBalance = Boolean.TRUE.equals(shorten)
+
+        exchange = finance.exchangeRate('NOK', Objects.toString(finance.profile().get('currency'), 'NOK'))
+        taxable = !finance.taxSettings().isEmpty()
+        def model = finance.model()
+        balance = model.variable(number(data.get('openingBalance'), 0d, Double.MAX_VALUE, 'amount'))
+        monthlyReceipt = model.variable(0d)
+        remainingMonths = model.variable(-1d)
+        paymentEnd = model.variable(NO_END)
+        model.valueAccount(capital, equity, () -> balance.getValue() * exchange)
+        ScheduleSpec months = ScheduleSpec.every(Frequency.MONTH, finance.from().withDayOfMonth(1)).atMonthEnd()
+        def calculation = model.action(months, () -> update(model.clock().getDate()))
+        YearMonth firstReceipt = knownStart == null ? earliestStart : effectiveStart(knownStart)
+        firstReceipt = later(firstReceipt, YearMonth.from(finance.from()))
+        ScheduleSpec payments = ScheduleSpec.every(Frequency.MONTH, firstReceipt.atDay(1)).atMonthEnd()
+        receipt = model.flow(payments, finance.cash(), income, () -> monthlyReceipt.getValue(), calculation)
+    }
+
+    private void update(LocalDate date) {
+        monthlyReceipt.setValue(0d)
+        LocalDate death = lifeEnd.get()
+        if (death != null && date.isAfter(death)) {
+            balance.setValue(0d)
+            return
+        }
+        int remaining = (int) remainingMonths.getValue()
+        if (remaining == 0) return
+        YearMonth month = YearMonth.from(date)
+        LocalDate first = month.atDay(1).isBefore(context.from()) ? context.from() : month.atDay(1)
+        double monthShare = (ChronoUnit.DAYS.between(first, date) + 1) / (double) month.lengthOfMonth()
+        double capitalNow = balance.getValue() * Math.pow(1d + growth, monthShare / 12d)
+        double priceFactor = context.inflationFactor(context.from(), date)
+        double incomeBase = (date.isBefore(BASE_CHANGE) ? 130_160d : 136_549d) * priceFactor
+        if (remaining < 0) {
+            LocalDate requested = requestedStart.get()
+            YearMonth firstPayout = effectiveStart(requested == null ? automaticStart : YearMonth.from(requested))
+            if (month.isBefore(firstPayout)) {
+                double pay = salary * priceFactor
+                if (!month.isBefore(birth.plusYears(13))) {
+                    double pensionable = Math.min(pay, 12d * incomeBase)
+                    double supplement = Math.max(0d, pensionable - 7.1d * incomeBase)
+                    capitalNow += (pensionable * employerRate + supplement * additionalRate) * monthShare / 12d
+                }
+                balance.setValue(capitalNow)
+                return
+            }
+            remaining = duration(month, capitalNow, incomeBase)
+            paymentEnd.setValue(month.plusMonths(remaining).atDay(1).toEpochDay())
+        }
+        double payout = capitalNow / remaining
+        monthlyReceipt.setValue(payout * exchange)
+        balance.setValue(capitalNow - payout)
+        remainingMonths.setValue(remaining - 1)
+    }
+
+    private int duration(YearMonth start, double capitalNow, double incomeBase) {
+        int statutory = (int) Math.max(120L, ChronoUnit.MONTHS.between(start, birth.plusYears(77)))
+        double annualTarget = .2d * incomeBase
+        if (shortenSmallBalance && capitalNow * 12d / statutory < annualTarget) {
+            int shorter = (int) Math.max(1L, Math.round(capitalNow / annualTarget)) * 12
+            return Math.min(shorter, statutory)
+        }
+        Math.max(requestedMonths, statutory)
+    }
+
+    private YearMonth effectiveStart(YearMonth desired) {
+        YearMonth start = later(desired, earliestStart)
+        start.isAfter(automaticStart) ? automaticStart : start
+    }
+
+    private LocalDate end() {
+        LocalDate death = lifeEnd.get()
+        LocalDate deathEnd = death == null ? null : death.plusDays(1)
+        double epochDay = paymentEnd.getValue()
+        if (epochDay == NO_END) return deathEnd
+        LocalDate termEnd = LocalDate.ofEpochDay((long) epochDay)
+        deathEnd == null || deathEnd.isAfter(termEnd) ? termEnd : deathEnd
+    }
+
+    @Override void funding(FundingPort port) {
+        port.receiptUntil(receipt, taxable ? FundingPort.ReceiptTax.TAXABLE : FundingPort.ReceiptTax.TAX_FREE, false, () -> end())
+    }
+
+    @Override void metrics(MetricsPort port) {
+        port.balance(capital, () -> balance.getValue() * exchange)
+        port.income(income, false)
+    }
+
+    @Override void tax(TaxPort port) {
+        if (taxable) port.income(owner, income, 'pension', 'monthly', 'NO', () -> context.from(), () -> true, Map.of())
+    }
+
+    private static YearMonth later(YearMonth first, YearMonth second) { first.isAfter(second) ? first : second }
+
+    private int integer(Object raw, int minimum, int maximum, String error) {
+        double value = number(raw, minimum, maximum, error)
+        if (value != Math.rint(value)) throw invalid(error)
+        (int) value
+    }
+
+    private double number(Object raw, double minimum, double maximum, String error) {
+        if (!(raw instanceof Number)) throw invalid(error)
+        double value = ((Number) raw).doubleValue()
+        if (!Double.isFinite(value) || value < minimum || value > maximum) throw invalid(error)
+        value
+    }
+
+    private IllegalArgumentException invalid(String key) { new IllegalArgumentException(messages.text(key)) }
+}

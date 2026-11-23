@@ -1,0 +1,16 @@
+{
+  "name": "Norsk tjänstepension (OTP)",
+  "names": {
+    "en": "Norwegian occupational pension (OTP)",
+    "sv": "Norsk tjänstepension (OTP)"
+  },
+  "description": {
+    "sv": "Premiebestämd tjänstepension för anställda i norsk privat sektor.",
+    "en": "Employer-funded defined-contribution pension for private-sector workers in Norway."
+  },
+  "country": "NO",
+  "category": "income",
+  "releases": [
+    "ff29c846f6d05b69105b667b45a58045a18a9bcc3c6cddbbe9966618a7d90cca"
+  ]
+}
