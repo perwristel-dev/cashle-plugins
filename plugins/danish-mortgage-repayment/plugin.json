@@ -1,0 +1,21 @@
+{
+  "id": "cashle.finance.loan-repayment.dk",
+  "requires": ["cashle.finance.loan-repayment", "cashle.dsl.groovy"],
+  "sources": [
+    {
+      "path": "danish-mortgage-repayment.cashle",
+      "providers": ["cashle.finance.loan-repayment.dk"],
+      "resources": [
+        "danish/mortgage/messages_en.properties",
+        "danish/mortgage/messages_sv.properties",
+        "danish/mortgage/messages_da.properties"
+      ]
+    }
+  ],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    { "locale": "en", "path": "ui/en.json" },
+    { "locale": "sv", "path": "ui/sv.json" },
+    { "locale": "da", "path": "ui/da.json" }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "name": "Danish mortgage amortization",
+  "names": {
+    "en": "Danish mortgage amortization",
+    "sv": "Danskt amorteringskrav"
+  },
+  "description": {
+    "en": "Standard Danish realkredit amortization with a term of up to 30 years and an agreed interest-only period.",
+    "sv": "Dansk realkreditamortering med upp till 30 års löptid och avtalad amorteringsfrihet."
+  },
+  "country": "DK",
+  "category": "flows",
+  "releases": [
+    "5e29f38e2a235ee103d36afe768358b1e0ca8cb1f643da39360bc566cf73be81"
+  ]
+}

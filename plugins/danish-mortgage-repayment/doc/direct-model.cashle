@@ -1,0 +1,16 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.debt'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.loan-repayment.dk' from '../danish-mortgage-repayment.cashle'
+}
+
+finance {
+    plan { from '2028-01-01'; until '2028-04-01'; currency 'DKK'; inflation 0d }
+    income 'Income', 40000d
+    debt('Mortgage') { balance 360000d; interest 0d }
+    danishMortgageRepayment('Mortgage amortization') {
+        settings loanId: 'Mortgage', remainingMonths: 360, interestOnlyMonths: 0
+    }
+}
+collect {}
