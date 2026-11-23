@@ -1,16 +1,16 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createSourcePlugin } from '../plugins/build-source-plugin.mjs';
+import { runnerDirectory, runnerVersion } from './dsl-test-cache.mjs';
 
 const cache = resolve('.cashle-tests');
-const version = '0.1.0';
-const artifact = `cashle-dsl-test-runner-${version}.zip`;
+const artifact = `cashle-dsl-test-runner-${runnerVersion}.zip`;
 const base = process.env.CASHLE_MAVEN_URL ?? 'https://cashle-lab.com/maven/';
-const url = new URL(`dev/cashle/cashle-dsl-test-runner/${version}/${artifact}`, base);
-const runtime = join(cache, `runner-${version}`);
+const url = new URL(`dev/cashle/cashle-dsl-test-runner/${runnerVersion}/${artifact}`, base);
+const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 await mkdir(cache, { recursive: true });
 
 async function fetchFile(address) {
@@ -19,26 +19,32 @@ async function fetchFile(address) {
   return response;
 }
 
-try {
-  await readFile(join(runtime, 'run.mjs'));
-} catch (error) {
+const localZip = process.env.CASHLE_DSL_RUNNER_ZIP;
+const localBytes = localZip ? await readFile(localZip) : undefined;
+const runnerSha256 = localBytes ? sha256(localBytes) : (await (await fetchFile(url.href + '.sha256')).text()).trim();
+const runtime = runnerDirectory(cache, runnerSha256);
+const cachedRunner = () => access(join(runtime, 'run.mjs')).then(() => true, error => {
   if (error.code !== 'ENOENT') throw error;
+  return false;
+});
+if (!await cachedRunner()) {
+  const bytes = localBytes ?? Buffer.from(await (await fetchFile(url)).arrayBuffer());
+  if (sha256(bytes) !== runnerSha256) throw new Error('Invalid SHA-256 for the Cashle runner');
   const temporary = await mkdtemp(join(cache, 'runner-'));
   try {
-    const localZip = process.env.CASHLE_DSL_RUNNER_ZIP;
-    const bytes = localZip ? await readFile(localZip) : Buffer.from(await (await fetchFile(url)).arrayBuffer());
-    if (!localZip) {
-      const sha256 = (await (await fetchFile(url.href + '.sha256')).text()).trim();
-      if (createHash('sha256').update(bytes).digest('hex') !== sha256)
-        throw new Error('Invalid SHA-256 for the Cashle runner');
-    }
     await writeFile(join(temporary, artifact), bytes);
     const jar = process.env.JAVA_HOME ? join(process.env.JAVA_HOME, 'bin', 'jar') : 'jar';
     const result = spawnSync(jar, ['xf', artifact], { cwd: temporary, stdio: 'inherit' });
     if (result.error) throw result.error;
     if (result.status !== 0) throw new Error('Could not unpack the Cashle runner');
     await rm(join(temporary, artifact));
-    await rename(temporary, runtime);
+    await access(join(temporary, 'run.mjs'));
+    try {
+      await rename(temporary, runtime);
+    } catch (error) {
+      // Concurrent preparation can publish the same verified bytes first.
+      if (!await cachedRunner()) throw error;
+    }
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
@@ -60,6 +66,8 @@ for (const entry of await readdir('plugins', { withFileTypes: true })) {
   const config = JSON.parse(raw);
   const local = await createSourcePlugin(directory, 1);
   const temporary = await mkdtemp(join(cache, 'plugin-'));
+  const lock = join(cache, entry.name + '.lock.json');
+  const stagedLock = `${lock}.${randomUUID()}`;
   try {
     const archive = join(temporary, 'plugin.zip');
     await writeFile(archive, local.bytes);
@@ -68,8 +76,12 @@ for (const entry of await readdir('plugins', { withFileTypes: true })) {
       catalogs: directories.length ? [] : [...new Set([...defaults, ...(config.catalogs ?? [])])],
       archives: [archive],
       plugins: config.plugins ?? [],
-    }, join(cache, entry.name + '.lock.json'));
+    }, stagedLock);
+    const resolved = JSON.parse(await readFile(stagedLock, 'utf8'));
+    await writeFile(stagedLock, JSON.stringify({ ...resolved, runnerSha256 }, null, 2) + '\n');
+    await rename(stagedLock, lock);
   } finally {
+    await rm(stagedLock, { force: true });
     await rm(temporary, { recursive: true, force: true });
   }
 }

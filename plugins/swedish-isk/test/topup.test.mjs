@@ -5,16 +5,15 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { createSourcePlugin } from '../../build-source-plugin.mjs';
+import { runPreparedScenario } from '../../../scripts/dsl-test-cache.mjs';
 
 test('a local ISK receives a 500 SEK deposit', async () => {
   const work = await mkdtemp(join(tmpdir(), 'cashle-isk-test-'));
   try {
-    const runner = new URL('../../../.cashle-tests/runner-0.1.0/run.mjs', import.meta.url);
-    const { runScenario } = await import(runner);
     const plugin = await createSourcePlugin(fileURLToPath(new URL('../', import.meta.url)), 1);
     const archive = join(work, 'swedish-isk.zip');
     await writeFile(archive, plugin.bytes);
-    const result = await runScenario(fileURLToPath(new URL('./topup.cashle', import.meta.url)), {
+    const result = await runPreparedScenario(fileURLToPath(new URL('./topup.cashle', import.meta.url)), {
       lock: fileURLToPath(new URL('../../../.cashle-tests/swedish-isk.lock.json', import.meta.url)),
       archives: [archive],
     });
