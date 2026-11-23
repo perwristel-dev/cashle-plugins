@@ -1,0 +1,16 @@
+{
+  "name": "ATP Livslang Pension",
+  "names": {
+    "en": "ATP Livslang Pension",
+    "sv": "ATP Livslang Pension"
+  },
+  "description": {
+    "en": "Danish ATP statement-based statutory supplementary pension with lifetime or lump-sum payments.",
+    "sv": "Dansk lagstadgad ATP-tilläggspension med livslång utbetalning eller engångsbelopp enligt pensionsbeskedet."
+  },
+  "country": "DK",
+  "category": "income",
+  "releases": [
+    "d4f41ccba508d731d084d3bfd73754ed519bd84e495b97b8b5de982701d97def"
+  ]
+}

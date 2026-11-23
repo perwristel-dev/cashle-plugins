@@ -1,0 +1,172 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
+import dev.cashle.sdk.composition.ModuleContext
+import dev.cashle.sdk.composition.ModuleInput
+import dev.cashle.sdk.finance.FinanceContext
+import dev.cashle.sdk.finance.FinanceModule
+import dev.cashle.sdk.finance.FundingPort
+import dev.cashle.sdk.finance.MetricsPort
+import dev.cashle.sdk.finance.TaxPort
+import dev.cashle.sdk.model.AccountHandle
+import dev.cashle.sdk.model.FlowHandle
+import dev.cashle.sdk.model.ScheduleSpec
+import java.time.LocalDate
+import java.time.YearMonth
+import java.util.function.Supplier
+
+financeModule('cashlab.danish-atp-pension', 1) {
+    pluginId 'cashle.finance.pension.dk.atp'
+    dsl('atpPension') { id -> [name:id, owner:'self', annualPension:0d, grossLumpSum:0d,
+                             deferredAnnualPension:0d, payoutStart:[reference:'minimum', offset:0]] }
+    factory { ModuleInput entry -> new DanishAtpPension(entry) }
+}
+
+final class DanishAtpPension implements FinanceModule {
+    private static final double CAPITALISATION_LIMIT = 3600d
+    private static final double LUMP_SUM_LEVY = 0.4d
+    private final ModuleInput entry
+    private AccountHandle account
+    private FlowHandle receipt
+    private boolean lumpSum
+    private String ownerId
+    private YearMonth birth
+    private LocalDate earliest
+    private double annual
+    private Supplier<LocalDate> lifeEnd
+    private Supplier<LocalDate> start
+
+    DanishAtpPension(ModuleInput entry) { this.entry = entry }
+    @Override void declare(ModuleContext context) {}
+
+    @Override void declareFinance(FinanceContext context) {
+        if (!entry.enabled()) return
+        def data = entry.data()
+        def messages = context.messages(DanishAtpPension, 'danish.atp.Messages')
+        def require = { boolean valid, String key ->
+            if (!valid) throw new IllegalArgumentException(messages.text(key))
+        }
+        ownerId = data.owner ?: 'self'
+        def owner = context.profile().people.find { row -> row.id == ownerId }
+        require(owner != null && whole(owner.birthYear, 1900, 9999) && whole(owner.birthMonth, 1, 12), 'invalid.owner')
+        require(data.name instanceof String && !data.name.isBlank() && data.name.trim().length() <= 80, 'invalid.name')
+        require(money(data.annualPension), 'invalid.pension')
+        annual = data.annualPension.doubleValue()
+        lumpSum = annual <= CAPITALISATION_LIMIT
+        if (lumpSum) {
+            def entered = data.getOrDefault('grossLumpSum', 0d)
+            require(money(entered) && (annual == 0d || entered > 0d), 'invalid.lump')
+            if (entered == 0d) return
+        } else {
+            def deferred = data.getOrDefault('deferredAnnualPension', 0d)
+            require(money(deferred) && (deferred == 0d || deferred >= annual), 'invalid.deferred')
+            require(validStart(data.payoutStart ?: [reference:'minimum']), 'invalid.start')
+        }
+
+        birth = YearMonth.of(owner.birthYear.intValue(), owner.birthMonth.intValue())
+        earliest = birth.plusMonths(retirementAgeMonths(birth) + 1).atDay(1)
+        account = context.owner(ownerId).account()
+        account.setName(data.name)
+        account.classify(AccountKind.INCOME, new AccountTag('cashle.household.economic-nature', 1,
+                'income.pension.occupational', [AccountKind.INCOME] as Set))
+        account.addReportingRole(ReportingRole.INCOME)
+    }
+
+    @Override void wireFinance(FinanceContext context) {
+        if (account == null) return
+        def data = entry.data()
+        LocalDate latest = earliest.plusYears(10)
+        double fx = context.exchangeRate('DKK', context.profile().currency ?: 'DKK')
+        def model = context.model()
+        def clock = model.clock()
+        lifeEnd = context.lifeEnd(ownerId)
+        ScheduleSpec schedule
+        def amount
+        if (lumpSum) {
+            // The capitalised amount is paid at pension age after its final levy.
+            start = { earliest }
+            schedule = ScheduleSpec.on(earliest)
+            amount = { data.grossLumpSum.doubleValue() * (1d - LUMP_SUM_LEVY) * fx }
+        } else {
+            def entered = data.getOrDefault('deferredAnnualPension', 0d)
+            double deferred = entered == 0d ? annual : entered.doubleValue()
+            def claim = data.payoutStart ?: [reference:'minimum']
+            Supplier<LocalDate> requested = requestedStart(context, claim, birth, earliest)
+            start = { boundedStart(requested.get(), earliest, latest, clock.getDate()) }
+            LocalDate anchor = claim.reference == 'milestone' ? earliest : start.get()
+            schedule = ScheduleSpec.every(Frequency.MONTH, anchor)
+            amount = {
+                LocalDate firstPayment = start.get()
+                if (firstPayment == null || clock.getDate().isBefore(firstPayment)) return 0d
+                return (firstPayment.isAfter(earliest) ? deferred : annual) * fx / 12d
+            }
+        }
+        receipt = model.flow(schedule.within(context.from(), context.until()), context.cash(), account, amount)
+        model.guard(receipt, { LocalDate end = lifeEnd.get(); end == null || clock.getDate().isBefore(end) })
+    }
+
+    @Override void funding(FundingPort port) {
+        if (receipt == null) return
+        def treatment = lumpSum ? FundingPort.ReceiptTax.TAX_FREE : FundingPort.ReceiptTax.TAXABLE
+        port.receiptUntil(receipt, treatment, false, lifeEnd)
+    }
+
+    @Override void metrics(MetricsPort port) {
+        if (account != null) port.income(account, false)
+    }
+
+    @Override void tax(TaxPort port) {
+        if (account != null && !lumpSum)
+            port.income(ownerId, account, 'pension', 'monthly', 'DK', { start?.get() ?: earliest }, { true }, Map.of())
+    }
+
+    private static int retirementAgeMonths(YearMonth birth) {
+        int year = birth.year
+        if (year <= 1953) return 65 * 12
+        if (year == 1954) return 65 * 12 + (birth.monthValue <= 6 ? 6 : 12)
+        if (year == 1955 && birth.monthValue <= 6) return 66 * 12 + 6
+        if (year <= 1962) return 67 * 12
+        if (year <= 1966) return 68 * 12
+        if (year <= 1970) return 69 * 12
+        return 70 * 12
+    }
+
+    private static LocalDate boundedStart(LocalDate requested, LocalDate earliest, LocalDate latest, LocalDate today) {
+        if (requested == null) return today == null || today.isBefore(latest) ? null : latest
+        LocalDate month = requested.dayOfMonth == 1 ? requested : requested.withDayOfMonth(1).plusMonths(1)
+        if (month.isBefore(earliest)) return earliest
+        return month.isAfter(latest) ? latest : month
+    }
+
+    private static Supplier<LocalDate> requestedStart(FinanceContext context, Map claim, YearMonth birth, LocalDate earliest) {
+        switch (claim.reference) {
+            case 'age': return { birth.plusYears(claim.age.longValue()).plusMonths(1).atDay(1) }
+            case 'date': return { LocalDate.of(claim.year.intValue(), claim.month.intValue(), ((Number) (claim.day ?: 1)).intValue()) }
+            case 'milestone': return context.milestoneDate(claim.milestoneId, 0)
+            default: return { earliest }
+        }
+    }
+
+    private static boolean validStart(Object value) {
+        if (!(value instanceof Map) || (value.offset ?: 0) != 0) return false
+        switch (value.reference) {
+            case 'minimum': return true
+            case 'age': return whole(value.age, 0, 125)
+            case 'date':
+                if (!whole(value.year, 1900, 9999) || !whole(value.month, 1, 12)) return false
+                int days = YearMonth.of(value.year.intValue(), value.month.intValue()).lengthOfMonth()
+                return value.day == null || whole(value.day, 1, days)
+            case 'milestone': return value.milestoneId instanceof String && !value.milestoneId.isBlank()
+            default: return false
+        }
+    }
+
+    private static boolean whole(Object value, int from, int until) {
+        value instanceof Number && from <= value && value <= until && value.doubleValue() == Math.rint(value.doubleValue())
+    }
+
+    private static boolean money(Object value) {
+        value instanceof Number && Double.isFinite(value.doubleValue()) && value >= 0d
+    }
+}
