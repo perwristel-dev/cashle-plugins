@@ -1,0 +1,14 @@
+{
+  "label": "Danskt amorteringskrav",
+  "field.name": "Namn",
+  "field.loan": "Bolån",
+  "field.term": "Total återstående löptid",
+  "field.deferral": "Återstående avtalad amorteringsfrihet",
+  "option.loan": "Välj bolån",
+  "unit.months": "månader",
+  "help.deferral": "Ange återstående tid som långivaren har beviljat. Tiden ingår i den totala löptiden.",
+  "summary.term": "{months} månader kvar",
+  "invalid.loan": "Välj ett bolån som stöder lånets start, räntebetalningsdagar och annuitetsberäkning.",
+  "invalid.periods": "Löptiden och den amorteringsfria tiden måste följa lånets betalningsintervall och lämna minst en amortering.",
+  "invalid.exclusive": "Bolånet kan ha en aktiv annuitetsplan."
+}

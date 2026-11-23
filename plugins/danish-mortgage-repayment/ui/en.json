@@ -1,0 +1,14 @@
+{
+  "label": "Danish mortgage amortization",
+  "field.name": "Name",
+  "field.loan": "Mortgage",
+  "field.term": "Remaining total term",
+  "field.deferral": "Remaining agreed interest-only period",
+  "option.loan": "Choose a mortgage",
+  "unit.months": "months",
+  "help.deferral": "Use the remaining period agreed with the lender. It is included in the total term.",
+  "summary.term": "{months} months remaining",
+  "invalid.loan": "Choose a mortgage that supports a loan start, interest calendar and annuity projection.",
+  "invalid.periods": "The term and interest-only period must align with the loan payment frequency and leave at least one principal installment.",
+  "invalid.exclusive": "The mortgage can have one active annuity repayment plan."
+}

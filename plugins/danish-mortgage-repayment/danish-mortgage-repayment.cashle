@@ -1,0 +1,138 @@
+import dev.cashle.core.i18n.Messages
+import dev.cashle.finance.repayment.RepaymentFlow
+import dev.cashle.sdk.composition.ModuleInput
+import dev.cashle.sdk.finance.AnnuityInterest
+import groovy.transform.CompileStatic
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
+import java.util.function.Function
+
+financeModule('cashlab.repayment-dk', 1) {
+    pluginId 'cashle.finance.loan-repayment.dk'
+    dsl('danishMortgageRepayment') { String name ->
+        RepaymentFlow.defaults(name) + [remainingMonths: 360, interestOnlyMonths: 0]
+    }
+    factory { ModuleInput entry ->
+        def data = entry.data() + [start: [reference: 'loan-start', offset: 0], end: [reference: 'end', offset: 0],
+                                  paymentFrequency: 'loan-interest']
+        def ownInput = new ModuleInput(entry.id(), entry.type(), entry.version(), data, entry.enabled())
+        new RepaymentFlow(ownInput, { RepaymentFlow.Terms terms ->
+            new DanishMortgagePayments(terms).payments()
+        } as Function)
+    }
+}
+
+@CompileStatic
+final class DanishMortgagePayments {
+    // Share the exclusion role with other annuity providers for the same principal.
+    private static final String ANNUITY_ROLE = 'cashle.finance.loan-repayment.annuity.v1'
+    private final RepaymentFlow.Terms terms
+    private final AnnuityInterest interest
+    private final Messages messages
+    private final int interestOnlyMonths
+    private final int installments
+
+    DanishMortgagePayments(RepaymentFlow.Terms terms) {
+        this.terms = terms
+        messages = terms.context().messages(DanishMortgagePayments, 'danish.mortgage.messages')
+        Map<String, Object> data = terms.input().data()
+        int remainingMonths = months(data.get('remainingMonths'), 1, 360, 'term')
+        interestOnlyMonths = months(data.get('interestOnlyMonths'), 0, 120, 'deferral')
+        int amortizingMonths = remainingMonths - interestOnlyMonths
+        if (amortizingMonths <= 0 || remainingMonths % terms.months() != 0 || interestOnlyMonths % terms.months() != 0)
+            throw invalid('periods')
+        installments = amortizingMonths.intdiv(terms.months()) as int
+        interest = terms.context().findAnnuityInterest(terms.loanId()).orElseThrow { -> invalid('projection') }
+        if (terms.input().enabled() && !terms.context().claimExclusive(terms.debt().principal(), ANNUITY_ROLE))
+            throw invalid('exclusive')
+    }
+
+    RepaymentFlow.Payments payments() {
+        new RepaymentFlow.Payments(interest.paymentSchedule(terms.start()), this::installment, this::commitment)
+    }
+
+    private LocalDate firstInstallment() {
+        LocalDate loanStart = terms.start().get()
+        if (loanStart == null) return null
+        LocalDate opening = terms.context().from()
+        LocalDate anchor = loanStart.isAfter(opening) ? loanStart : opening
+        interest.nextPaymentDate(anchor.plusMonths(interestOnlyMonths))
+    }
+
+    private double installment(double arrears) {
+        if (!terms.active()) return 0d
+        LocalDate day = terms.today()
+        LocalDate first = firstInstallment()
+        if (first == null || day.isBefore(first) || day != interest.nextPaymentDate(day)) return 0d
+        principalPortion(terms.outstanding(arrears), interest.accruedInterest(), day, first)
+    }
+
+    // The loan reserves interest and this flow reserves principal through the same calendar.
+    private double commitment(LocalDate horizon, double arrears) {
+        LocalDate today = terms.today()
+        if (horizon == null || !today.isBefore(horizon) || !terms.debt().available().getAsBoolean()) return 0d
+        LocalDate first = firstInstallment()
+        if (first == null || !first.isBefore(horizon)) return 0d
+        LocalDate next = interest.nextPaymentDate(today.plusDays(1))
+        if (next == null) return 0d
+        double balance = terms.outstanding(arrears)
+        double accrued = today == interest.nextPaymentDate(today) ? 0d : interest.accruedInterest()
+        LocalDate from = today
+        while (next.isBefore(first)) {
+            from = next
+            accrued = 0d
+            next = paymentAfter(next)
+        }
+        double total = 0d
+        while (next.isBefore(horizon) && balance > 0d) {
+            accrued += interest.projectedInterest(from, next, balance)
+            double principal = principalPortion(balance, accrued, next, first)
+            total += principal
+            balance -= principal
+            accrued = 0d
+            from = next
+            next = paymentAfter(next)
+        }
+        total
+    }
+
+    private double principalPortion(double balance, double accrued, LocalDate date, LocalDate first) {
+        if (balance == 0d) return 0d
+        long elapsed = monthsBetween(first, date)
+        if (elapsed < 0L || elapsed % terms.months() != 0L) return 0d
+        int remaining = (int) Math.max(1L, installments - Math.floorDiv(elapsed, (long) terms.months()))
+        if (remaining == 1) return balance
+        if (!Double.isFinite(accrued) || accrued < 0d) throw invalid('projection')
+        // Discount the remaining level payments with the loan's projected period rates.
+        // The current period's actual accrued interest is due together with its principal.
+        double discount = 1d
+        double factor = 1d
+        for (int period = 1; period < remaining; period++) {
+            LocalDate next = paymentAfter(date)
+            double rate = interest.projectedInterest(date, next, 1d)
+            if (!Double.isFinite(rate) || rate < 0d) throw invalid('projection')
+            discount /= 1d + rate
+            factor += discount
+            date = next
+        }
+        Math.min(balance, Math.max(0d, (balance + accrued) / factor - accrued))
+    }
+
+    private LocalDate paymentAfter(LocalDate date) {
+        LocalDate next = interest.nextPaymentDate(date.plusDays(1))
+        if (next == null || !next.isAfter(date) || monthsBetween(date, next) != terms.months()) throw invalid('periods')
+        next
+    }
+
+    private static long monthsBetween(LocalDate first, LocalDate last) {
+        ChronoUnit.MONTHS.between(first.withDayOfMonth(1), last.withDayOfMonth(1))
+    }
+
+    private int months(Object value, int min, int max, String error) {
+        double amount = value instanceof Number ? ((Number) value).doubleValue() : Double.NaN
+        if (!Double.isFinite(amount) || amount < min || amount > max || amount != Math.rint(amount)) throw invalid(error)
+        (int) amount
+    }
+
+    private IllegalArgumentException invalid(String key) { new IllegalArgumentException(messages.text(key)) }
+}

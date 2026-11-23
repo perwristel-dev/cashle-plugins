@@ -1,0 +1,14 @@
+{
+  "label": "Danske afdrag på realkreditlån",
+  "field.name": "Navn",
+  "field.loan": "Realkreditlån",
+  "field.term": "Samlet restløbetid",
+  "field.deferral": "Resterende aftalt afdragsfrihed",
+  "option.loan": "Vælg et realkreditlån",
+  "unit.months": "måneder",
+  "help.deferral": "Indtast den resterende afdragsfrihed, som långiveren har bevilget. Perioden indgår i restløbetiden.",
+  "summary.term": "{months} måneder tilbage",
+  "invalid.loan": "Vælg et realkreditlån med startdato, rentebetalingsterminer og annuitetsberegning.",
+  "invalid.periods": "Løbetiden og afdragsfriheden skal følge lånets betalingsterminer og efterlade mindst ét afdrag.",
+  "invalid.exclusive": "Realkreditlånet kan have én aktiv annuitetsplan."
+}
