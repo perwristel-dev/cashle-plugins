@@ -26,8 +26,8 @@ underlaget för dess Kela-del där så att samma arbetspension räknas en gång.
 FPA:s tillägg påverkas av arbetspensionen och underlaget behöver anges i den
 posten. Partiellt förtida uttag, ny intjäning efter fullt uttag och särskilda
 regler för exempelvis arbetslöshet omfattas av andra prognosantaganden.
-Den finska skattemodellen kräver en separat utökning för att bedöma lön och
-pension tillsammans i samma fall.
+Finsk skatt version 3 bedömer lön och pension tillsammans under
+pensionsövergången. Andra förmåner bedöms separat.
 
 [Direkt Cashle-modell](doc/direct-model.cashle) ·
 [Försäkring av arbetstagare och inkomstgräns](https://www.tyoelake.fi/en/employers-obligations/employers-arrange-pension-insurance/) ·
