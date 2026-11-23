@@ -1,0 +1,205 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
+import dev.cashle.sdk.model.ScheduleSpec
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.temporal.ChronoUnit
+import java.util.function.Supplier
+
+final class CanadianPensionDates {
+    static boolean whole(Object value, int minimum, int maximum) {
+        value instanceof Number && value >= minimum && value <= maximum && value.doubleValue() == Math.rint(value.doubleValue())
+    }
+
+    static boolean money(Object value) {
+        value instanceof Number && Double.isFinite(value.doubleValue()) && value >= 0d
+    }
+
+    static boolean validMonth(Object value) {
+        value instanceof String && value ==~ /(?:19\d\d|[2-9]\d{3})-(?:0[1-9]|1[0-2])/
+    }
+
+    static LocalDate monthStart(LocalDate date) {
+        date.dayOfMonth == 1 ? date : date.withDayOfMonth(1).plusMonths(1)
+    }
+
+    static boolean validStart(Object start) {
+        if (!(start instanceof Map) || !(start.reference in ['now', 'age', 'date', 'retirement', 'milestone']) ||
+            (start.offset != null && !whole(start.offset, -1800, 1800))) return false
+        switch (start.reference) {
+            case 'age': return whole(start.age, 0, 125)
+            case 'date':
+                return whole(start.year, 1900, 9999) && whole(start.month, 1, 12) &&
+                    (start.day == null || whole(start.day, 1, YearMonth.of(start.year.intValue(), start.month.intValue()).lengthOfMonth()))
+            case 'milestone': return start.milestoneId instanceof String && !start.milestoneId.isBlank()
+            default: return true
+        }
+    }
+
+    static LocalDate claimMonth(Supplier<LocalDate> requested, LocalDate minimum) {
+        LocalDate date = requested.get()
+        if (date == null) return null
+        LocalDate month = monthStart(date)
+        month.isBefore(minimum) ? minimum : month
+    }
+}
+
+financeModule('cashlab.canadian-public-pension', 1) {
+    pluginId 'cashle.finance.pension.ca'
+    messages 'canadian.pension.messages'
+    dsl('canadianPublicPension') { id ->
+        [name: id, owner: 'self', plan: 'cpp', earningsMonthly: 0d, earningsReceiving: false,
+         qppEarlyRate: 0.6d, earningsStart: [reference: 'age', age: 65, offset: 0],
+         oasYears: 0, oasMonthly: 762.50d, oasReceiving: false, oasFirstPayment: '', oasFullPayment: '',
+         oasQualifyingYears: 0, oasStart: [reference: 'age', age: 65, offset: 0],
+         gisMonthly: 0d, gisThrough: '']
+    }
+
+    calculation {
+        if (!enabled) return
+        String personId = input.owner ?: 'self'
+        def person = profile.people.find { it.id == personId && it.id in ['self', 'partner'] }
+        requireInput('invalid.owner') {
+            CanadianPensionDates.whole(person?.birthYear, 1900, 9999) && CanadianPensionDates.whole(person?.birthMonth, 1, 12)
+        }
+        requireInput('invalid.name') { input.name instanceof String && !input.name.isBlank() && input.name.trim().length() <= 80 }
+        requireInput('invalid.plan') { input.plan in ['cpp', 'qpp'] }
+        requireInput('invalid.earnings') {
+            CanadianPensionDates.money(input.earningsMonthly) && input.earningsReceiving instanceof Boolean
+        }
+        requireInput('invalid.qppRate') {
+            input.plan != 'qpp' || input.earningsReceiving || input.earningsMonthly == 0d ||
+                (CanadianPensionDates.money(input.qppEarlyRate) && input.qppEarlyRate >= 0.5d && input.qppEarlyRate <= 0.6d)
+        }
+        requireInput('invalid.oas') {
+            CanadianPensionDates.whole(input.oasYears, 0, 40) && (input.oasYears == 0 || input.oasYears >= 10) &&
+                CanadianPensionDates.money(input.oasMonthly) && input.oasReceiving instanceof Boolean
+        }
+        requireInput('invalid.oasQualification') {
+            input.oasReceiving || input.oasYears == 0 ||
+                ((!input.oasFirstPayment || CanadianPensionDates.validMonth(input.oasFirstPayment)) &&
+                (input.oasQualifyingYears == null || input.oasQualifyingYears == 0 ||
+                    CanadianPensionDates.whole(input.oasQualifyingYears, 10, input.oasYears.intValue())))
+        }
+        requireInput('invalid.gis') {
+            CanadianPensionDates.money(input.gisMonthly) && (input.gisMonthly == 0d ||
+                (input.oasYears >= 10 && input.oasMonthly > 0d && CanadianPensionDates.validMonth(input.gisThrough)))
+        }
+        requireInput('invalid.earningsStart') {
+            input.earningsReceiving || input.earningsMonthly == 0d || CanadianPensionDates.validStart(input.earningsStart)
+        }
+        requireInput('invalid.oasStart') {
+            input.oasReceiving || input.oasYears == 0 || input.oasMonthly == 0d || CanadianPensionDates.validStart(input.oasStart)
+        }
+
+        LocalDate planDate = planStart.anchor()
+        LocalDate birth = LocalDate.of(person.birthYear.intValue(), person.birthMonth.intValue(), 1)
+        LocalDate age60 = birth.plusYears(60).plusMonths(1)
+        LocalDate age65 = birth.plusYears(65).plusMonths(1)
+        LocalDate age70 = birth.plusYears(70).plusMonths(1)
+        LocalDate age75 = [birth.plusYears(75).plusMonths(1), LocalDate.of(2022, 7, 1)].max()
+        def requested = { Map start, boolean receiving ->
+            if (receiving) return { planDate } as Supplier<LocalDate>
+            int offset = ((Number) (start.offset ?: 0)).intValue()
+            switch (start.reference) {
+                case 'now': return { planDate.plusMonths(offset) } as Supplier<LocalDate>
+                case 'age': return { birth.plusYears(start.age.intValue()).plusMonths(offset + 1) } as Supplier<LocalDate>
+                case 'date':
+                    LocalDate entered = LocalDate.of(start.year.intValue(), start.month.intValue(), ((Number) (start.day ?: 1)).intValue())
+                    return { entered.plusMonths(offset) } as Supplier<LocalDate>
+                case 'retirement': return milestone('retirement:' + personId, offset)
+                case 'milestone': return milestone(start.milestoneId, offset)
+            }
+        }
+
+        def monthly = ScheduleSpec.every(Frequency.MONTH, CanadianPensionDates.monthStart(planDate))
+        double fx = exchangeRate('CAD', profile.currency ?: 'CAD')
+        def incomeAccount = { String label ->
+            owner(personId).account {
+                name input.name + ' – ' + label
+                classify AccountKind.INCOME, new AccountTag('cashle.household.economic-nature', 1, 'income.pension.public', [AccountKind.INCOME] as Set)
+                reportingRole ReportingRole.INCOME
+            }
+        }
+
+        if (input.earningsMonthly > 0d) {
+            boolean qpp = input.plan == 'qpp'
+            boolean receiving = input.earningsReceiving
+            double estimate = input.earningsMonthly.doubleValue()
+            double earlyRate = qpp && !receiving ? input.qppEarlyRate.doubleValue() / 100d : 0.006d
+            int maximumDelay = qpp ? 84 : 60
+            Supplier<LocalDate> chosen = requested(input.earningsStart, receiving)
+            def earnings = incomeAccount(qpp ? 'QPP' : 'CPP')
+            taxableReceipt(personId, 'pension', 'monthly') {
+                on monthly
+                until deathOf(personId)
+                debit cash
+                credit earnings
+                amount {
+                    LocalDate start = CanadianPensionDates.claimMonth(chosen, age60)
+                    if (start == null || today.isBefore(start)) return 0d
+                    long months = receiving ? 0L : ChronoUnit.MONTHS.between(age65, start)
+                    double factor = months < 0 ? 1d + earlyRate * months : 1d + 0.007d * Math.min(maximumDelay, months)
+                    estimate * factor * inflationFactor(planDate, today) * fx
+                }
+            }
+        }
+
+        if (input.oasYears == 0 || input.oasMonthly == 0d) return
+        int residenceYears = input.oasYears.intValue()
+        double oas = input.oasMonthly.doubleValue()
+        boolean receiving = input.oasReceiving
+        int qualifyingYears = receiving ? residenceYears : ((Number) (input.oasQualifyingYears ?: residenceYears)).intValue()
+        LocalDate firstQualified = receiving || !input.oasFirstPayment ? age65 :
+            [age65, YearMonth.parse(input.oasFirstPayment).atDay(1)].max()
+        LocalDate deferralFrom = [firstQualified, LocalDate.of(2013, 7, 1)].max()
+        boolean reachesFullRate = !receiving && residenceYears == 40 && qualifyingYears < 40
+        requireInput('invalid.oasFullQualification') {
+            !reachesFullRate || (CanadianPensionDates.validMonth(input.oasFullPayment) &&
+                !YearMonth.parse(input.oasFullPayment).atDay(1).isBefore(firstQualified))
+        }
+        LocalDate oasMinimum = reachesFullRate ? YearMonth.parse(input.oasFullPayment).atDay(1) : firstQualified
+        LocalDate fullDeferralFrom = [oasMinimum, LocalDate.of(2013, 7, 1)].max()
+        Supplier<LocalDate> chosen = requested(input.oasStart, receiving)
+        def inCanada = { LocalDate day -> (residenceAt(personId, day)?.country() ?: 'CA') == 'CA' }
+        def oldAge = incomeAccount('OAS')
+        taxableReceipt(personId, 'oasPension', 'monthly') {
+            on monthly
+            until deathOf(personId)
+            debit cash
+            credit oldAge
+            amount {
+                LocalDate start = CanadianPensionDates.claimMonth(chosen, oasMinimum)
+                if (start == null || today.isBefore(start) || (residenceYears < 20 && !inCanada(today))) return 0d
+                long months = Math.max(0L, ChronoUnit.MONTHS.between(deferralFrom, [age70, start].min()))
+                // Section 7.1 compares the deferred pension with the undeferred rate at approval.
+                double share = receiving ? 1d : Math.max(residenceYears, qualifyingYears * (1d + 0.006d * months)) / 40d
+                if (reachesFullRate && !start.isBefore(fullDeferralFrom)) {
+                    long fullMonths = Math.max(0L, ChronoUnit.MONTHS.between(fullDeferralFrom, [age70, start].min()))
+                    share = Math.max(share, 1d + 0.006d * fullMonths)
+                }
+                double over75 = today.isBefore(age75) || (receiving && !planDate.isBefore(age75)) ? 1d : 1.1d
+                oas * share * over75 * inflationFactor(planDate, today) * fx
+            }
+        }
+
+        if (input.gisMonthly > 0d) {
+            double gis = input.gisMonthly.doubleValue()
+            LocalDate quoteEnd = YearMonth.parse(input.gisThrough).plusMonths(1).atDay(1)
+            def supplement = incomeAccount('GIS')
+            taxableReceipt(personId, 'federalPensionSupplement', 'monthly') {
+                on monthly
+                until deathOf(personId)
+                debit cash
+                credit supplement
+                amount {
+                    LocalDate start = CanadianPensionDates.claimMonth(chosen, oasMinimum)
+                    if (start == null || today.isBefore(start) || !today.isBefore(quoteEnd) || !inCanada(today)) return 0d
+                    gis * inflationFactor(planDate, today) * fx
+                }
+            }
+        }
+    }
+}
