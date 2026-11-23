@@ -1,0 +1,14 @@
+{
+  "id": "cashle.finance.pension.au.public",
+  "requires": ["cashle.finance", "cashle.dsl.groovy"],
+  "sources": [{
+    "path": "australian-age-pension.cashle",
+    "providers": ["cashle.finance.pension.au.public"],
+    "resources": ["dev/cashle/pension/au/AgePension_en.properties", "dev/cashle/pension/au/AgePension_sv.properties"]
+  }],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {"locale": "en", "path": "ui/en.json"},
+    {"locale": "sv", "path": "ui/sv.json"}
+  ]
+}

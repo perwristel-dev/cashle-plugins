@@ -1,0 +1,29 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.tax'
+    id 'cashle.cashflow'
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.au' from '../../australian-tax/australian-tax.cashle'
+    id 'cashle.finance.pension.au.public' from '../australian-age-pension.cashle'
+}
+finance {
+    plan { from '2026-06-01'; until '2027-11-23'; currency 'AUD'; inflation 0d }
+    person('self') { name 'Pensioner'; birthYear 1959; birthMonth 7 }
+    tax {
+        country 'AU'
+        preliminaryRate 0d
+        options([
+            ruleYear: 2026, residency: 'full-year', openingCapitalLoss: 0d,
+            medicareProfile: 'declared-assessment', workExpenses: 0d, nonRefundableOffset: 0d,
+            mlsIncomeAdditions: 0d, mlsBaseAdditions: 0d, declaredMedicareLevy: 0d, declaredMedicareSurcharge: 0d,
+            paymentTimingConfirmed: true, settlementMonth: 11, settlementDay: 21
+        ])
+    }
+    salary('work') { name 'Salary'; owner 'self'; amount 2000d; frequency 'monthly'; taxTreatment 'taxable' }
+    agePension('Centrelink pension') {
+        settings grossFortnightly: 1200d, taxableFortnightly: 1100d, eligibilityConfirmed: true,
+            payoutStart: [reference: 'date', year: 2025, month: 4, day: 15]
+    }
+}
+collect { cashflow { format json; output 'stdout' } }
