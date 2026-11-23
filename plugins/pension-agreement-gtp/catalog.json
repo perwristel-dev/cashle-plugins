@@ -1,0 +1,16 @@
+{
+  "name": "GTP",
+  "names": {
+    "en": "GTP (Fremia–LO)",
+    "sv": "GTP (Fremia–LO)"
+  },
+  "description": {
+    "sv": "Ålderspensionspremier enligt Fremia–LO:s Gemensam tjänstepension.",
+    "en": "Old-age pension contributions under Fremia–LO's joint occupational pension agreement."
+  },
+  "country": "SE",
+  "category": "income",
+  "releases": [
+    "9ab5eab5569b8ab56abc11b8ab3daa1997fbcc663f1272435c4f4332f6889293"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "id": "cashle.pension.agreement.GTP",
+  "sources": [
+    {
+      "path": "gtp.cashle",
+      "providers": ["cashle.pension.agreement.GTP"],
+      "imports": {
+        "cashle.pension.agreement.rules": ["SwedishAgreementRules.groovy"]
+      }
+    }
+  ],
+  "ui": "agreement-entry.js",
+  "requires": ["cashle.pension.agreement.rules"]
+}

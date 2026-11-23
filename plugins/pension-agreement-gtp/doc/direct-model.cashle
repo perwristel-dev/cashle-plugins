@@ -1,0 +1,32 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.tax'
+    id 'cashle.tax.se'
+    id 'cashle.pension.types'
+    id 'cashle.finance.pension.dc'
+    id 'cashle.pension.agreement.GTP'
+}
+
+finance {
+    plan {
+        from '2026-01-01'
+        until '2026-04-01'
+        inflation 0d
+        settings([generalAssumptions: ['swedish-pension': [baseAmountIncrease: 0d, lifelongDivisionYears: 20d]]])
+    }
+    person('self') { birthYear 1986; birthMonth 1 }
+    tax {
+        country 'SE'
+        preliminaryRate 0d
+        options([ruleYear: 2025, residentMonths: 12, municipality: '0180', municipalRate: 0.306d,
+                 burialFeeRate: 0.00293d, communityMember: false])
+    }
+    salary('Salary') { amount 60_000d; frequency 'monthly'; taxTreatment 'taxable'; taxBasis 'salary' }
+    dcPension('GTP') {
+        settings([inputMode: 'statement', scheme: 'GTP', salaryId: 'Salary',
+                  historicalWageEvents: [[incomeId: 'Salary', openingEventIncluded: false]],
+                  capital: 0d, growthRate: 0d, duration: 10d])
+    }
+}
+collect {}

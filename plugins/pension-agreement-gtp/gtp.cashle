@@ -1,0 +1,32 @@
+import dev.cashle.pension.agreement.PensionAgreement.ContributionInput
+import dev.cashle.pension.agreement.PensionAgreement.Kind
+
+import static SwedishAgreementRules.*
+
+def gtp = localized('GTP (Fremia–LO)', 55, 5)
+pensionAgreement('GTP') {
+    pluginId 'cashle.pension.agreement.GTP'
+    kind Kind.DEFINED_CONTRIBUTION
+    metadata gtp('sv')
+    localizedMetadata gtp
+    eligible { ContributionInput input -> gtpEligible(input) }
+    historicalContributionBreakpoints { ContributionInput input -> thresholds(input, 7.5d) }
+    contribution { ContributionInput input ->
+        if (!gtpEligible(input)) return 0d
+        double premium = uncappedPremium(input, .045d, .30d)
+        premium * (1d - .012d)
+    }
+}
+
+static boolean gtpEligible(ContributionInput input) {
+    int year = input.date().year
+    if (year < 2011) return false
+
+    int minimumAge = 22
+    if (year <= 2020) minimumAge = 25
+    if (year == 2021) minimumAge = 24
+    if (year == 2022) minimumAge = 23
+
+    double ageInYears = age(input)
+    ageInYears >= minimumAge && ageInYears < 65d
+}
