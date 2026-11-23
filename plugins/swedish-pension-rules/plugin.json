@@ -1,8 +1,23 @@
 {
   "id": "cashle.finance.pension.rules",
-  "sourceExports": ["swedish-pension-common.cashle"],
-  "sources": [{
-    "path": "swedish-pension-common.cashle",
-    "resources": ["swedish/pension/common_en.properties", "swedish/pension/common_sv.properties"]
-  }]
+  "sourceExports": [
+    "swedish-pension-common.cashle"
+  ],
+  "sources": [
+    {
+      "path": "swedish-pension-common.cashle",
+      "resources": [
+        "swedish/pension/common_en.properties",
+        "swedish/pension/common_sv.properties"
+      ]
+    }
+  ],
+  "ui": "ui.js",
+  "uiAssets": [
+    "ui/factory.js",
+    "ui/services.js",
+    "ui/model.js",
+    "ui/editor.js",
+    "ui/locale.js"
+  ]
 }
