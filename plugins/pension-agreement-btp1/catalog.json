@@ -1,0 +1,16 @@
+{
+  "name": "BTP 1",
+  "names": {
+    "en": "BTP 1",
+    "sv": "BTP 1"
+  },
+  "description": {
+    "sv": "Premier för bankbranschens premiebestämda tjänstepension BTP 1.",
+    "en": "Contributions for the banking sector’s defined-contribution BTP 1 pension."
+  },
+  "country": "SE",
+  "category": "income",
+  "releases": [
+    "f1c87388ece67c3df8225cd7af868efbf2f0ec503a5f6ba11dd4725d9eee2fe5"
+  ]
+}
