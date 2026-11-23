@@ -1,0 +1,16 @@
+{
+  "name": "KTP 1",
+  "names": {
+    "en": "KTP 1",
+    "sv": "KTP 1"
+  },
+  "description": {
+    "sv": "Premiebestämd ålderspension enligt KTP 1 med premier per avtalsområde.",
+    "en": "KTP 1 defined-contribution old-age pension with premiums by agreement area."
+  },
+  "country": "SE",
+  "category": "income",
+  "releases": [
+    "f0993c3539e9f33a30bde20f8c0aaaa55b5e9fa589f65a6229481ed3cb3eb6be"
+  ]
+}
