@@ -1,0 +1,19 @@
+{
+  "Norskt amorteringskrav": "Norwegian mortgage repayment requirement",
+  "Namn": "Name",
+  "Bostad": "Dwelling",
+  "Välj bostad": "Choose dwelling",
+  "Bolån": "Mortgage",
+  "Välj bolån": "Choose mortgage",
+  "Ange bankens värdering": "Enter the lender's valuation",
+  "Bankens värdering": "Lender's valuation",
+  "Ange beviljat lånebelopp": "Enter the granted amount",
+  "Beviljat lånebelopp": "Granted amount",
+  "Datum då lånet beviljades (ÅÅÅÅ-MM-DD)": "Grant date (YYYY-MM-DD)",
+  "Med tomma underlag använder prognosen bostadens värde samt lånets ingående saldo och startdatum.": "If you leave the lender's details blank, the forecast uses the dwelling's value and the loan's opening balance and start date.",
+  "Lägg först till en bostad med kopplade lån.": "Add a dwelling with linked loans first.",
+  "Välj en bostad med kopplade lån.": "Choose a dwelling with linked loans.",
+  "Välj ett lån som är kopplat till bostaden.": "Choose a loan linked to the dwelling.",
+  "Ange lånedatum som ÅÅÅÅ-MM-DD.": "Enter the grant date as YYYY-MM-DD.",
+  "Lånet har redan en plan för norskt amorteringskrav.": "The loan already has a Norwegian mortgage repayment plan."
+}

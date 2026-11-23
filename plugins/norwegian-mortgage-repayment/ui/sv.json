@@ -1,0 +1,19 @@
+{
+  "Norskt amorteringskrav": "Norskt amorteringskrav",
+  "Namn": "Namn",
+  "Bostad": "Bostad",
+  "Välj bostad": "Välj bostad",
+  "Bolån": "Bolån",
+  "Välj bolån": "Välj bolån",
+  "Ange bankens värdering": "Ange bankens värdering",
+  "Bankens värdering": "Bankens värdering",
+  "Ange beviljat lånebelopp": "Ange beviljat lånebelopp",
+  "Beviljat lånebelopp": "Beviljat lånebelopp",
+  "Datum då lånet beviljades (ÅÅÅÅ-MM-DD)": "Datum då lånet beviljades (ÅÅÅÅ-MM-DD)",
+  "Med tomma underlag använder prognosen bostadens värde samt lånets ingående saldo och startdatum.": "Med tomma underlag använder prognosen bostadens värde samt lånets ingående saldo och startdatum.",
+  "Lägg först till en bostad med kopplade lån.": "Lägg först till en bostad med kopplade lån.",
+  "Välj en bostad med kopplade lån.": "Välj en bostad med kopplade lån.",
+  "Välj ett lån som är kopplat till bostaden.": "Välj ett lån som är kopplat till bostaden.",
+  "Ange lånedatum som ÅÅÅÅ-MM-DD.": "Ange lånedatum som ÅÅÅÅ-MM-DD.",
+  "Lånet har redan en plan för norskt amorteringskrav.": "Lånet har redan en plan för norskt amorteringskrav."
+}

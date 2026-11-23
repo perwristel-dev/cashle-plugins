@@ -1,0 +1,19 @@
+{
+  "id": "cashle.finance.loan-repayment.no",
+  "requires": ["cashle.finance.loan-repayment", "cashle.dsl.groovy"],
+  "sources": [
+    {
+      "path": "norwegian-mortgage-repayment.cashle",
+      "providers": ["cashle.finance.loan-repayment.no"],
+      "resources": [
+        "dev/cashle/repayment/no/messages_en.properties",
+        "dev/cashle/repayment/no/messages_sv.properties"
+      ]
+    }
+  ],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {"locale": "en", "path": "ui/en.json"},
+    {"locale": "sv", "path": "ui/sv.json"}
+  ]
+}

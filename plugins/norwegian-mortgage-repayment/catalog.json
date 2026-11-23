@@ -1,0 +1,16 @@
+{
+  "name": "Norskt amorteringskrav",
+  "names": {
+    "en": "Norwegian mortgage repayment requirement",
+    "sv": "Norskt amorteringskrav"
+  },
+  "description": {
+    "en": "Forecast minimum principal repayments on a Norwegian mortgage under section 9 of the lending regulation.",
+    "sv": "Beräknar lägsta amortering för norska bolån enligt § 9 i utlånsforskriften."
+  },
+  "country": "NO",
+  "category": "flows",
+  "releases": [
+    "6197a434c2d62b6f1db82a45fe9d68422262a0aad41f11c855ac6b78cdb75863"
+  ]
+}

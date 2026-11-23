@@ -1,0 +1,186 @@
+import dev.cashle.core.i18n.Messages
+import dev.cashle.sdk.composition.ModuleContext
+import dev.cashle.sdk.composition.ModuleInput
+import dev.cashle.sdk.finance.AnnuityInterest
+import dev.cashle.sdk.finance.CollateralAsset
+import dev.cashle.sdk.finance.FinanceContext
+import dev.cashle.sdk.finance.FinanceModule
+import dev.cashle.sdk.finance.FundingPort
+import dev.cashle.sdk.finance.FundingSchedule
+import dev.cashle.sdk.finance.RepayableDebt
+import dev.cashle.sdk.model.Variable
+import groovy.transform.CompileStatic
+
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
+import java.util.function.DoubleSupplier
+
+financeModule('cashlab.repayment-no', 1) {
+    pluginId 'cashle.finance.loan-repayment.no'
+    dsl('norwegianMortgageRepayment') { String name ->
+        [name: name, homeId: '', loanId: '', source: FundingPort.CASH]
+    }
+    factory { ModuleInput input -> new NorwegianMortgageRepayment(input) }
+}
+
+@CompileStatic
+final class NorwegianMortgageRepayment implements FinanceModule {
+    private static final String ROLE = 'cashle.finance.loan-repayment.no.loan.v1'
+    private static final double NO_DATE = -1.0e12d
+    private static final int REFERENCE_YEARS = 30
+    private static final int MONTHS_IN_YEAR = 12
+    private static final double LTV_THRESHOLD = 0.60d
+    private static final double GRANT_RATE = 0.025d
+    private final ModuleInput entry
+    private FinanceContext context
+    private Messages messages
+    private CollateralAsset home
+    private RepayableDebt loan
+    private AnnuityInterest interest
+    private final List<RepayableDebt> securedLoans = new ArrayList<>()
+    private double lenderValue
+    private LocalDate grantedDate
+    private Variable grantedAmount
+    private Variable openingDay
+
+    NorwegianMortgageRepayment(ModuleInput entry) { this.entry = entry }
+
+    @Override void declare(ModuleContext ignored) {}
+
+    @Override void wireFinance(FinanceContext finance) {
+        if (!entry.enabled()) return
+        context = finance
+        messages = context.messages(NorwegianMortgageRepayment, 'dev.cashle.repayment.no.messages')
+        Map<String, Object> data = entry.data()
+        String homeId = Objects.toString(data.get('homeId'), '')
+        String loanId = Objects.toString(data.get('loanId'), '')
+        home = context.findCollateralAsset(homeId).orElse(null)
+        if (home == null || home.kind() != CollateralAsset.Kind.DWELLING) throw invalid('dwelling')
+        if (!home.creditIds().contains(loanId)) throw invalid('loan')
+        loan = lookupLoan(loanId)
+        if (!context.claimExclusive(loan.principal(), ROLE)) throw invalid('duplicate')
+        interest = context.findAnnuityInterest(loanId).orElse(null)
+        for (String id : home.creditIds()) securedLoans.add(lookupLoan(id))
+
+        lenderValue = positiveAmount(data.get('lenderValue'))
+        grantedDate = optionalDate(data.get('grantedDate'))
+        grantedAmount = context.model().variable(positiveAmount(data.get('grantedAmount')))
+        openingDay = context.model().variable(NO_DATE)
+        // Capture the opening draw before repayments can reduce the recorded principal.
+        context.model().beforeBalanceChange(loan.principal()) { double delta ->
+            if (openingDay.getValue() != NO_DATE || delta >= 0d) return
+            double principalAfterDraw = -loan.principal().getPostedBalance() - delta
+            if (principalAfterDraw <= 0d) return
+            openingDay.setValue(context.model().clock().getDate().toEpochDay())
+            if (grantedAmount.getValue() == 0d) grantedAmount.setValue(principalAfterDraw)
+        }
+    }
+
+    @Override void funding(FundingPort port) {
+        if (!entry.enabled()) return
+        String source = Objects.toString(entry.data().get('source'), FundingPort.CASH)
+        FundingSchedule schedule = FundingSchedule.monthlyEnd(context::from)
+        DoubleSupplier arrears = port.requiredLiabilityWithArrears(entry.id(), source, loan.principal(),
+                this::installment, schedule, this::active, () -> 1d, null, true, () -> false, () -> principal(loan))
+        if (FundingPort.CASH.equals(source))
+            port.liabilityCommitment(loan.principal(), () -> commitment(arrears.getAsDouble()), arrears)
+    }
+
+    private double installment(double arrears) {
+        Math.min(Math.max(0d, principal(loan) - arrears),
+                monthlyMinimum(context.model().clock().getDate(), securedPrincipal()))
+    }
+
+    private double commitment(double arrears) {
+        if (!active()) return 0d
+        double remaining = Math.max(0d, principal(loan) - arrears)
+        double secured = securedPrincipal(), reserved = 0d
+        LocalDate horizon = context.nextReceiptDate().get()
+        for (LocalDate date = monthEndOnOrAfter(context.model().clock().getDate().plusDays(1));
+                date.isBefore(horizon) && remaining > 0d; date = monthEndOnOrAfter(date.plusDays(1))) {
+            double amount = Math.min(remaining, monthlyMinimum(date, secured))
+            reserved += amount
+            remaining -= amount
+            secured -= amount
+        }
+        reserved
+    }
+
+    private double monthlyMinimum(LocalDate date, double secured) {
+        double granted = grantedAmount.getValue()
+        LocalDate start = loanGrantDate()
+        if (granted <= 0d || secured <= 0d || start == null || date.isBefore(start)) return 0d
+        double value = lenderValue > 0d ? lenderValue : home.marketValueAt().applyAsDouble(date)
+        if (!Double.isFinite(value) || value <= 0d) {
+            // A future valuation can be unavailable after the dwelling is sold.
+            if (date.isAfter(context.model().clock().getDate())) return 0d
+            throw invalid('value')
+        }
+        if (secured <= LTV_THRESHOLD * value) return 0d
+
+        long loanYear = ChronoUnit.MONTHS.between(start.withDayOfMonth(1), date.withDayOfMonth(1))
+                .intdiv(MONTHS_IN_YEAR)
+        double principalShare = annualAnnuityPrincipal(monthlyRate(date), loanYear)
+        granted * Math.min(GRANT_RATE, principalShare) / MONTHS_IN_YEAR
+    }
+
+    private double monthlyRate(LocalDate date) {
+        double rate = interest == null ? Math.max(0d, loan.annualRate().getAsDouble()) / MONTHS_IN_YEAR :
+                interest.projectedInterest(date, monthEndOnOrAfter(date.plusDays(1)), 1d)
+        if (!Double.isFinite(rate) || rate < 0d) throw invalid('rate')
+        rate
+    }
+
+    /** Sum the reference annuity's principal shares for the loan year. */
+    private static double annualAnnuityPrincipal(double monthlyRate, long loanYear) {
+        if (monthlyRate == 0d) return 1d / REFERENCE_YEARS
+        long yearsAfter = Math.max(0L, REFERENCE_YEARS - 1L - loanYear)
+        double annualLogRate = MONTHS_IN_YEAR * Math.log1p(monthlyRate)
+        Math.exp(-yearsAfter * annualLogRate) * Math.expm1(-annualLogRate) /
+                Math.expm1(-REFERENCE_YEARS * annualLogRate)
+    }
+
+    private LocalDate loanGrantDate() {
+        if (grantedDate != null) return grantedDate
+        LocalDate modeled = loan.startDate() == null ? null : loan.startDate().get()
+        if (modeled != null) return modeled
+        openingDay.getValue() == NO_DATE ? null : LocalDate.ofEpochDay((long) openingDay.getValue())
+    }
+
+    private double securedPrincipal() {
+        double total = 0d
+        for (RepayableDebt debt : securedLoans) {
+            if (debt.available().getAsBoolean()) total += principal(debt)
+        }
+        total
+    }
+
+    private boolean active() { home.owned().getAsBoolean() && loan.available().getAsBoolean() }
+
+    private RepayableDebt lookupLoan(String id) {
+        context.findRepayableDebt(id).orElseThrow { invalid('credit') }
+    }
+
+    private static LocalDate monthEndOnOrAfter(LocalDate day) { day.withDayOfMonth(day.lengthOfMonth()) }
+
+    private static double principal(RepayableDebt debt) { Math.max(0d, -debt.principal().getPostedBalance()) }
+
+    private double positiveAmount(Object raw) {
+        if (raw == null) return 0d
+        if (!(raw instanceof Number)) throw invalid('amount')
+        double amount = ((Number) raw).doubleValue()
+        if (!Double.isFinite(amount) || amount <= 0d) throw invalid('amount')
+        amount
+    }
+
+    private LocalDate optionalDate(Object raw) {
+        if (raw == null || ''.equals(raw)) return null
+        try {
+            return LocalDate.parse(raw.toString())
+        } catch (java.time.DateTimeException failure) {
+            throw invalid('date')
+        }
+    }
+
+    private IllegalArgumentException invalid(String key) { new IllegalArgumentException(messages.text(key)) }
+}
