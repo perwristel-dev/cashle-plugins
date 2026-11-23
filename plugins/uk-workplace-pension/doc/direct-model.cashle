@@ -1,0 +1,16 @@
+plugins {
+    id 'cashle.finance'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.gb.workplace' from '../uk-workplace-pension.cashle'
+}
+
+finance {
+    plan { from '2026-04-01'; until '2026-08-01'; currency 'GBP'; inflation 0d }
+    person('self') { birthYear 1970; birthMonth 5 }
+    ukWorkplacePension('Workplace pension') {
+        settings([openingCapital: 20_000d, grossMonthlyPay: 3_000d, payoutMode: 'monthly',
+                  monthlyWithdrawal: 1_000d, remainingLumpSumAllowance: 350d,
+                  payoutStart: [reference: 'date', year: 2026, month: 6, day: 1]])
+    }
+}
+collect { }

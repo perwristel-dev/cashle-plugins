@@ -1,0 +1,16 @@
+{
+  "name": "UK workplace pension – auto-enrolment DC",
+  "names": {
+    "en": "UK workplace pension – auto-enrolment DC",
+    "sv": "Brittisk tjänstepension – automatisk anslutning"
+  },
+  "description": {
+    "en": "Qualifying-earnings contributions to an individual workplace pension pot and flexible lump-sum withdrawals.",
+    "sv": "Avgifter på kvalificerande lön till brittisk premiebestämd tjänstepension med flexibla engångsuttag."
+  },
+  "country": "GB",
+  "category": "income",
+  "releases": [
+    "cd80a4a7d9f069ccbfddacf48b9f50596af01e9f571e7998883159379c13d8f7"
+  ]
+}
