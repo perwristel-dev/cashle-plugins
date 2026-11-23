@@ -18,8 +18,11 @@ import static dev.cashle.tax.support.PropertyInputs.requiredBool
 import static dev.cashle.tax.support.PropertyInputs.scope
 
 int referenceYear = 2026
-def bases = ['salary', 'capitalIncome', 'shareIncome', 'privatePropertyIncome'].asImmutable()
-def nativeMoney = ['employmentExpenses', 'churchTaxPaid'].asImmutable()
+def pensionBases = ['germanStatutoryPension', 'germanVblPension'].asImmutable()
+def bases = (['salary', 'capitalIncome', 'shareIncome', 'privatePropertyIncome'] + pensionBases).asImmutable()
+def employeeMoney = ['employmentExpenses', 'churchTaxPaid'].asImmutable()
+def pensionMoney = ['pensionInsurancePaid', 'statutoryPensionExemptAmount'].asImmutable()
+def nativeMoney = (employeeMoney + pensionMoney).asImmutable()
 def lossFields = [
     shareLossCarry: new TaxStateField('Share sale losses (EUR)', true),
     otherCapitalLossCarry: new TaxStateField('Other capital losses (EUR)', true),
@@ -28,13 +31,23 @@ def lossFields = [
 def moneyOptions = (nativeMoney + lossFields.keySet()).toSet().asImmutable()
 def allowed = (bases + moneyOptions + ['ruleYear', 'residency', 'birthYear', 'profile', 'churchRate',
     'healthAdditionalRate', 'saxony', 'settlementDate', 'noticeDatesByYear', 'noticeAmountsByYear',
-    'settlementCalendar', 'initialState']).toSet().asImmutable()
+    'settlementCalendar', 'initialState', 'assessmentYear', 'statutoryPensionStartYear',
+    'vblTaxableShare']).toSet().asImmutable()
 def finite = { value -> value instanceof Number && Double.isFinite(value.doubleValue()) }
 def equalNumber = { value, double target -> value instanceof Number && value.doubleValue() == target }
 def nonnegative = { options, String key ->
     double value = number(options, key, 0d)
     require(value >= 0d, "${key} must be nonnegative.")
     value
+}
+def wholeBetween = { value, int min, int max ->
+    finite(value) && value.doubleValue() == Math.rint(value.doubleValue()) && value >= min && value <= max
+}
+def statutoryTaxableShare = { int startYear ->
+    // § 22 no. 1 sentence 3(a)(aa): cohort share from the first year of receipt.
+    if (startYear <= 2020) return 0.50d + Math.max(0, startYear - 2005) * 0.02d
+    if (startYear <= 2022) return 0.80d + (startYear - 2020) * 0.01d
+    Math.min(1d, 0.82d + (startYear - 2022) * 0.005d)
 }
 def tariff = { double income ->
     double whole = Math.floor(Math.max(0d, income))
@@ -58,6 +71,7 @@ countryTaxPolicy('DE') {
     currency 'EUR'
     ruleYear referenceYear
     incomeBases bases
+    preliminaryEligible { basis, options -> bases.contains(basis) && !pensionBases.contains(basis) }
     requiresTaxPlan true
     messages 'dev.cashle.tax.germany.GermanTaxSource'
     nativeMonetaryOptions nativeMoney
@@ -68,10 +82,11 @@ countryTaxPolicy('DE') {
         if (!equalNumber(options.ruleYear, referenceYear) || !'full-year'.equals(options.residency)) {
             errors.add('profile.ruleYearResidency')
         }
+        boolean retiree = 'single-retiree'.equals(options.profile)
         if (context.people().any { person ->
             def birth = person.get('birthYear')
             finite(birth) && birth.doubleValue() == Math.rint(birth.doubleValue()) &&
-                (birth.intValue() < 1962 || birth.intValue() > 2002)
+                (birth.intValue() < (retiree ? 1900 : 1962) || birth.intValue() > 2002)
         }) errors.add('profile.birthYear')
         def settlement = options.get('settlementDate')
         def notices = options.get('noticeDatesByYear')
@@ -80,13 +95,24 @@ countryTaxPolicy('DE') {
         boolean noticesEntered = notices instanceof Map && !notices.isEmpty()
         boolean calendarConfirmed = calendar instanceof Map && Boolean.TRUE.equals(calendar.get('confirmed'))
         if (!dateEntered && !noticesEntered && !calendarConfirmed) errors.add('profile.settlementDate')
-        if (!'single-childless-statutory'.equals(options.profile)) errors.add('profile.conditions')
+        if (!retiree && !'single-childless-statutory'.equals(options.profile)) errors.add('profile.conditions')
         if (![0d, 0.08d, 0.09d].any { rate -> equalNumber(options.churchRate, rate) }) errors.add('profile.churchRate')
-        if (!finite(options.healthAdditionalRate) || options.healthAdditionalRate < 0d || options.healthAdditionalRate > 0.1d) {
-            errors.add('profile.healthAdditionalRate')
+        if (!retiree) {
+            if (!finite(options.healthAdditionalRate) || options.healthAdditionalRate < 0d || options.healthAdditionalRate > 0.1d) {
+                errors.add('profile.healthAdditionalRate')
+            }
+            if (!(options.saxony instanceof Boolean)) errors.add('profile.saxony')
+        } else {
+            if (!finite(options.pensionInsurancePaid) || options.pensionInsurancePaid < 0d ||
+                (options.statutoryPensionStartYear != null && !wholeBetween(options.statutoryPensionStartYear, 1900, 9999)) ||
+                (options.statutoryPensionExemptAmount != null &&
+                    (!finite(options.statutoryPensionExemptAmount) || options.statutoryPensionExemptAmount < 0d)) ||
+                (options.vblTaxableShare != null &&
+                    (!finite(options.vblTaxableShare) || options.vblTaxableShare < 0d || options.vblTaxableShare > 1d))) {
+                errors.add('profile.pensionOptions')
+            }
         }
-        if (!(options.saxony instanceof Boolean)) errors.add('profile.saxony')
-        for (String key : nativeMoney) {
+        for (String key : retiree ? ['churchTaxPaid'] : employeeMoney) {
             if (!finite(options.get(key)) || options.get(key) < 0d) errors.add('profile.deductions')
         }
         errors
@@ -103,6 +129,18 @@ countryTaxPolicy('DE') {
             'Germany needs an explicit annual payment date from the assessment notice (settlementDate); no fixed May calendar applies.')
         LocalDate.parse(options.get('settlementDate').toString())
     }
+    annualInputs { options, int birthYear, int birthMonth, int year, annualBases ->
+        def resolved = new LinkedHashMap(options)
+        resolved.put('ruleYear', referenceYear)
+        boolean retiree = 'single-retiree'.equals(options.profile)
+        resolved.put('birthYear', retiree ? birthYear : birthYear - year + referenceYear)
+        if (retiree) resolved.put('assessmentYear', year)
+        annualBases.each { key, value ->
+            require(bases.contains(key), "Unsupported German tax basis: ${key}")
+            resolved.put(key, number(resolved, key, 0d) + value)
+        }
+        resolved
+    }
     assessAnnualStateful { options, int birthYear, int birthMonth, int year, annualBases, state, annual ->
         def merged = new LinkedHashMap(options)
         merged.putAll(state)
@@ -118,34 +156,72 @@ countryTaxPolicy('DE') {
         keys(options, allowed)
         require(number(options, 'ruleYear', 0d) == referenceYear, 'Select explicit ruleYear:2026.')
         require('full-year'.equals(options.residency), 'Only full-year German residence is supported.')
-        require('single-childless-statutory'.equals(options.profile),
-            'Confirm individual assessment, no child tax benefits, and ordinary statutory employee insurance. Joint assessment and pension-age profiles are unsupported.')
-        double birth = number(options, 'birthYear', 0d)
-        require(birth == Math.rint(birth) && birth >= 1962d && birth <= 2002d,
-            'German profile supports adults aged 24–64 in the assessment year.')
+        boolean retiree = 'single-retiree'.equals(options.profile)
+        require(retiree || 'single-childless-statutory'.equals(options.profile),
+            'Confirm either the supported German employee or retired individual profile.')
+        require(wholeBetween(options.birthYear, retiree ? 1900 : 1962, 2002),
+            'Enter a birth year supported by the selected German profile.')
         double salary = nonnegative(options, 'salary')
-        require(salary == 0d || salary > 24000d,
-            'Mini/midi-job and partial-year employment insurance are unsupported; full-year ordinary salary must exceed EUR 24,000.')
+        double statutory = nonnegative(options, 'germanStatutoryPension')
+        double vbl = nonnegative(options, 'germanVblPension')
+        double propertyCurrent = number(options, 'privatePropertyIncome', 0d)
         double church = number(options, 'churchRate', Double.NaN)
-        double extra = number(options, 'healthAdditionalRate', Double.NaN)
         require(church == 0d || church == 0.08d || church == 0.09d,
             'Provide churchRate 0, .08 (Bavaria/Baden-Württemberg), or .09 (other states).')
-        require(extra >= 0d && extra <= 0.1d, "Provide the actual insurer's additional health contribution rate.")
-        require(options.containsKey('saxony'), 'Confirm Saxony residence explicitly.')
 
-        double pension = Math.min(salary, 101400d) * 0.093d
-        double unemployment = Math.min(salary, 101400d) * 0.013d
-        double health = Math.min(salary, 69750d) * (0.073d + extra / 2d)
-        double care = Math.min(salary, 69750d) * (bool(options, 'saxony', false) ? 0.029d : 0.024d)
-        double basicHealth = health * 0.96d
-        double insuranceDeduction = pension + basicHealth + care +
-            Math.min(unemployment, Math.max(0d, 1900d - basicHealth - care))
-        double work = Math.min(salary, Math.max(1230d, nonnegative(options, 'employmentExpenses')))
+        double pension = 0d
+        double unemployment = 0d
+        double health = 0d
+        double care = 0d
+        double insuranceDeduction
+        double work = 0d
+        double pensionIncome = 0d
+        double pensionExpense = 0d
+        if (retiree) {
+            require(salary == 0d && propertyCurrent == 0d,
+                'The German retirement assessment supports pension and capital income. Wages and taxable private sales in retirement need separate rules.')
+            require(options.containsKey('pensionInsurancePaid'), 'Enter deductible retiree health and care premiums, or zero.')
+            if (statutory > 0d) {
+                int year = options.getOrDefault('assessmentYear', referenceYear)
+                require(wholeBetween(options.statutoryPensionStartYear, 1900, year),
+                    'Enter the actual calendar year when the German statutory pension first began.')
+                int startYear = options.statutoryPensionStartYear
+                double share = statutoryTaxableShare(startYear)
+                if (year == startYear || share == 1d) {
+                    pensionIncome = statutory * share
+                } else {
+                    require(options.containsKey('statutoryPensionExemptAmount'),
+                        'Enter the fixed annual statutory pension exemption from the tax notice or your forecast.')
+                    pensionIncome = Math.max(0d, statutory - nonnegative(options, 'statutoryPensionExemptAmount'))
+                }
+            }
+            if (vbl > 0d) {
+                double share = number(options, 'vblTaxableShare', Double.NaN)
+                require(share >= 0d && share <= 1d, 'Enter the taxable VBL share supported by the provider statement.')
+                pensionIncome += vbl * share
+            }
+            pensionExpense = Math.min(102d, pensionIncome)
+            insuranceDeduction = nonnegative(options, 'pensionInsurancePaid')
+        } else {
+            require(statutory == 0d && vbl == 0d, 'Choose the German retired individual profile to assess pension receipts.')
+            require(salary == 0d || salary > 24000d,
+                'Mini/midi-job and partial-year employment insurance are unsupported; full-year ordinary salary must exceed EUR 24,000.')
+            double extra = number(options, 'healthAdditionalRate', Double.NaN)
+            require(extra >= 0d && extra <= 0.1d, "Provide the actual insurer's additional health contribution rate.")
+            require(options.containsKey('saxony'), 'Confirm Saxony residence explicitly.')
+            pension = Math.min(salary, 101400d) * 0.093d
+            unemployment = Math.min(salary, 101400d) * 0.013d
+            health = Math.min(salary, 69750d) * (0.073d + extra / 2d)
+            care = Math.min(salary, 69750d) * (bool(options, 'saxony', false) ? 0.029d : 0.024d)
+            double basicHealth = health * 0.96d
+            insuranceDeduction = pension + basicHealth + care +
+                Math.min(unemployment, Math.max(0d, 1900d - basicHealth - care))
+            work = Math.min(salary, Math.max(1230d, nonnegative(options, 'employmentExpenses')))
+        }
 
-        double propertyCurrent = number(options, 'privatePropertyIncome', 0d)
         double property = (propertyCurrent > 0d && propertyCurrent < 1000d ? 0d : propertyCurrent) -
             nonnegative(options, 'privatePropertyLossCarry')
-        double taxable = Math.max(0d, salary - work - insuranceDeduction -
+        double taxable = Math.max(0d, salary - work + pensionIncome - pensionExpense - insuranceDeduction -
             Math.max(36d, nonnegative(options, 'churchTaxPaid')) + Math.max(0d, property))
         double ordinary = tariff(taxable)
         double soli = solidarity(ordinary)
@@ -168,7 +244,8 @@ countryTaxPolicy('DE') {
                 'ordinaryChurchTax', churchOrdinary, 'taxableOrdinaryIncome', taxable,
                 'employeePension', pension, 'employeeUnemployment', unemployment,
                 'employeeHealth', health, 'employeeCare', care, 'insuranceDeduction', insuranceDeduction,
-                'employmentDeduction', work, 'taxableCapitalIncome', capitalTaxable, 'capitalIncomeTax', capital,
+                'employmentDeduction', work, 'taxablePensionBeforeExpenses', pensionIncome,
+                'pensionExpenseAllowance', pensionExpense, 'taxableCapitalIncome', capitalTaxable, 'capitalIncomeTax', capital,
                 'capitalSolidarity', capitalSoli, 'capitalChurchTax', capitalChurch,
                 'shareLossRemaining', shareRemaining, 'otherCapitalLossRemaining', otherRemaining,
                 'privatePropertyLossRemaining', Math.max(0d, -property)))
