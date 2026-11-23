@@ -1,0 +1,22 @@
+{
+  "label": "Plan de pensiones de la construcción (PPESC)",
+  "description": "Plan de empleo del sector de la construcción con capital y cobro flexible.",
+  "income": "Cobro de la pensión de construcción",
+  "name": "Nombre",
+  "owner": "Persona",
+  "capital": "Capital acumulado inicial",
+  "contribution": "Aportación mensual",
+  "contributionHelp": "Utilice el importe del empleador o de VidaCaixa.",
+  "return": "Rentabilidad neta anual",
+  "eligibility": "Primera fecha de cobro autorizada",
+  "eligibilityHelp": "Utilice la fecha confirmada por la gestora para la jubilación.",
+  "mode": "Modalidad de cobro",
+  "monthly": "Pagos mensuales",
+  "lumpSum": "Pago único en capital",
+  "duration": "Número de pagos",
+  "months": "meses",
+  "start": "Inicio deseado",
+  "minimum": "Primera fecha autorizada",
+  "age": "Edad",
+  "right": "Ahorro previsional afecto"
+}

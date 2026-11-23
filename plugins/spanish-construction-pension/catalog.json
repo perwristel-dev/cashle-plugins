@@ -1,0 +1,16 @@
+{
+  "name": "Construction sector pension (PPESC)",
+  "names": {
+    "en": "Construction sector pension (PPESC)",
+    "sv": "Byggsektorns tjänstepension (PPESC)"
+  },
+  "description": {
+    "en": "Spanish construction-sector employment pension with a savings balance and flexible payout.",
+    "sv": "Spansk tjänstepension för byggsektorn med pensionskapital och flexibelt uttag."
+  },
+  "country": "ES",
+  "category": "income",
+  "releases": [
+    "5d98612576460fc75a033e0272acb1c648b0a0250a29f2964fa9f2fba48d494e"
+  ]
+}

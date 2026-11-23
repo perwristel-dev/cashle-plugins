@@ -1,0 +1,14 @@
+plugins {
+    id 'cashle.finance'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.occupational.es.construction' from '../spanish-construction-pension.cashle'
+}
+finance {
+    plan { from '2026-01-01'; until '2026-09-01'; currency 'EUR'; inflation 0d }
+    person('self') { birthYear 1961; birthMonth 4 }
+    spanishConstructionPension('PPESC') {
+        settings([capital:12000d, contributionMonthly:300d, eligibilityDate:'2026-04-15',
+            payoutMonths:12, payoutStart:[reference:'date', year:2026, month:1, day:1]])
+    }
+}
+collect {}
