@@ -1,0 +1,17 @@
+{
+  "id": "cashle.pension.agreement.KAP-KL",
+  "sources": [
+    {
+      "path": "kap-kl.cashle",
+      "providers": [
+        "cashle.pension.agreement.KAP-KL-DC",
+        "cashle.pension.agreement.KAP-KL-DB"
+      ],
+      "imports": {
+        "cashle.pension.agreement.rules": ["SwedishAgreementRules.groovy"]
+      }
+    }
+  ],
+  "ui": "agreement-entry.js",
+  "requires": ["cashle.pension.agreement.rules"]
+}

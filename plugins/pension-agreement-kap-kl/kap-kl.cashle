@@ -1,0 +1,86 @@
+import dev.cashle.pension.agreement.PensionAgreement.BenefitInput
+import dev.cashle.pension.agreement.PensionAgreement.ContributionInput
+import dev.cashle.pension.agreement.PensionAgreement.Kind
+import groovy.transform.CompileStatic
+
+import static SwedishAgreementRules.*
+
+def premiumDefined = localized('KAP-KL', 62, 10, 12, 12, 1d, 'openingPendingKapKlPremium',
+        false, ' – pensionskapital', ' – pension capital')
+pensionAgreement('KAP-KL-DC') {
+    pluginId 'cashle.pension.agreement.KAP-KL-DC'
+    kind Kind.DEFINED_CONTRIBUTION
+    metadata premiumDefined('sv')
+    localizedMetadata premiumDefined
+    eligible { ContributionInput input -> kapKlPremiumEligible(input) }
+    contribution { ContributionInput input ->
+        if (!kapKlPremiumEligible(input)) return 0d
+        double base = incomeBase(input)
+        double premium = band(input.salary(), 0d, 30d * base, .045d)
+        // Smaller premiums do not go into pension capital.
+        premium > .01d * base ? premium : 0d
+    }
+}
+
+def benefitDefined = localized('KAP-KL', 61, 5)
+pensionAgreement('KAP-KL-DB') {
+    pluginId 'cashle.pension.agreement.KAP-KL-DB'
+    kind Kind.DEFINED_BENEFIT
+    metadata benefitDefined('sv')
+    localizedMetadata benefitDefined
+    eligible { ContributionInput input ->
+        def birthMonth = input.birth().withDayOfMonth(1)
+        !input.date().isBefore(birthMonth.plusYears(28).plusMonths(1)) &&
+                input.date().isBefore(birthMonth.plusYears(65))
+    }
+    accruedServiceYears { double existing, double increment -> Math.min(30d, existing + increment) }
+    canBatchEstimatedServiceByMonth true
+    canBatchStatementServiceByMonth true
+    annualBenefit { BenefitInput input -> KapKlBenefit.annualBenefit(input, input.serviceYears()) }
+    incrementalBenefit { BenefitInput previous, BenefitInput current ->
+        KapKlBenefit.annualBenefit(current, current.serviceYears() - previous.serviceYears())
+    }
+}
+
+static boolean kapKlPremiumEligible(ContributionInput input) {
+    !input.date().isBefore(input.birth().withDayOfMonth(1).plusYears(21).plusMonths(1))
+}
+
+@CompileStatic
+final class KapKlBenefit {
+    // KAP-KL § 21. Rates in basis points for the 7.5–20 and 20–30 IBB bands.
+    private static final int[][] RATES = [
+        [6250, 3125], // 1946 and earlier
+        [6214, 3107], // 1947
+        [6179, 3089], // 1948
+        [6143, 3071], // 1949
+        [6107, 3054], // 1950
+        [6071, 3036], // 1951
+        [6036, 3018], // 1952
+        [6000, 3000], // 1953
+        [5964, 2982], // 1954
+        [5929, 2964], // 1955
+        [5893, 2946], // 1956
+        [5857, 2929], // 1957
+        [5821, 2911], // 1958
+        [5786, 2893], // 1959
+        [5750, 2875], // 1960
+        [5714, 2857], // 1961
+        [5679, 2839], // 1962
+        [5643, 2821], // 1963
+        [5607, 2804], // 1964
+        [5571, 2786], // 1965
+        [5536, 2768], // 1966
+        [5500, 2750], // 1967 and later
+    ] as int[][]
+
+    static double annualBenefit(BenefitInput input, double serviceYears) {
+        int cohort = Math.max(1946, Math.min(1967, input.birth().year))
+        int[] rates = RATES[cohort - 1946]
+        double base = yearlyIncomeBase(input.date(), input.baseGrowth())
+        double salary = input.salary()
+        double fullBenefit = band(salary, 7.5d * base, 20d * base, rates[0] / 10_000d) +
+                band(salary, 20d * base, 30d * base, rates[1] / 10_000d)
+        fullBenefit * Math.max(0d, Math.min(30d, serviceYears)) / 30d
+    }
+}

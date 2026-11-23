@@ -1,0 +1,48 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.tax'
+    id 'cashle.tax.se'
+    id 'cashle.pension.types'
+    id 'cashle.finance.pension.dc'
+    id 'cashle.finance.pension.db'
+    id 'cashle.pension.agreement.KAP-KL-DC'
+    id 'cashle.pension.agreement.KAP-KL-DB'
+}
+finance {
+    plan {
+        from '2026-01-01'
+        until '2027-03-01'
+        currency 'SEK'
+        inflation 0d
+        settings([generalAssumptions:['swedish-pension':[baseAmountIncrease:0d, lifelongDivisionYears:20d]]])
+    }
+    person('self') {
+        birthYear 1962
+        birthMonth 1
+        settings([workStartAge:34])
+    }
+    tax {
+        country 'SE'
+        preliminaryRate 0d
+        options([ruleYear:2025, residentMonths:12, municipality:'0180', municipalRate:0.306d,
+                 burialFeeRate:0.00293d, communityMember:false])
+    }
+    salary('Salary') {
+        amount 70000d
+        frequency 'monthly'
+        taxTreatment 'taxable'
+        taxBasis 'salary'
+        end '2027-01-01'
+    }
+    dcPension('KAP-KL capital') {
+        settings([inputMode:'statement', scheme:'KAP-KL-DC', salaryId:'Salary',
+                  historicalWageEvents:[[incomeId:'Salary', openingEventIncluded:false]],
+                  capital:0d, growthRate:0d, duration:0d])
+    }
+    dbPension('KAP-KL benefit') {
+        settings([inputMode:'estimate', scheme:'KAP-KL-DB', salaryId:'Salary',
+                  payoutAge:65, payoutStart:[reference:'age', age:65, offset:0, personId:'self'], duration:0d])
+    }
+}
+collect {}
