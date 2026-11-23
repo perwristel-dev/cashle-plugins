@@ -1,0 +1,17 @@
+{
+  "label": "Tjänstepension ABP",
+  "description": "Livsvarig ABP-pension för nederländsk offentlig sektor och utbildning.",
+  "income": "Utbetalning av ABP",
+  "name": "Namn",
+  "owner": "Person",
+  "gross": "Bruttopension per månad",
+  "quoteHelp": "Ange beloppet från MijnABP för vald uttagsstart.",
+  "aowDate": "AOW-datum",
+  "aowHelp": "Ange datum som SVB har beräknat eller meddelat.",
+  "start": "Önskad uttagsstart",
+  "aow": "Vid AOW-åldern",
+  "age": "Ålder",
+  "window": "Uttag kan börja från månaden du fyller 60 till fem år efter ditt AOW-datum.",
+  "right": "Intjänad ABP per månad",
+  "lifetime": "Livsvarig månadsutbetalning"
+}

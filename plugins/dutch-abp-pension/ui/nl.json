@@ -1,0 +1,17 @@
+{
+  "label": "ABP-pensioen",
+  "description": "Levenslang ABP-pensioen voor werknemers in overheid en onderwijs.",
+  "income": "Uitbetaling ABP",
+  "name": "Naam",
+  "owner": "Persoon",
+  "gross": "Bruto pensioen per maand",
+  "quoteHelp": "Vul het bedrag uit MijnABP in voor de gekozen ingangsdatum.",
+  "aowDate": "AOW-datum",
+  "aowHelp": "Vul de door de SVB opgegeven of verwachte datum in.",
+  "start": "Gewenste ingangsdatum",
+  "aow": "Bij AOW-leeftijd",
+  "age": "Leeftijd",
+  "window": "U kunt starten vanaf de maand waarin u 60 wordt tot vijf jaar na uw AOW-datum.",
+  "right": "Opgebouwd ABP-pensioen per maand",
+  "lifetime": "Levenslange maandelijkse uitkering"
+}

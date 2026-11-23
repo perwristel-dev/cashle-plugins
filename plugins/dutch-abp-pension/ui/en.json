@@ -1,0 +1,17 @@
+{
+  "label": "ABP occupational pension",
+  "description": "Lifetime ABP pension for Dutch government and education employment.",
+  "income": "ABP payment",
+  "name": "Name",
+  "owner": "Person",
+  "gross": "Gross monthly pension",
+  "quoteHelp": "Enter the amount shown by MijnABP for the chosen start.",
+  "aowDate": "AOW date",
+  "aowHelp": "Enter the date given or forecast by SVB.",
+  "start": "Preferred start",
+  "aow": "At AOW age",
+  "age": "Age",
+  "window": "You can start from the month you turn 60 until five years after your AOW date.",
+  "right": "ABP monthly entitlement",
+  "lifetime": "Lifetime monthly payments"
+}
