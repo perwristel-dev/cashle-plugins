@@ -1,0 +1,49 @@
+import dev.cashle.pension.agreement.PensionAgreement.BenefitInput
+import dev.cashle.pension.agreement.PensionAgreement.ContributionInput
+import dev.cashle.pension.agreement.PensionAgreement.Kind
+
+import static SwedishAgreementRules.*
+
+def btp2 = localized('BTP2', 65, 5)
+pensionAgreement('BTP2') {
+    pluginId 'cashle.pension.agreement.BTP2'
+    kind Kind.DEFINED_BENEFIT
+    metadata btp2('sv')
+    localizedMetadata btp2
+    eligible { ContributionInput input -> btp2Eligible(input) }
+    accruedServiceYears { double existing, double increment -> Math.min(30d, existing + increment) }
+    canBatchEstimatedServiceByMonth true
+    canBatchStatementServiceByMonth true
+    annualBenefit { BenefitInput input -> btp2Benefit(input, input.serviceYears()) }
+    incrementalBenefit { BenefitInput previous, BenefitInput current ->
+        btp2Benefit(current, current.serviceYears() - previous.serviceYears())
+    }
+}
+
+def btpk = localized('BTPK', 55, 5)
+pensionAgreement('BTPK') {
+    pluginId 'cashle.pension.agreement.BTPK'
+    kind Kind.DEFINED_CONTRIBUTION
+    metadata btpk('sv')
+    localizedMetadata btpk
+    eligible { ContributionInput input -> btp2Eligible(input) }
+    historicalContributionBreakpoints { ContributionInput input -> thresholds(input, 30d) }
+    contribution { ContributionInput input ->
+        if (!btp2Eligible(input)) return 0d
+        boolean strengthened = input.birth().year >= 1967 && input.date().year >= 2023
+        cappedPremium(input, strengthened ? .04d : .02d)
+    }
+}
+
+static boolean btp2Eligible(ContributionInput input) {
+    age(input) >= 25d + 1d / 12d && age(input) < 65d
+}
+
+static double btp2Benefit(BenefitInput input, double serviceYears) {
+    double base = yearlyIncomeBase(input.date(), input.baseGrowth())
+    double salary = input.salary()
+    double fullBenefit = band(salary, 0d, 7.5d * base, .10d) +
+            band(salary, 7.5d * base, 20d * base, .65d) +
+            band(salary, 20d * base, 30d * base, .325d)
+    fullBenefit * Math.min(1d, Math.max(0d, serviceYears) / 30d)
+}

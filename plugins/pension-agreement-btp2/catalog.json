@@ -1,0 +1,16 @@
+{
+  "name": "BTP 2",
+  "names": {
+    "en": "BTP 2",
+    "sv": "BTP 2"
+  },
+  "description": {
+    "sv": "Förmånsbestämd pension och BTPK för bankbranschen.",
+    "en": "Defined-benefit pension and the BTPK supplement for the banking sector."
+  },
+  "country": "SE",
+  "category": "income",
+  "releases": [
+    "c3c9d073e2a9589a94615d2d11fa8b8fd2bb24b57435f6c6245a2f50ca6f5618"
+  ]
+}
