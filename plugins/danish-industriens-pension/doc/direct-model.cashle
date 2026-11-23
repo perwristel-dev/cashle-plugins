@@ -1,0 +1,22 @@
+plugins {
+    id 'cashle.finance'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.dk.industriens' from '../industriens-pension.cashle'
+}
+
+finance {
+    plan {
+        from '2025-04-01'
+        until '2025-09-01'
+        currency 'DKK'
+        inflation 0d
+    }
+    person('self') { birthYear 1960; birthMonth 7 }
+    industriensPension('Industry pension') {
+        settings([openingCapital: 500_000d, pensionableMonthlyPay: 30_000d,
+                  contributionFrom: '2025-04-01', monthlyDeductions: 500d,
+                  firstEligiblePayout: '2025-07-01', payoutStart: [reference: 'age', age: 65, offset: 0],
+                  rateMonthly: 2_000d, rateYears: 15, lifelongMonthly: 3_000d])
+    }
+}
+collect {}

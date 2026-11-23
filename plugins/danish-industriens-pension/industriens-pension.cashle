@@ -1,0 +1,200 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
+import dev.cashle.sdk.model.ScheduleSpec
+
+import java.time.DateTimeException
+import java.time.LocalDate
+import java.util.function.Supplier
+
+final class IndustriensPensionRules {
+    static final LocalDate FIRST_RATE_DATE = LocalDate.of(2023, 6, 1)
+    static final LocalDate CURRENT_RATE_DATE = LocalDate.of(2025, 5, 1)
+
+    static double employerRate(LocalDate date) { date.isBefore(CURRENT_RATE_DATE) ? .10d : .11d }
+    static double grossContribution(double wage, LocalDate date) { wage * (employerRate(date) + .02d) }
+
+    static boolean amount(Object value) {
+        value instanceof Number && Double.isFinite(value.doubleValue()) && value.doubleValue() >= 0d
+    }
+
+    static boolean whole(Object value, int minimum, int maximum) {
+        amount(value) && value.doubleValue() >= minimum && value.doubleValue() <= maximum &&
+                value.doubleValue() == value.intValue()
+    }
+
+    static LocalDate date(Object value) {
+        if (!(value instanceof String) || !(value ==~ /\d{4}-\d{2}-\d{2}/)) return null
+        try {
+            LocalDate parsed = LocalDate.parse(value)
+            parsed.year >= 1900 ? parsed : null
+        } catch (DateTimeException ignored) {
+            null
+        }
+    }
+
+    static LocalDate birthMonth(Map person) {
+        if (!whole(person?.birthYear, 1900, 2300) || !whole(person?.birthMonth, 1, 12)) return null
+        LocalDate.of(person.birthYear.intValue(), person.birthMonth.intValue(), 1)
+    }
+
+    static LocalDate requestDate(Map request, LocalDate birth) {
+        if (request.reference == 'age' && birth != null && whole(request.age, 0, 130)) {
+            return birth.plusYears(request.age.longValue())
+        }
+        if (request.reference == 'date' && whole(request.year, 1900, 2430) && whole(request.month, 1, 12) &&
+                whole(request.getOrDefault('day', 1), 1, 31)) {
+            try {
+                return LocalDate.of(request.year.intValue(), request.month.intValue(), request.getOrDefault('day', 1).intValue())
+            } catch (DateTimeException ignored) {
+                return null
+            }
+        }
+        null
+    }
+
+    static LocalDate monthOnOrAfter(LocalDate date) {
+        date.dayOfMonth == 1 ? date : date.withDayOfMonth(1).plusMonths(1)
+    }
+
+    static boolean allowedRateWindow(LocalDate start, LocalDate earliest, int years) {
+        !start.plusYears(years).isAfter(earliest.plusYears(30))
+    }
+}
+
+financeModule('cashlab.danish-industriens-pension', 1) {
+    pluginId 'cashle.finance.pension.dk.industriens'
+    messages 'danish.industriens.messages'
+    dsl('industriensPension') { id ->
+        [name: id, owner: 'self', openingCapital: 0d, pensionableMonthlyPay: 0d,
+         rateMonthly: 0d, rateYears: 15, lifelongMonthly: 0d]
+    }
+
+    calculation {
+        def person = profile.people.find { it.id == input.owner }
+        LocalDate birth = IndustriensPensionRules.birthMonth(person)
+        requireInput('invalid.person') { birth != null && input.owner != 'joint' }
+        requireInput('invalid.amount') {
+            ['openingCapital', 'pensionableMonthlyPay', 'rateMonthly', 'lifelongMonthly'].every {
+                IndustriensPensionRules.amount(input[it])
+            }
+        }
+        String personId = birth == null ? 'self' : input.owner
+        String accountName = input.name instanceof String && !input.name.isBlank() ? input.name : text('account.name')
+        def capital = owner(personId).account {
+            name accountName + ' – ' + text('account.savings')
+            kind AccountKind.ASSET
+            reportingRole ReportingRole.PENSION
+        }
+        reportBalance capital
+        if (!enabled) return
+
+        def period = monthlyFromPlanStart
+        LocalDate from = period.fromInclusive()
+        LocalDate to = period.untilExclusive()
+        double fx = exchangeRate('DKK', profile.currency)
+        double wage = input.pensionableMonthlyPay.doubleValue()
+        double opening = input.openingCapital.doubleValue()
+        def openingBooking = null
+        if (opening > 0d) {
+            def equity = owner(personId).account { name text('account.equity'); kind AccountKind.EQUITY }
+            openingBooking = flow { on planStart; debit capital; credit equity; amount { opening * fx } }
+        }
+
+        double rate = input.rateMonthly.doubleValue()
+        double lifelong = input.lifelongMonthly.doubleValue()
+        boolean hasPayout = rate > 0d || lifelong > 0d
+        LocalDate earliest = IndustriensPensionRules.date(input.firstEligiblePayout)
+        Map request = input.payoutStart instanceof Map ? input.payoutStart : [:]
+        LocalDate entered = IndustriensPensionRules.requestDate(request, birth)
+        boolean milestoneReference = request.reference == 'milestone' &&
+                request.milestoneId instanceof String && !request.milestoneId.isBlank()
+        requireInput('invalid.payout') {
+            !hasPayout || earliest != null && earliest >= birth.plusYears(60) &&
+                    request.getOrDefault('offset', 0) == 0 && (milestoneReference || entered != null && entered >= earliest)
+        }
+        requireInput('invalid.rateDuration') { rate == 0d || IndustriensPensionRules.whole(input.rateYears, 10, 30) }
+        int years = rate > 0d ? input.rateYears.intValue() : 0
+        requireInput('invalid.rateWindow') {
+            rate == 0d || milestoneReference ||
+                    IndustriensPensionRules.allowedRateWindow(IndustriensPensionRules.monthOnOrAfter(entered), earliest, years)
+        }
+
+        Supplier<LocalDate> requested = milestoneReference && hasPayout ? milestone(request.milestoneId) : { entered } as Supplier<LocalDate>
+        Supplier<LocalDate> payout = {
+            if (!hasPayout) return null
+            LocalDate candidate = requested.get()
+            if (candidate == null) return null
+            LocalDate start = IndustriensPensionRules.monthOnOrAfter(candidate < earliest ? earliest : candidate)
+            if (rate > 0d && !IndustriensPensionRules.allowedRateWindow(start, earliest, years)) return null
+            start
+        } as Supplier<LocalDate>
+        Supplier<LocalDate> rateEnd = { payout.get()?.plusYears(years) } as Supplier<LocalDate>
+        Supplier<LocalDate> death = deathOf(personId)
+
+        if (wage > 0d) {
+            LocalDate contributionFrom = IndustriensPensionRules.date(input.contributionFrom)
+            requireInput('invalid.contribution') {
+                contributionFrom != null && IndustriensPensionRules.amount(input.monthlyDeductions)
+            }
+            LocalDate firstMonth = [from.withDayOfMonth(1), contributionFrom.withDayOfMonth(1),
+                    birth.plusYears(18), IndustriensPensionRules.FIRST_RATE_DATE].max()
+            double deductions = input.monthlyDeductions.doubleValue()
+            def contributionEquity = owner(personId).account { name text('account.contributions'); kind AccountKind.EQUITY }
+            flow {
+                on ScheduleSpec.every(Frequency.MONTH, firstMonth).atMonthEnd().within(from, to)
+                until death
+                debit capital
+                credit contributionEquity
+                amount {
+                    LocalDate start = payout.get()
+                    if (start != null && !today.isBefore(start)) return 0d
+                    double gross = IndustriensPensionRules.grossContribution(wage, today)
+                    Math.max(0d, gross - deductions) * fx
+                }
+            }
+        }
+
+        if (!hasPayout) return
+        LocalDate firstMonth = IndustriensPensionRules.monthOnOrAfter(milestoneReference ? earliest : entered)
+        def paymentMonths = ScheduleSpec.every(Frequency.MONTH, firstMonth).within(from, to)
+        def pensionEquity = owner(personId).account { name text('account.conversion'); kind AccountKind.EQUITY }
+        // The statement capital is a pre-payout amount. The insurer's quoted rights replace it at payout.
+        Supplier<LocalDate> conversion = {
+            LocalDate start = payout.get()
+            start == null ? null : [start, from].max()
+        } as Supplier<LocalDate>
+        flow {
+            on conversion
+            if (openingBooking != null) after openingBooking
+            until death
+            debit pensionEquity
+            credit capital
+            amount { Math.max(0d, capital.balance) }
+        }
+
+        [[rate, 'account.rate', rateEnd], [lifelong, 'account.lifelong', death]].each { double monthly, String label, Supplier<LocalDate> end ->
+            if (monthly == 0d) return
+            def income = owner(personId).account {
+                name accountName + ' – ' + text(label)
+                classify AccountKind.INCOME, new AccountTag('cashle.household.economic-nature', 1, 'income.pension.occupational', [AccountKind.INCOME] as Set)
+            }
+            Supplier<LocalDate> entitlementEnd = {
+                LocalDate expiry = end.get()
+                LocalDate died = death.get()
+                expiry == null ? died : (died == null || expiry < died ? expiry : died)
+            } as Supplier<LocalDate>
+            taxableReceipt(personId, 'pension', 'monthly') {
+                on paymentMonths
+                until entitlementEnd
+                debit cash
+                credit income
+                amount {
+                    LocalDate start = payout.get()
+                    start != null && !today.isBefore(start) ? monthly * fx : 0d
+                }
+            }
+        }
+    }
+}
