@@ -1,0 +1,35 @@
+{
+  "id": "cashle.finance.pension.occupational.fr.agirc-arrco",
+  "requires": [
+    "cashle.finance",
+    "cashle.dsl.groovy"
+  ],
+  "sources": [
+    {
+      "path": "french-agirc-arrco-pension.cashle",
+      "providers": [
+        "cashle.finance.pension.occupational.fr.agirc-arrco"
+      ],
+      "resources": [
+        "agircarrco/Messages_en.properties",
+        "agircarrco/Messages_sv.properties",
+        "agircarrco/Messages_fr.properties"
+      ]
+    }
+  ],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui/en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui/sv.json"
+    },
+    {
+      "locale": "fr",
+      "path": "ui/fr.json"
+    }
+  ]
+}

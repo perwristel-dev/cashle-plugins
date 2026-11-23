@@ -1,0 +1,13 @@
+plugins {
+    id 'cashle.finance'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.occupational.fr.agirc-arrco' from '../french-agirc-arrco-pension.cashle'
+}
+finance {
+    plan { from '2026-09-01'; until '2027-01-01'; currency 'EUR'; inflation 0d }
+    person('self') { birthYear 1969; birthMonth 9 }
+    frenchAgircArrcoPension('Agirc-Arrco') {
+        settings([points:12000d, claimRoute:'reduced', payoutStart:[reference:'age', age:55]])
+    }
+}
+collect {}
