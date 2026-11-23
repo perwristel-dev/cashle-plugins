@@ -4,7 +4,10 @@ Each directory under `plugins/` owns one source package and its catalog metadata
 
 Keep `catalog.json`'s `name` as the canonical name. Add `names.en` and `names.sv` for the display names in Cashle. These fields appear in the catalog index, so editing a display name leaves the ZIP and package version unchanged.
 
-The GitHub Actions workflow builds and publishes `/plugins/` on each push to `main`. Configure the repository's Pages source to **GitHub Actions**. The workflow keeps published versions for unchanged archives and assigns a new version to changed archives.
+The GitHub Actions workflow builds and publishes `/plugins/` when catalog
+inputs change on `main` or when started manually. Configure the repository's
+Pages source to **GitHub Actions**. The workflow keeps published versions for
+unchanged archives and assigns a new version to changed archives.
 
 In Cashle, configure the published directory URL as `CASHLE_PLUGIN_CATALOG_URL`. Other catalogs can use the same directory layout and be added by URL from the Plugins page.
 
@@ -21,9 +24,10 @@ npm test
 Preparation downloads the runner from `https://cashle-lab.com/maven/` and
 uses Cashle's catalog installer to resolve dependencies from the core and
 source plugin catalogs. Both steps write to `.cashle-tests/`. Cache this
-directory in CI, including the lock and its sibling `plugin-cache/`
+directory locally, including the lock and its sibling `plugin-cache/`
 directory. The test command can then run offline. Run preparation again
-when you change dependencies or want to refresh their versions.
+when you change dependencies or want to refresh their versions. The DSL test
+workflow is available on manual dispatch in GitHub Actions.
 
 Put the authored scenario and its assertions in your plugin's `test/`
 directory. Add a `test/dependencies.json` with any extra `plugins` and

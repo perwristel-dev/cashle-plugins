@@ -3,6 +3,13 @@ name: Publish plugin ZIPs
 on:
   push:
     branches: [main]
+    paths:
+      - 'build-catalog.mjs'
+      - 'plugins/**'
+      - '!plugins/*/doc/**'
+      - '!plugins/*/test/**'
+      - '!plugins/*/README.md'
+      - '.github/workflows/publish-plugins.yml'
   workflow_dispatch:
 
 permissions:
@@ -17,6 +24,7 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
