@@ -1,0 +1,22 @@
+{
+  "id": "cashle.finance.loan-repayment.se",
+  "requires": [
+    "cashle.finance.loan-repayment",
+    "cashle.dsl.groovy"
+  ],
+  "sources": [
+    {
+      "path": "swedish-mortgage-repayment.cashle",
+      "providers": ["cashle.finance.loan-repayment.se"],
+      "resources": [
+        "dev/cashle/repayment/se/messages_en.properties",
+        "dev/cashle/repayment/se/messages_sv.properties"
+      ]
+    }
+  ],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {"locale": "en", "path": "ui/en.json"},
+    {"locale": "sv", "path": "ui/sv.json"}
+  ]
+}
