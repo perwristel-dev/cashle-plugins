@@ -1,0 +1,16 @@
+{
+  "name": "Australian core household budget",
+  "names": {
+    "en": "Australian core household budget",
+    "sv": "Australisk grundbudget för hushåll"
+  },
+  "description": {
+    "en": "DSS-commissioned 2024 minimum healthy-living costs for metropolitan working-age households, excluding housing.",
+    "sv": "Referensbudget beställd av Australiens socialdepartement för grundläggande levnadskostnader 2024 i storstadsområden, exklusive boende."
+  },
+  "country": "AU",
+  "category": "expenses",
+  "releases": [
+    "845c70ab80f794e50c4042643bd77d28dbb5ead4cf4efde04d07a32b8eb02de7"
+  ]
+}

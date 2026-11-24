@@ -1,0 +1,42 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import java.time.LocalDate
+
+final class AustralianBudgetStandards {
+    // Q4 2024, national metropolitan core totals in AUD/week from UNSW tables 16, 17 and 19.
+    static final LocalDate PRICE_DATE = LocalDate.of(2024, 12, 1)
+    static final Map<String, Map<String, Integer>> WEEKLY = [
+        'single-adult': ['full-time': 404, unemployed: 257],
+        'single-mother-1': ['full-time': 626, 'part-time': 605, unemployed: 508],
+        'single-father-1': ['full-time': 623, 'part-time': 603, unemployed: 512],
+        'single-mother-2': ['full-time': 819, 'part-time': 778, unemployed: 652],
+        'single-father-2': ['full-time': 816, 'part-time': 777, unemployed: 656],
+        'couple-0': ['single-earner': 633, 'dual-earner': 653, unemployed: 439],
+        'couple-1': ['single-earner': 821, 'dual-earner': 860, unemployed: 716],
+        'couple-2': ['single-earner': 971, 'dual-earner': 1032, unemployed: 858],
+    ].collectEntries { household, costs -> [household, costs.asImmutable()] }.asImmutable()
+}
+
+financeModule('cashlab.australian-reference-budget', 1) {
+    pluginId 'cashle.finance.budget.au'
+    messages 'budget.AustralianBudget'
+    dsl('australianReferenceBudget') { id -> [name: id, household: 'single-adult', employment: 'full-time'] }
+
+    calculation {
+        Integer weekly = AustralianBudgetStandards.WEEKLY.get(input.household)?.get(input.employment)
+        requireInput('invalid.household') { weekly != null }
+        double monthly = (weekly ?: 0) * (52d / 12d)
+        double fx = exchangeRate('AUD', Objects.toString(profile.currency, 'AUD'))
+        def expense = household.account {
+            name Objects.toString(input.name, text('name'))
+            classify AccountKind.EXPENSE, new AccountTag('cashle.household.economic-nature',
+                1, 'expense.consumption.consumer-budget', [AccountKind.EXPENSE] as Set)
+        }
+        requiredExpense('core') {
+            on monthlyFromPlanStart
+            destination expense
+            savings 'core'
+            amount { monthly * fx * inflationFactor(AustralianBudgetStandards.PRICE_DATE, today) }
+        }
+    }
+}
