@@ -1,0 +1,22 @@
+{
+  "label": "Deutsche Grundsteuer B für Wohnimmobilien",
+  "field.name": "Name",
+  "field.assessmentBase": "Steuermessbetrag",
+  "field.multiplier": "Kommunaler Hebesatz",
+  "field.cadence": "Zahlungstermine laut Bescheid",
+  "field.firstYear": "Erstes Veranlagungsjahr des Eigentümers",
+  "field.lastYear": "Letztes Veranlagungsjahr des Eigentümers (0 = fortlaufend)",
+  "option.quarterly": "Vierteljährlich zum 15.",
+  "option.halfYearly": "Februar und August (bis 30 EUR jährlich)",
+  "option.august": "August (bis 15 EUR jährlich)",
+  "option.july": "Genehmigte Jahreszahlung zum 1. Juli",
+  "unit.eur": "EUR",
+  "unit.percent": "%",
+  "help.assessmentBase": "Übernehmen Sie den Betrag aus dem Grundsteuermessbescheid.",
+  "help.multiplier": "Übernehmen Sie den Hebesatz. Geben Sie bei 415 % den Wert 415 ein.",
+  "funding": "Finanzierung",
+  "summary.amount": "{amount} EUR/Jahr",
+  "invalid.amount": "Geben Sie einen gültigen nichtnegativen Messbetrag und Hebesatz ein.",
+  "invalid.years": "Prüfen Sie die Veranlagungsjahre. Die Berechnung gilt ab 2025.",
+  "invalid.cadence": "Wählen Sie die laut Bescheid für diesen Betrag zulässigen Zahlungstermine."
+}

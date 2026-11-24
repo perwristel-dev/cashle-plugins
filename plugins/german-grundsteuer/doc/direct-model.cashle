@@ -1,0 +1,16 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.cashflow'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.property-tax.de' from '../german-grundsteuer.cashle'
+
+}
+finance {
+    language 'en'
+    plan { from '2026-01-01'; until '2027-01-01'; currency 'EUR'; inflation 0d }
+    person('self') { name 'Owner'; birthYear 1980; birthMonth 1 }
+    income 'income', 2000d
+    germanGrundsteuer('property tax') { settings assessmentBaseEur: 96d, municipalMultiplierPercent: 415d }
+}
+collect { cashflow {} }

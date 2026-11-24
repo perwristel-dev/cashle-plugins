@@ -1,0 +1,34 @@
+{
+  "id": "cashle.finance.property-tax.de",
+  "requires": [
+    "cashle.finance"
+  ],
+  "sources": [
+    {
+      "path": "german-grundsteuer.cashle",
+      "providers": [
+        "cashle.finance.property-tax.de"
+      ],
+      "resources": [
+        "german/grundsteuer/messages_en.properties",
+        "german/grundsteuer/messages_sv.properties",
+        "german/grundsteuer/messages_de.properties"
+      ]
+    }
+  ],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui/en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui/sv.json"
+    },
+    {
+      "locale": "de",
+      "path": "ui/de.json"
+    }
+  ]
+}

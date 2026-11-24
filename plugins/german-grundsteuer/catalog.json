@@ -1,0 +1,16 @@
+{
+  "name": "German residential property tax (Grundsteuer B)",
+  "names": {
+    "en": "German residential property tax (Grundsteuer B)",
+    "sv": "Tysk fastighetsskatt (Grundsteuer B)"
+  },
+  "description": {
+    "en": "Municipal Grundsteuer B on a German home using the assessed amount and local multiplier.",
+    "sv": "Kommunal Grundsteuer B för en tysk bostad enligt skattemätbeloppet och den lokala skattesatsen."
+  },
+  "country": "DE",
+  "category": "expenses",
+  "releases": [
+    "33f90b36915f14fad093f3f92ab51b9d9dfa611cf7556f1088d211632b88e592"
+  ]
+}

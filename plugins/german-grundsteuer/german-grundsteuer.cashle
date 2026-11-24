@@ -1,0 +1,77 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
+import dev.cashle.sdk.model.ScheduleSpec
+import java.time.LocalDate
+
+financeModule('cashlab.german-grundsteuer', 1) {
+    pluginId 'cashle.finance.property-tax.de'
+    messages 'german.grundsteuer.messages'
+    dsl('germanGrundsteuer') { id ->
+        [name: id, assessmentBaseEur: 0d, municipalMultiplierPercent: 0d, cadence: 'quarterly',
+            firstTaxYear: 2025, lastTaxYear: 0]
+    }
+
+    calculation {
+        if (!enabled) return
+        requireInput('invalid.amount') {
+            [input.assessmentBaseEur, input.municipalMultiplierPercent].every {
+                it instanceof Number && Double.isFinite(it.doubleValue()) && it >= 0d
+            }
+        }
+        requireInput('invalid.years') {
+            [input.firstTaxYear, input.lastTaxYear].every {
+                it instanceof Number && Double.isFinite(it.doubleValue()) && it.doubleValue() == it.intValue()
+            } && input.firstTaxYear >= 2025 && input.firstTaxYear <= 9998 &&
+                (input.lastTaxYear == 0 || input.lastTaxYear >= input.firstTaxYear && input.lastTaxYear <= 9998)
+        }
+
+        // Messbetrag in EUR multiplied by the stated municipal Hebesatz, entered as percent.
+        BigDecimal cents = new BigDecimal(input.assessmentBaseEur.toString())
+            .multiply(new BigDecimal(input.municipalMultiplierPercent.toString()))
+            .setScale(0, java.math.RoundingMode.HALF_UP)
+        requireInput('invalid.amount') { cents <= 9_000_000_000_000d }
+        long annualCents = cents.longValueExact()
+        def dates = [
+            quarterly: [Frequency.QUARTER, 2, 15, 4],
+            halfYearly: [Frequency.SEMIANNUAL, 2, 15, 2],
+            august: [Frequency.YEAR, 8, 15, 1],
+            july: [Frequency.YEAR, 7, 1, 1]
+        ]
+        requireInput('invalid.cadence') {
+            dates.containsKey(input.cadence) && (input.cadence != 'halfYearly' || annualCents <= 3000) &&
+                (input.cadence != 'august' || annualCents <= 1500)
+        }
+        if (annualCents == 0) return
+        def payment = dates.get(input.cadence)
+        int lastYear = input.lastTaxYear.intValue()
+        def horizon = monthlyFromPlanStart
+        def first = LocalDate.of(input.firstTaxYear.intValue(), payment[1], payment[2])
+        if (!first.isBefore(horizon.untilExclusive()) ||
+            (lastYear > 0 && horizon.fromInclusive().year > lastYear)) return
+        def untilDate = horizon.untilExclusive()
+        if (lastYear > 0 && lastYear < untilDate.year) untilDate = LocalDate.of(lastYear + 1, 1, 1)
+        int installments = payment[3]
+        long ordinaryInstallment = Math.floorDiv(annualCents, (long) installments)
+        long finalInstallment = annualCents - ordinaryInstallment * (installments - 1)
+        double fx = exchangeRate('EUR', profile.currency)
+
+        def expense = household.account {
+            name input.name instanceof String && !input.name.isBlank() ? input.name : text('name')
+            classify AccountKind.EXPENSE, new AccountTag('cashle.household.economic-nature', 1,
+                'expense.tax.property', [AccountKind.EXPENSE] as Set)
+            reportingRole ReportingRole.TAX_EXPENSE
+        }
+        requiredExpense('propertyTax') {
+            on ScheduleSpec.every(payment[0], first).within(horizon.fromInclusive(), untilDate)
+            destination expense
+            amount {
+                boolean finalDueDate = installments == 1 || today.monthValue >= 8 && input.cadence == 'halfYearly' ||
+                    today.monthValue == 11 && input.cadence == 'quarterly'
+                (finalDueDate ? finalInstallment : ordinaryInstallment) * fx / 100d
+            }
+            savings 'propertyTax'
+        }
+    }
+}
