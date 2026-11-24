@@ -16,6 +16,8 @@ export default function (context) {
     taxRate('churchRate', 'Kyrkoskatt', 0.1, 'Ange 0 om kyrkoskatt inte gäller.'),
     profileChoice('civilStatus', 'Civilstånd enligt skattereglerna', [['', 'Välj'], ['single', 'Ensamstående']]),
     confirm('singleParentSupplement', 'Inget extra avdrag för ensamförsörjare'),
+    { key: 'listedShareLossCarry', label: 'Ingående förlustsaldo för noterade aktier (DKK)', kind: 'number',
+      default: 0, min: 0, money: true, help: 'Ange verifierad kvarvarande avdragsgill förlust från skattebeskedet.' },
   ];
 
   const nativeOptions = options => Object.fromEntries(Object.entries(options).filter(([, value]) => value !== null && value !== undefined && value !== ''));
@@ -53,7 +55,7 @@ export default function (context) {
     sourceTax: { language: 'groovy-cashle-plugin', provider: 'cashle.tax.dk', source: 'danish-tax.cashle' },
     id: 'DK', supportedBases: ['salary', 'pension', 'capitalIncome', 'interestExpenses', 'shareIncome'], label: 'Danmark', currency: 'DKK', ruleYear: 2026,
     description: 'Danska regler 2026 för ensamstående. Senioravdraget beräknas automatiskt på AM-bidragspliktig lön under de fem kalenderåren före folkepensionsåldern.',
-    defaultOptions: { ruleYear: 2026, residency: '', municipalRate: null, churchRate: 0, civilStatus: '', singleParentSupplement: null },
+    defaultOptions: { ruleYear: 2026, residency: '', municipalRate: null, churchRate: 0, civilStatus: '', singleParentSupplement: null, listedShareLossCarry: 0 },
     fields: profileFields,
     validate(options) {
       const errors = [];
@@ -65,6 +67,8 @@ export default function (context) {
         }
       }
       if (options.civilStatus !== 'single' || options.singleParentSupplement !== false) errors.push(taxText('Bekräfta ensamstående utan det extra avdraget för ensamförsörjare.'));
+      if (options.listedShareLossCarry != null && (!Number.isFinite(options.listedShareLossCarry) || options.listedShareLossCarry < 0))
+        errors.push(taxText('Ange ett giltigt förlustsaldo för noterade aktier.'));
       return errors;
     }, assessmentOptions: nativeOptions,
   };

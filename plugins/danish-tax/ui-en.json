@@ -37,5 +37,8 @@
   "Ja, hela året": "Yes, full year",
   "Ensamstående": "Single",
   "Bekräftat": "Confirmed",
-  "{label}: ange ett värde.": "{label}: enter a value."
+  "{label}: ange ett värde.": "{label}: enter a value.",
+  "Ingående förlustsaldo för noterade aktier (DKK)": "Opening listed-share loss balance (DKK)",
+  "Ange verifierad kvarvarande avdragsgill förlust från skattebeskedet.": "Enter the verified remaining deductible loss from the tax notice.",
+  "Ange ett giltigt förlustsaldo för noterade aktier.": "Enter a valid listed-share loss balance."
 }

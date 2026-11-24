@@ -1,0 +1,13 @@
+{
+  "label": "Danish taxable listed-share depot",
+  "help": "Use one holding per security per depot. Danish holdings of the same company and class share an average cost across depots.",
+  "field.confirmed": "Ordinary Danish listed shares and complete holdings",
+  "field.reporting": "Purchase and loss reporting verified",
+  "help.confirmed": "Confirm the plan includes all ordinary post-2005 holdings of the company and only one class of its shares.",
+  "help.reporting": "Confirm the purchase and any loss are reported on time to deduct eligible losses.",
+  "invalid.security": "Enter a Danish security identifier and its holding quantity.",
+  "invalid.scope": "Confirm ordinary Danish post-2005 listed shares, cash dividends and complete holdings.",
+  "invalid.pool": "The transaction cannot be allocated to the identified average-cost pool.",
+  "invalid.price": "The same security must have the same market price in every modeled depot.",
+  "invalid.money": "Listed-share taxation requires the Danish 2026 annual policy."
+}

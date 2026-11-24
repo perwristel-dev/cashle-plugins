@@ -37,5 +37,8 @@
   "Ja, hela året": "Ja, hela året",
   "Ensamstående": "Ensamstående",
   "Bekräftat": "Bekräftat",
-  "{label}: ange ett värde.": "{label}: ange ett värde."
+  "{label}: ange ett värde.": "{label}: ange ett värde.",
+  "Ingående förlustsaldo för noterade aktier (DKK)": "Ingående förlustsaldo för noterade aktier (DKK)",
+  "Ange verifierad kvarvarande avdragsgill förlust från skattebeskedet.": "Ange verifierad kvarvarande avdragsgill förlust från skattebeskedet.",
+  "Ange ett giltigt förlustsaldo för noterade aktier.": "Ange ett giltigt förlustsaldo för noterade aktier."
 }

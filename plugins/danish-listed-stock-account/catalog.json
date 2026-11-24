@@ -1,0 +1,16 @@
+{
+  "name": "Danish taxable listed-share depot",
+  "names": {
+    "en": "Danish taxable listed-share depot",
+    "sv": "Dansk beskattad aktiedepå"
+  },
+  "description": {
+    "en": "Ordinary Danish listed shares using realized taxation and a shared average cost across depots.",
+    "sv": "Vanliga danska noterade aktier med realisationsbeskattning och gemensamt genomsnittligt anskaffningsvärde."
+  },
+  "country": "DK",
+  "category": "accounts",
+  "releases": [
+    "2043408237f15df2e48f29a0c03a00433a9d6b010b3140b7b38685fc9db86973"
+  ]
+}

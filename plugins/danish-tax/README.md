@@ -38,3 +38,16 @@ cashle-cli/build/install/cashle/bin/cashle plugins/danish-tax/doc/direct-model.c
 ```
 
 [Rule provenance](doc/rule-provenance.json)
+
+## Ordinary listed shares
+
+The [Danish listed-share depot](../danish-listed-stock-account/README.md)
+contributes eligible gains, dividends and verified losses separately to the
+annual assessment. The existing share-income bands apply to the positive
+total. Eligible listed losses offset other eligible listed income for the same
+taxpayer and fall into an indefinite carry when they exceed it. Enter an
+existing verified carry as `listedShareLossCarry` in nominal DKK at the start
+of the forecast. Generic `shareIncome` still enters the shared bands. It does
+not draw down the listed-share loss balance because it does not establish
+eligibility.
+[Danish Tax Agency guidance on listed-share losses](https://skat.dk/en-us/borger/aktier-og-andre-vaerdipapirer/skat-af-aktier)
