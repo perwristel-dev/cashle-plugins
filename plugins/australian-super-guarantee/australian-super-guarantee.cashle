@@ -1,0 +1,242 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
+import dev.cashle.core.i18n.Messages
+import dev.cashle.sdk.composition.ModuleContext
+import dev.cashle.sdk.composition.ModuleInput
+import dev.cashle.sdk.finance.FinanceContext
+import dev.cashle.sdk.finance.FinanceModule
+import dev.cashle.sdk.finance.FundingPort
+import dev.cashle.sdk.finance.MetricsPort
+import dev.cashle.sdk.model.AccountHandle
+import dev.cashle.sdk.model.FlowHandle
+import dev.cashle.sdk.model.ScheduleSpec
+import dev.cashle.sdk.model.Variable
+import groovy.transform.CompileStatic
+import java.time.DateTimeException
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.temporal.ChronoUnit
+import java.util.function.Supplier
+
+financeModule('cashlab.australian-super-guarantee', 1) {
+    pluginId 'cashle.finance.pension.au.super-guarantee'
+    dsl('superGuarantee') { id -> [name: id, owner: 'self', openingBalance: 0d,
+        qualifyingAnnualEarnings: 0d, currentYearPriorEarnings: 0d, contributeAfterStart: false, annualReturn: 0d,
+        payoutStart: [reference: 'age', age: 65], cessationConfirmed: false,
+        transferCap: 2_100_000d, monthlyWithdrawal: 0d] }
+    factory { ModuleInput input -> new AustralianSuperGuarantee(input) }
+}
+
+@CompileStatic
+final class AustralianSuperGuarantee implements FinanceModule {
+    private static final String NATURE = 'cashle.household.economic-nature'
+    private static final LocalDate PAYDAY_SUPER_START = LocalDate.of(2026, 7, 1)
+    private static final double EARNINGS_CAP = 270_830d
+    private static final double NET_CONTRIBUTION_RATE = 0.12d * (1d - 0.15d)
+    private final ModuleInput entry
+    private FinanceContext context
+    private Messages messages
+    private String owner
+    private YearMonth birth
+    private LocalDate releaseFloor, firstForecastMonth, firstAdultMonth
+    private Supplier<LocalDate> requested, lifeEnd
+    private AccountHandle capital, equity, income
+    private FlowHandle receipt
+    private Variable accumulation, pension, hasStarted, yearToDate, monthlyMinimum, monthlyReceipt
+    private double qualifyingEarnings, growth, transferCap, desiredWithdrawal, exchange
+    private boolean contributeAfterStart
+
+    AustralianSuperGuarantee(ModuleInput entry) { this.entry = entry }
+
+    @Override void declare(ModuleContext ignored) {}
+
+    @Override void declareFinance(FinanceContext finance) {
+        context = finance
+        messages = finance.messages(AustralianSuperGuarantee, 'dev.cashle.pension.au.SuperGuarantee')
+        owner = Objects.toString(entry.data().get('owner'), 'self')
+        if (owner == 'joint') throw invalid('owner')
+        String name = Objects.toString(entry.data().get('name'), entry.id())
+        def entity = finance.owner(owner)
+        capital = entity.account().classify(AccountKind.ASSET,
+            new AccountTag(NATURE, 1, 'asset.pension', Set.of(AccountKind.ASSET)))
+        capital.setName(name)
+        capital.addReportingRole(ReportingRole.PENSION)
+        capital.setInheritable(false)
+        equity = entity.account().classify(AccountKind.EQUITY,
+            new AccountTag(NATURE, 1, 'equity.contribution', Set.of(AccountKind.EQUITY)))
+        income = entity.account().classify(AccountKind.INCOME,
+            new AccountTag(NATURE, 1, 'income.pension.occupational', Set.of(AccountKind.INCOME)))
+        income.setName(name)
+    }
+
+    @Override void wireFinance(FinanceContext finance) {
+        Map<String,Object> data = entry.data()
+        List<?> people = (List<?>) finance.profile().get('people')
+        Map<?,?> person = (Map<?,?>) people.find { Object candidate -> owner == ((Map<?,?>) candidate).get('id') }
+        if (person == null) throw invalid('owner')
+        birth = YearMonth.of(integer(person.get('birthYear'), 1800, 2300, 'owner'),
+            integer(person.get('birthMonth'), 1, 12, 'owner'))
+        if (!(data.get('cessationConfirmed') instanceof Boolean)) throw invalid('cessation')
+        releaseFloor = afterBirthday(Boolean.TRUE.equals(data.get('cessationConfirmed')) ? 60 : 65)
+        firstAdultMonth = afterBirthday(18)
+        firstForecastMonth = monthOnOrAfter(finance.from())
+        Map<String,Object> start = data.get('payoutStart') instanceof Map
+            ? (Map<String,Object>) data.get('payoutStart') : Map.of()
+        requested = requestDate(start)
+        lifeEnd = finance.lifeEnd(owner)
+        double opening = number(data.get('openingBalance'), 0d, Double.MAX_VALUE, 'amount')
+        qualifyingEarnings = number(data.get('qualifyingAnnualEarnings'), 0d, Double.MAX_VALUE, 'amount')
+        double prior = number(data.get('currentYearPriorEarnings'), 0d, Double.MAX_VALUE, 'amount')
+        if (prior > 0d && (finance.from().isBefore(PAYDAY_SUPER_START) || finance.from() == fiscalStart(finance.from()))) {
+            throw invalid('prior')
+        }
+        if (!(data.get('contributeAfterStart') instanceof Boolean)) throw invalid('contributions')
+        contributeAfterStart = Boolean.TRUE.equals(data.get('contributeAfterStart'))
+        growth = number(data.get('annualReturn'), -99d, 100d, 'return') / 100d
+        transferCap = number(data.get('transferCap'), 0d, Double.MAX_VALUE, 'amount')
+        desiredWithdrawal = number(data.get('monthlyWithdrawal'), 0d, Double.MAX_VALUE, 'amount')
+        exchange = finance.exchangeRate('AUD', Objects.toString(finance.profile().get('currency'), 'AUD'))
+
+        def model = finance.model()
+        accumulation = model.variable(opening)
+        pension = model.variable(0d)
+        hasStarted = model.variable(0d)
+        yearToDate = model.variable(Math.min(EARNINGS_CAP, prior))
+        monthlyMinimum = model.variable(0d)
+        monthlyReceipt = model.variable(0d)
+        model.valueAccount(capital, equity, () -> accountBalance())
+        ScheduleSpec months = ScheduleSpec.every(Frequency.MONTH, finance.from().withDayOfMonth(1))
+            .atMonthEnd().within(finance.from(), finance.until())
+        def update = model.action(months, () -> updateMonth(model.clock().getDate()))
+        LocalDate firstPaymentMonth = later(releaseFloor, firstForecastMonth)
+        if (start.get('reference') != 'milestone') firstPaymentMonth = later(firstPaymentMonth, monthOnOrAfter(requested.get()))
+        ScheduleSpec payments = ScheduleSpec.every(Frequency.MONTH, firstPaymentMonth)
+            .atMonthEnd().within(finance.from(), finance.until())
+        receipt = model.flow(payments, finance.cash(), income, () -> monthlyReceipt.getValue(), update)
+    }
+
+    private void updateMonth(LocalDate date) {
+        monthlyReceipt.setValue(0d)
+        LocalDate death = lifeEnd.get()
+        if (death != null && date.isAfter(death)) {
+            accumulation.setValue(0d)
+            pension.setValue(0d)
+            return
+        }
+        LocalDate month = date.withDayOfMonth(1)
+        LocalDate first = month.isBefore(context.from()) ? context.from() : month
+        double monthShare = (ChronoUnit.DAYS.between(first, date) + 1d) / date.lengthOfMonth()
+        double growthFactor = Math.pow(1d + growth, monthShare / 12d)
+        LocalDate financialYear = fiscalStart(month)
+        if (month == financialYear && !month.isBefore(context.from())) yearToDate.setValue(0d)
+
+        if (hasStarted.getValue() == 0d) {
+            LocalDate requestedDate = requested.get()
+            boolean canStart = requestedDate != null && !month.isBefore(monthOnOrAfter(requestedDate)) &&
+                !month.isBefore(releaseFloor) && !month.isBefore(firstForecastMonth)
+            if (canStart) {
+                double transferred = Math.min(accumulation.getValue(), transferCap)
+                pension.setValue(transferred)
+                accumulation.setValue(accumulation.getValue() - transferred)
+                hasStarted.setValue(1d)
+                monthlyMinimum.setValue(minimumPayment(transferred, month, financialYear))
+            } else {
+                accumulation.setValue(accumulation.getValue() * growthFactor + contribution(month, monthShare))
+                return
+            }
+        } else if (month == financialYear) {
+            monthlyMinimum.setValue(minimumPayment(pension.getValue(), month, financialYear))
+        }
+
+        double additionalContribution = contributeAfterStart ? contribution(month, monthShare) : 0d
+        accumulation.setValue(accumulation.getValue() * growthFactor + additionalContribution)
+        double available = pension.getValue() * growthFactor
+        double payout = Math.min(available, Math.max(monthlyMinimum.getValue(), desiredWithdrawal))
+        if (payout > 0d && context.residenceAt(owner, date).filter(residence -> residence.country() != 'AU').isPresent()) {
+            throw invalid('taxCountry')
+        }
+        pension.setValue(available - payout)
+        monthlyReceipt.setValue(payout * exchange)
+    }
+
+    private double contribution(LocalDate month, double monthShare) {
+        if (month.isBefore(PAYDAY_SUPER_START) || month.isBefore(firstAdultMonth)) return 0d
+        double covered = Math.min(Math.max(0d, EARNINGS_CAP - yearToDate.getValue()), qualifyingEarnings / 12d * monthShare)
+        yearToDate.setValue(yearToDate.getValue() + covered)
+        covered * NET_CONTRIBUTION_RATE
+    }
+
+    private double minimumPayment(double opening, LocalDate start, LocalDate financialYear) {
+        if (start.monthValue == 6) return 0d
+        LocalDate nextYear = financialYear.plusYears(1)
+        // A July birthday can already have occurred at financial year open.
+        // Use the older possible age so a month-only birth date cannot lower the minimum.
+        long age = ChronoUnit.YEARS.between(birth.atDay(1), start)
+        double rate = age < 65 ? 0.04d : age < 75 ? 0.05d : age < 80 ? 0.06d : age < 85 ? 0.07d :
+            age < 90 ? 0.09d : age < 95 ? 0.11d : 0.14d
+        double proRata = ChronoUnit.DAYS.between(start, nextYear) / (double) ChronoUnit.DAYS.between(financialYear, nextYear)
+        double annualMinimum = Math.floor(opening * rate * proRata / 10d + 0.5d) * 10d
+        annualMinimum / ChronoUnit.MONTHS.between(start, nextYear)
+    }
+
+    private double accountBalance() { (accumulation.getValue() + pension.getValue()) * exchange }
+
+    @Override void funding(FundingPort port) {
+        port.receiptUntil(receipt, FundingPort.ReceiptTax.TAX_FREE, false, () -> lifeEnd.get()?.plusDays(1))
+    }
+
+    @Override void metrics(MetricsPort port) {
+        port.balance(capital, () -> accountBalance())
+        port.income(income, false)
+    }
+
+    private LocalDate afterBirthday(int age) { birth.plusYears(age).plusMonths(1).atDay(1) }
+
+    private static LocalDate later(LocalDate first, LocalDate second) { first.isAfter(second) ? first : second }
+
+    private static LocalDate monthOnOrAfter(LocalDate date) {
+        date.dayOfMonth == 1 ? date : date.withDayOfMonth(1).plusMonths(1)
+    }
+
+    private static LocalDate fiscalStart(LocalDate date) {
+        LocalDate.of(date.year - (date.monthValue < 7 ? 1 : 0), 7, 1)
+    }
+
+    private Supplier<LocalDate> requestDate(Map<String,Object> start) {
+        integer(start.getOrDefault('offset', 0), 0, 0, 'start')
+        if (start.get('reference') == 'age') {
+            LocalDate date = afterBirthday(integer(start.get('age'), 0, 130, 'start'))
+            return () -> date
+        }
+        if (start.get('reference') == 'date') {
+            LocalDate date
+            try {
+                date = LocalDate.of(integer(start.get('year'), 1800, 2430, 'start'),
+                    integer(start.get('month'), 1, 12, 'start'), integer(start.getOrDefault('day', 1), 1, 31, 'start'))
+            } catch (DateTimeException ignored) { throw invalid('start') }
+            return () -> date
+        }
+        Object milestone = start.get('milestoneId')
+        if (start.get('reference') == 'milestone' && milestone instanceof String && !((String) milestone).isBlank()) {
+            return context.milestoneDate((String) milestone, 0)
+        }
+        throw invalid('start')
+    }
+
+    private int integer(Object raw, int min, int max, String error) {
+        double value = number(raw, min, max, error)
+        if (value != Math.rint(value)) throw invalid(error)
+        (int) value
+    }
+
+    private double number(Object raw, double min, double max, String error) {
+        if (!(raw instanceof Number)) throw invalid(error)
+        double value = ((Number) raw).doubleValue()
+        if (!Double.isFinite(value) || value < min || value > max) throw invalid(error)
+        value
+    }
+
+    private IllegalArgumentException invalid(String key) { new IllegalArgumentException(messages.text(key)) }
+}
