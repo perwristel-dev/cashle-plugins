@@ -1,0 +1,154 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.InvestmentCarry
+import dev.cashle.tax.InvestmentWithdrawalResult
+import dev.cashle.tax.TaxPolicyField
+import dev.cashle.tax.TaxStateField
+import java.time.LocalDate
+
+investmentAccount('cashlab.ca-fhsa', 1) {
+    pluginId 'cashle.finance.ca-fhsa'
+    dsl 'caFhsa'
+    country 'CA'
+    kind 'CAfhsa'
+    taxPolicy 'fhsa'
+    messages 'canadian.fhsa.policy'
+    prepaidTax false
+    transfers true
+    defaults([reinvestDividends: true])
+    validateInput { data ->
+        requireInput('invalid.confirmation') { data.policyOptions?.eligibilityConfirmed == true }
+        requireInput('invalid.distributions') { data.reinvestDividends != false }
+        requireInput('invalid.room') {
+            data.initialYear?.newAccountAtStart == true || !(data.balance instanceof Number) || data.balance == 0d ||
+                (data.policyOptions.openingLifetimeUsed instanceof Number && data.policyOptions.openingLifetimeUsed > 0d)
+        }
+    }
+}
+
+accountTaxPolicy('fhsa') {
+    pluginId 'cashle.finance.ca-fhsa.tax-policy'
+    messages 'canadian.fhsa.policy'
+    country 'CA'
+    ruleYear 2026
+    annualOnly 'cashlab.ca-fhsa'
+    annualBases 'fhsaIncome', 'fhsaDeduction'
+    maxAccountsPerPerson 1
+    existingYearFacts true
+    policyFields([
+        eligibilityConfirmed: new TaxPolicyField('field.eligibilityConfirmed', 'boolean'),
+        firstFhsaOpened: new TaxPolicyField('field.firstFhsaOpened', 'date'),
+        turns71Year: new TaxPolicyField('field.turns71Year', 'number'),
+        roomYear: new TaxPolicyField('field.roomYear', 'number'),
+        openingRoom: new TaxPolicyField('field.openingRoom', 'number'),
+        openingLifetimeUsed: new TaxPolicyField('field.openingLifetimeUsed', 'number'),
+        qualifyingDate: new TaxPolicyField('field.qualifyingDate', 'date'),
+        claimDeduction: new TaxPolicyField('field.claimDeduction', 'boolean')
+    ])
+    stateFields([
+        roomYear: new TaxStateField('state.roomYear', false),
+        remainingRoom: new TaxStateField('state.remainingRoom', true),
+        lifetimeUsed: new TaxStateField('state.lifetimeUsed', true),
+        taxableWithdrawalYear: new TaxStateField('state.taxableWithdrawalYear', false),
+        qualifyingWithdrawal: new TaxStateField('state.qualifyingWithdrawal', true)
+    ])
+
+    def bounds = { rules, options ->
+        rules.require(options.eligibilityConfirmed == true && options.claimDeduction instanceof Boolean, 'invalid.confirmation')
+        LocalDate opened
+        try {
+            opened = LocalDate.parse(options.firstFhsaOpened?.toString() ?: '')
+        } catch (java.time.DateTimeException ignored) {
+            rules.require(false, 'invalid.opened')
+        }
+        double turns71Year = rules.number(options, 'turns71Year', 0d)
+        rules.require(!opened.isBefore(LocalDate.of(2023, 4, 1)) && turns71Year == Math.rint(turns71Year) &&
+            turns71Year >= opened.year && turns71Year <= opened.year + 53, 'invalid.opened')
+        LocalDate deadline = LocalDate.of(Math.min(opened.year + 15, (int) turns71Year), 12, 31)
+        [opened, deadline]
+    }
+
+    def roomAt = { rules, options, state, LocalDate date ->
+        def (opened, deadline) = bounds(rules, options)
+        rules.require(!date.isBefore(opened) && !date.isAfter(deadline), 'invalid.period')
+        double year = state.getOrDefault('roomYear', rules.number(options, 'roomYear', 0d))
+        double left = state.getOrDefault('remainingRoom', rules.number(options, 'openingRoom', -1d))
+        double used = state.getOrDefault('lifetimeUsed', rules.number(options, 'openingLifetimeUsed', -1d))
+        rules.require(year == Math.rint(year) && year >= opened.year && date.year >= year && date.year <= year + 1d &&
+            left >= 0d && left <= (year == opened.year ? 8000d : 16000d) &&
+            used >= 0d && used <= 40000d && left <= 40000d - used, 'invalid.room')
+        if (date.year > year) left = Math.min(40000d - used, 8000d + Math.min(8000d, left))
+        [roomYear: (double) date.year, remainingRoom: left, lifetimeUsed: used]
+    }
+
+    def qualifying = { rules, request ->
+        def value = request.policyOptions().qualifyingDate
+        if (value == null || value == '') return false
+        LocalDate approved
+        try {
+            approved = LocalDate.parse(value.toString())
+        } catch (java.time.DateTimeException ignored) {
+            rules.require(false, 'invalid.qualifying')
+        }
+        request.closeAccount() && request.date() == approved
+    }
+
+    def mayContribute = { deposit ->
+        deposit.state().getOrDefault('taxableWithdrawalYear', 0d) == 0d &&
+            deposit.grossDeposits() <= deposit.netDeposits() + 1e-7d
+    }
+
+    maximumDeposit { deposit ->
+        def room = roomAt(delegate, deposit.policyOptions(), deposit.state(), deposit.date())
+        mayContribute(deposit) ? room.remainingRoom : 0d
+    }
+
+    stateAfterDeposit { deposit ->
+        def room = roomAt(delegate, deposit.policyOptions(), deposit.state(), deposit.date())
+        require(deposit.amount() <= room.remainingRoom + 1e-7d &&
+            (deposit.amount() == 0d || mayContribute(deposit)), 'invalid.deposit')
+        Map.copyOf(deposit.state() + room + [
+            remainingRoom: Math.max(0d, room.remainingRoom - deposit.amount()),
+            lifetimeUsed: Math.min(40000d, room.lifetimeUsed + deposit.amount())
+        ])
+    }
+
+    withdraw { request ->
+        roomAt(delegate, request.policyOptions(), request.state(), request.date())
+        def change = withdrawal(request, false, false, true)
+        new InvestmentWithdrawalResult(change.position(), 0d, 0d, qualifying(delegate, request) ? 0d : request.amount())
+    }
+
+    stateAfterWithdrawal { request ->
+        def room = roomAt(delegate, request.policyOptions(), request.state(), request.date())
+        if (request.amount() == 0d) return Map.copyOf(request.state() + room)
+        def classification = qualifying(delegate, request) ? [qualifyingWithdrawal: request.amount()] :
+            [taxableWithdrawalYear: (double) request.date().year]
+        Map.copyOf(request.state() + room + classification)
+    }
+
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        require(accounts.size() <= 1, 'invalid.aggregate')
+        double taxable = 0d
+        double deduction = 0d
+        def carries = [:]
+        for (def account in accounts) {
+            def (opened, deadline) = bounds(delegate, account.policyOptions())
+            if (!account.closed()) require(account.date().isBefore(deadline), 'invalid.deadline')
+            def room = roomAt(delegate, account.policyOptions(), account.state(), account.date())
+            require(account.distributedDividends() == 0d, 'invalid.distributions')
+            require(account.externalDeposits() <= room.lifetimeUsed + 1e-7d, 'invalid.deposit')
+            double withdrawn = account.withdrawals()
+            double exempt = account.state().getOrDefault('qualifyingWithdrawal', 0d)
+            require(exempt >= 0d && exempt <= withdrawn + 1e-7d && (exempt == 0d || account.closed()), 'invalid.withdrawals')
+            double assessable = Math.max(0d, withdrawn - exempt)
+            taxable += assessable
+            if (account.policyOptions().claimDeduction == true) deduction += account.externalDeposits()
+            carries[account.id()] = new InvestmentCarry(0d, 0d, Map.copyOf(account.state() + room + [
+                taxableWithdrawalYear: assessable > 0d ? (double) money.assessmentYear() : account.state().getOrDefault('taxableWithdrawalYear', 0d),
+                qualifyingWithdrawal: 0d
+            ]))
+        }
+        new InvestmentAnnualAssessment([fhsaIncome: taxable, fhsaDeduction: deduction], 0d, carries)
+    }
+}

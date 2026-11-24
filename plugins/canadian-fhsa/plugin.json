@@ -1,0 +1,37 @@
+{
+  "id": "cashle.finance.ca-fhsa",
+  "requires": [
+    "cashle.finance",
+    "cashle.account.support",
+    "cashle.account.tax.support"
+  ],
+  "ui": "ui.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui-en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui-sv.json"
+    },
+    {
+      "locale": "fr",
+      "path": "ui-fr.json"
+    }
+  ],
+  "sources": [
+    {
+      "path": "canadian-fhsa.cashle",
+      "providers": [
+        "cashle.finance.ca-fhsa",
+        "cashle.finance.ca-fhsa.tax-policy"
+      ],
+      "resources": [
+        "canadian/fhsa/policy_en.properties",
+        "canadian/fhsa/policy_sv.properties",
+        "canadian/fhsa/policy_fr.properties"
+      ]
+    }
+  ]
+}

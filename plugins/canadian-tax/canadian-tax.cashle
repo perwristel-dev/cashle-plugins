@@ -24,7 +24,7 @@ int referenceYear = 2026
 def provinces = ['AB', 'ON'].asImmutable()
 def externalBases = ['salary', 'pension', 'registeredPension', 'oasPension', 'federalPensionSupplement',
     'capitalIncome', 'eligibleDividends', 'nonEligibleDividends', 'capitalGains', 'capitalLosses'].asImmutable()
-def bases = (externalBases + ['investmentCapitalLoss', 'businessIncome']).asImmutable()
+def bases = (externalBases + ['investmentCapitalLoss', 'businessIncome', 'fhsaIncome', 'fhsaDeduction']).asImmutable()
 def nativeMoneyFields = ['adjustedFamilyNetIncome', 'cppPensionableEmploymentIncome', 'cppPensionableBusinessIncome'].asImmutable()
 
 def amount = { Map input, String key ->
@@ -94,6 +94,8 @@ def assessIncome = { Map input ->
     double oas = amount(input, 'oasPension')
     double supplement = amount(input, 'federalPensionSupplement')
     double pensionIncome = pension + registeredPension + oas + supplement
+    double fhsaIncome = amount(input, 'fhsaIncome')
+    double fhsaDeduction = amount(input, 'fhsaDeduction')
     double interest = amount(input, 'capitalIncome')
     double business = amount(input, 'businessIncome')
     require(business == 0d || bool(input, 'propertyFlippingIncomeConfirmed', false),
@@ -106,9 +108,9 @@ def assessIncome = { Map input ->
     double gains = amount(input, 'capitalGains')
     double currentNetGains = Math.max(0d, gains - currentLosses)
     double netGains = Math.max(0d, gains - losses)
-    require(salary + pensionIncome + interest + business + eligible + other + currentNetGains <= 181440d ||
-        currentNetGains + eligible + other == 0d,
-        'This investment-income profile may require Canadian alternative minimum tax (T691), which is unsupported.')
+    require(salary + pensionIncome + fhsaIncome + interest + business + eligible + other + currentNetGains <= 181440d ||
+        currentNetGains + eligible + other + fhsaDeduction == 0d,
+        'This investment-income or FHSA deduction profile may require Canadian alternative minimum tax (T691), which is unsupported.')
 
     int age = referenceYear - (int) number(input, 'birthYear', 0d)
     double months = 12d
@@ -176,8 +178,8 @@ def assessIncome = { Map input ->
     double selfCpp = 2d * (selfBase + selfEnhanced + Math.max(0d, selfCpp2))
     double ei = Math.min(salary, 68900d) * 0.0163d
     double enhancedDeduction = cppEnhanced + cpp2 + 2d * (selfEnhanced + Math.max(0d, selfCpp2))
-    double beforeRecovery = Math.max(0d, salary + pensionIncome + interest + business + grossDiv +
-        currentNetGains * 0.5d - enhancedDeduction - selfBase)
+    double beforeRecovery = Math.max(0d, salary + pensionIncome + fhsaIncome + interest + business + grossDiv +
+        currentNetGains * 0.5d - enhancedDeduction - selfBase - fhsaDeduction)
     double oasRecovery = Math.min(oas + supplement, Math.max(0d, beforeRecovery - 95323d) * 0.15d)
     double netIncome = beforeRecovery - oasRecovery
     double supplementDeduction = Math.max(0d, supplement - Math.max(0d, oasRecovery - oas))
@@ -229,6 +231,7 @@ def assessIncome = { Map input ->
             'federalBasicPersonalAmount', bpa, 'federalAgeAmount', federalAge, 'provincialAgeAmount', provincialAge,
             'federalPensionAmount', federalPensionAmount, 'provincialPensionAmount', provincialPensionAmount,
             'oasRecovery', oasRecovery, 'federalPensionSupplementDeduction', supplementDeduction,
+            'fhsaIncome', fhsaIncome, 'fhsaDeduction', fhsaDeduction,
             'cppContributionMonths', months, 'provincialBasicPersonalAmount', provincialBpa, 'netIncome', netIncome,
             'taxableIncome', taxable, 'taxableCapitalGains', netGains * 0.5d, 'grossedUpDividends', grossDiv,
             'federalDividendCredit', federalDiv, 'provincialDividendCredit', provincialDiv,
