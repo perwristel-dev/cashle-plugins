@@ -1,0 +1,22 @@
+{
+  "label": "German residential property tax (Grundsteuer B)",
+  "field.name": "Name",
+  "field.assessmentBase": "Tax assessment amount (Steuermessbetrag)",
+  "field.multiplier": "Municipal multiplier (Hebesatz)",
+  "field.cadence": "Payment schedule on the notice",
+  "field.firstYear": "First year assessed to the owner",
+  "field.lastYear": "Last year assessed to the owner (0 = open)",
+  "option.quarterly": "Quarterly on the 15th",
+  "option.halfYearly": "February and August (bill up to €30)",
+  "option.august": "August (bill up to €15)",
+  "option.july": "Approved annual payment on July 1",
+  "unit.eur": "EUR",
+  "unit.percent": "%",
+  "help.assessmentBase": "Use the assessed amount from the tax office’s measurement notice.",
+  "help.multiplier": "Enter the rate as printed. For 415%, enter 415.",
+  "funding": "Expense funding",
+  "summary.amount": "{amount} EUR/year",
+  "invalid.amount": "Enter a valid nonnegative assessment amount and multiplier.",
+  "invalid.years": "Check the assessed ownership years. This calculation starts in 2025.",
+  "invalid.cadence": "Choose the payment schedule permitted for this amount on the notice."
+}

@@ -1,0 +1,22 @@
+{
+  "label": "Tysk fastighetsskatt (Grundsteuer B)",
+  "field.name": "Namn",
+  "field.assessmentBase": "Skattemätbelopp (Steuermessbetrag)",
+  "field.multiplier": "Kommunal skattesats (Hebesatz)",
+  "field.cadence": "Betalningsplan enligt beslutet",
+  "field.firstYear": "Första år som ägaren beskattas",
+  "field.lastYear": "Sista år som ägaren beskattas (0 = tills vidare)",
+  "option.quarterly": "Kvartalsvis den 15:e",
+  "option.halfYearly": "Februari och augusti (högst 30 EUR)",
+  "option.august": "Augusti (högst 15 EUR)",
+  "option.july": "Godkänd årsbetalning 1 juli",
+  "unit.eur": "EUR",
+  "unit.percent": "%",
+  "help.assessmentBase": "Använd beloppet i skattemyndighetens mätbesked.",
+  "help.multiplier": "Ange procentsatsen som den står. För 415 %, skriv 415.",
+  "funding": "Finansiering",
+  "summary.amount": "{amount} EUR/år",
+  "invalid.amount": "Ange giltigt mätbelopp och giltig skattesats som båda är minst noll.",
+  "invalid.years": "Kontrollera ägarens beskattningsår. Beräkningen gäller från 2025.",
+  "invalid.cadence": "Välj en betalningsplan som beslutet tillåter för beloppet."
+}
