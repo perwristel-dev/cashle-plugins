@@ -1,0 +1,12 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.cashflow'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.budget.au' from '../australian-reference-budget.cashle'
+}
+finance {
+    plan { from '2026-07-01'; until '2026-10-01'; currency 'AUD'; inflation 0d }
+    person('self') { name 'Householder'; birthYear 1980; birthMonth 1 }
+    australianReferenceBudget('Core living costs') { settings household: 'couple-2', employment: 'dual-earner' }
+}
+collect { cashflow { format json; output 'stdout' } }

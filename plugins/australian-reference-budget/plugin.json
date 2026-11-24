@@ -1,0 +1,14 @@
+{
+  "id": "cashle.finance.budget.au",
+  "requires": ["cashle.finance", "cashle.dsl.groovy"],
+  "sources": [{
+    "path": "australian-reference-budget.cashle",
+    "providers": ["cashle.finance.budget.au"],
+    "resources": ["budget/AustralianBudget_en.properties", "budget/AustralianBudget_sv.properties"]
+  }],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {"locale": "en", "path": "ui/en.json"},
+    {"locale": "sv", "path": "ui/sv.json"}
+  ]
+}

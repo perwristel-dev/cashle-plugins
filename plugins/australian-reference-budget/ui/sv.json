@@ -1,0 +1,23 @@
+{
+  "label": "Australisk grundbudget för hushåll",
+  "field.name": "Namn",
+  "field.household": "Referenshushåll",
+  "field.employment": "Sysselsättningsprofil",
+  "field.funding": "Finansiering",
+  "option.single-adult": "Ensamstående vuxen",
+  "option.single-mother-1": "Ensamstående mamma med ett barn",
+  "option.single-father-1": "Ensamstående pappa med ett barn",
+  "option.single-mother-2": "Ensamstående mamma med två barn",
+  "option.single-father-2": "Ensamstående pappa med två barn",
+  "option.couple-0": "Par utan barn",
+  "option.couple-1": "Par med ett barn",
+  "option.couple-2": "Par med två barn",
+  "option.full-time": "Heltid med minimilön",
+  "option.part-time": "Deltid med minimilön",
+  "option.single-earner": "En heltidsarbetande med minimilön",
+  "option.dual-earner": "En heltidsarbetande och en deltidsarbetande med minimilön",
+  "option.unemployed": "Arbetslös",
+  "help.scope": "Välj ett storstadshushåll i arbetsför ålder med låg lön eller arbetslöshet enligt 2024 års referensbudget, beställd av Australiens socialdepartement. Lägg till boendet separat. Ange bara övriga kostnader som ligger utanför referensbudgeten.",
+  "invalid.household": "Välj en sysselsättningsprofil som publicerats för hushållstypen.",
+  "invalid.duplicate": "En plan kan ha en australisk grundbudget för hushållet."
+}

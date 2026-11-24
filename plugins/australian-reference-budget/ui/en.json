@@ -1,0 +1,23 @@
+{
+  "label": "Australian core household budget",
+  "field.name": "Name",
+  "field.household": "Reference household",
+  "field.employment": "Employment profile",
+  "field.funding": "Funding",
+  "option.single-adult": "Single adult",
+  "option.single-mother-1": "Single mother with one child",
+  "option.single-father-1": "Single father with one child",
+  "option.single-mother-2": "Single mother with two children",
+  "option.single-father-2": "Single father with two children",
+  "option.couple-0": "Couple without children",
+  "option.couple-1": "Couple with one child",
+  "option.couple-2": "Couple with two children",
+  "option.full-time": "Full-time at minimum wage",
+  "option.part-time": "Part-time at minimum wage",
+  "option.single-earner": "One full-time earner at minimum wage",
+  "option.dual-earner": "Full-time and part-time earners at minimum wage",
+  "option.unemployed": "Unemployed",
+  "help.scope": "Choose a low-paid or unemployed working-age metropolitan household in the 2024 DSS-commissioned healthy-living budget. Add housing separately. Add only costs outside the benchmark to avoid overlap.",
+  "invalid.household": "Choose an employment profile published for this household type.",
+  "invalid.duplicate": "A plan can have one Australian core household budget."
+}
