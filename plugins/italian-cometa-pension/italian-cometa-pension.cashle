@@ -1,0 +1,143 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
+import dev.cashle.sdk.composition.ModuleContext
+import dev.cashle.sdk.composition.ModuleInput
+import dev.cashle.sdk.finance.FinanceContext
+import dev.cashle.sdk.finance.FinanceModule
+import dev.cashle.sdk.finance.FundingPort
+import dev.cashle.sdk.finance.MetricsPort
+import dev.cashle.sdk.model.AccountHandle
+import dev.cashle.sdk.model.FlowHandle
+import dev.cashle.sdk.model.ScheduleSpec
+
+import java.time.LocalDate
+import java.time.YearMonth
+import java.util.function.Supplier
+
+financeModule('cashlab.italian-cometa-pension', 1) {
+    pluginId 'cashle.finance.pension.occupational.it.cometa'
+    dsl('italianCometaPension') { id ->
+        [name:id, owner:'self', positionAtClaim:0d, membershipStart:'', mandatoryEligibility:'',
+            netMonthlyQuote:0d, grossCapital:0d, netCapital:0d, payoutStart:[reference:'minimum', offset:0]]
+    }
+    factory { ModuleInput entry -> new ItalianCometaPension(entry) }
+}
+
+final class ItalianCometaPension implements FinanceModule {
+    private final ModuleInput entry
+    private AccountHandle income
+    private FlowHandle payment
+    private Supplier<LocalDate> lifeEnd
+    private LocalDate earliest
+    private YearMonth birth
+    private String ownerId
+
+    ItalianCometaPension(ModuleInput entry) { this.entry = entry }
+
+    @Override void declare(ModuleContext context) {}
+
+    @Override void declareFinance(FinanceContext context) {
+        if (!entry.enabled()) return
+        def data = entry.data()
+        def messages = context.messages(ItalianCometaPension, 'cometa.Messages')
+        def require = { boolean valid, String key ->
+            if (!valid) throw new IllegalArgumentException(messages.text(key))
+        }
+        ownerId = data.owner ?: 'self'
+        def member = context.profile().people.find { row -> row.id == ownerId }
+        require(member?.birthYear instanceof Number && member.birthYear >= 1900 &&
+            member.birthMonth instanceof Number && member.birthMonth in 1..12, 'owner')
+        birth = YearMonth.of(member.birthYear.intValue(), member.birthMonth.intValue())
+
+        LocalDate joined = enteredDate(data.membershipStart)
+        LocalDate mandatory = enteredDate(data.mandatoryEligibility)
+        require(joined != null && !joined.isBefore(birth.atDay(1)), 'membership')
+        require(mandatory != null && !mandatory.isBefore(birth.atDay(1)), 'eligibility')
+        earliest = monthStart(later(joined.plusYears(5), mandatory))
+
+        require(nonnegative(data.positionAtClaim) && nonnegative(data.netMonthlyQuote), 'quote')
+        require(nonnegative(data.grossCapital) && nonnegative(data.netCapital) &&
+            data.grossCapital <= data.positionAtClaim * 0.5d && data.netCapital <= data.grossCapital &&
+            (data.grossCapital == 0d || data.netCapital > 0d), 'capital')
+        require(data.grossCapital == 0d || data.netMonthlyQuote > 0d, 'annuity')
+
+        income = context.owner(ownerId).account()
+        income.setName(data.name)
+        income.classify(AccountKind.INCOME, new AccountTag('cashle.household.economic-nature', 1,
+            'income.pension.occupational', [AccountKind.INCOME] as Set))
+        income.addReportingRole(ReportingRole.INCOME)
+    }
+
+    @Override void wireFinance(FinanceContext context) {
+        if (income == null) return
+        def data = entry.data()
+        def model = context.model()
+        def clock = model.clock()
+        LocalDate planDate = context.from()
+        LocalDate anchor = monthStart(later(planDate, earliest))
+        lifeEnd = context.lifeEnd(ownerId)
+        Supplier<LocalDate> requested = requestedStart(context, data.payoutStart)
+        double fx = context.exchangeRate('EUR', context.profile().currency ?: 'EUR')
+        double monthly = data.netMonthlyQuote.doubleValue() * fx
+        double capital = data.netCapital.doubleValue() * fx
+
+        payment = model.flow(ScheduleSpec.every(Frequency.MONTH, anchor).within(planDate, context.until()),
+            context.cash(), income, {
+                LocalDate claim = requested.get()
+                if (claim == null) return 0d
+                LocalDate first = later(earliest, monthStart(claim))
+                LocalDate today = clock.getDate()
+                if (today.isBefore(first)) return 0d
+                (monthly + (today == first ? capital : 0d)) * context.inflationFactor(planDate, today)
+            })
+        model.guard(payment, {
+            LocalDate end = lifeEnd.get()
+            end == null || clock.getDate().isBefore(end)
+        })
+    }
+
+    @Override void funding(FundingPort port) {
+        if (payment != null) {
+            // The quoted amounts already reflect the fund's definitive withholding.
+            port.receiptUntil(payment, FundingPort.ReceiptTax.TAX_FREE, false, lifeEnd)
+        }
+    }
+
+    @Override void metrics(MetricsPort port) {
+        if (income != null) port.income(income, false)
+    }
+
+    private Supplier<LocalDate> requestedStart(FinanceContext context, Map time) {
+        int offset = ((Number) time.getOrDefault('offset', 0)).intValue()
+        if (time.reference == 'minimum') return { earliest.plusMonths(offset) }
+        if (time.reference == 'age') return { birth.plusYears(time.age.longValue()).plusMonths(offset + 1).atDay(1) }
+        if (time.reference == 'date') return { LocalDate.of(time.year.intValue(), time.month.intValue(),
+            ((Number) time.getOrDefault('day', 1)).intValue()).plusMonths(offset) }
+        if (time.reference == 'retirement') return context.milestoneDate('retirement:' + (time.personId ?: ownerId), offset)
+        if (time.reference == 'milestone') return context.milestoneDate(time.milestoneId, offset)
+        return { context.from().plusMonths(offset) }
+    }
+
+    private static LocalDate monthStart(LocalDate date) {
+        date.dayOfMonth == 1 ? date : date.withDayOfMonth(1).plusMonths(1)
+    }
+
+    private static LocalDate later(LocalDate first, LocalDate second) {
+        first.isAfter(second) ? first : second
+    }
+
+    private static boolean nonnegative(Object value) {
+        value instanceof Number && Double.isFinite(value.doubleValue()) && value >= 0d
+    }
+
+    private static LocalDate enteredDate(Object value) {
+        if (!(value instanceof String) || !value.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')) return null
+        try {
+            return LocalDate.parse(value)
+        } catch (java.time.format.DateTimeParseException ignored) {
+            return null
+        }
+    }
+}

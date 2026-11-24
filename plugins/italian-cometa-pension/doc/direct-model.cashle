@@ -1,0 +1,15 @@
+plugins {
+    id 'cashle.finance'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.occupational.it.cometa' from '../italian-cometa-pension.cashle'
+}
+finance {
+    plan { from '2027-01-01'; until '2027-09-01'; currency 'EUR'; inflation 0d }
+    person('self') { birthYear 1960; birthMonth 1 }
+    italianCometaPension('Fondo Cometa') {
+        settings([positionAtClaim:40000d, membershipStart:'2022-05-20', mandatoryEligibility:'2027-03-01',
+            netMonthlyQuote:300d, grossCapital:20000d, netCapital:17300d,
+            payoutStart:[reference:'date',year:2027,month:3,day:1]])
+    }
+}
+collect {}

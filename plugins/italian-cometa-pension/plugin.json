@@ -1,0 +1,35 @@
+{
+  "id": "cashle.finance.pension.occupational.it.cometa",
+  "requires": [
+    "cashle.finance",
+    "cashle.dsl.groovy"
+  ],
+  "sources": [
+    {
+      "path": "italian-cometa-pension.cashle",
+      "providers": [
+        "cashle.finance.pension.occupational.it.cometa"
+      ],
+      "resources": [
+        "cometa/Messages_en.properties",
+        "cometa/Messages_sv.properties",
+        "cometa/Messages_it.properties"
+      ]
+    }
+  ],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui/en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui/sv.json"
+    },
+    {
+      "locale": "it",
+      "path": "ui/it.json"
+    }
+  ]
+}

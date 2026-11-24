@@ -1,0 +1,17 @@
+{
+  "name": "Fondo Cometa",
+  "names": {
+    "en": "Fondo Cometa supplementary pension",
+    "sv": "Fondo Cometa – italiensk tjänstepension"
+  },
+  "description": {
+    "it": "Proietta la rendita vitalizia netta e l’eventuale capitale parziale del fondo dei metalmeccanici.",
+    "en": "Project the metalworkers’ fund’s net lifetime annuity and optional partial capital payment.",
+    "sv": "Prognostisera livsvarig nettoutbetalning och eventuellt kapitaluttag från metallarbetarnas pensionsfond."
+  },
+  "category": "accounts",
+  "country": "IT",
+  "releases": [
+    "1fd43e48766ba2a735e2f518cca357b3b44390ff5a71be970478a6fdaf8d9704"
+  ]
+}
