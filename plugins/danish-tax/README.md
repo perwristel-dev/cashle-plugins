@@ -46,8 +46,13 @@ contributes eligible gains, dividends and verified losses separately to the
 annual assessment. The existing share-income bands apply to the positive
 total. Eligible listed losses offset other eligible listed income for the same
 taxpayer and fall into an indefinite carry when they exceed it. Enter an
-existing verified carry as `listedShareLossCarry` in nominal DKK at the start
-of the forecast. Generic `shareIncome` still enters the shared bands. It does
+existing verified carry in the listed-share depot in nominal DKK at the start
+of the forecast. Earlier profiles can retain their previously saved carry. Generic `shareIncome` still enters the shared bands. It does
 not draw down the listed-share loss balance because it does not establish
 eligibility.
 [Danish Tax Agency guidance on listed-share losses](https://skat.dk/en-us/borger/aktier-og-andre-vaerdipapirer/skat-af-aktier)
+
+Select a municipality in the tax profile. Cashle uses the 2026 municipal and
+church rates from Statistics Denmark. Church tax applies when membership is
+selected. The profile uses the individual full-year assessment without
+spousal transfers or the single-parent supplement. [Statistics Denmark PSKAT](https://www.statbank.dk/PSKAT)

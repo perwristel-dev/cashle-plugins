@@ -1,4 +1,8 @@
 {
+  "Kommun": "Municipality",
+  "Välj kommun": "Select municipality",
+  "Välj kommun.": "Select a municipality.",
+  "Medlem i Danska folkkyrkan": "Member of the Church of Denmark",
   "Ange 0 om kyrkoskatt inte gäller.": "Enter 0 if church tax does not apply.",
   "Ange den faktiska lokala skattesatsen för regelåret.": "Enter the actual local tax rate for the rule year.",
   "Ange ett nominellt belopp i landets valuta per rad, i samma ordning som datumen. Negativa belopp avser återbetalning. Vid flera datum krävs belopp för varje datum.": "Enter one nominal amount in the country's currency per line, in the same order as the dates. Negative amounts indicate refunds. If there are multiple dates, enter an amount for each date.",
@@ -37,8 +41,5 @@
   "Ja, hela året": "Yes, full year",
   "Ensamstående": "Single",
   "Bekräftat": "Confirmed",
-  "{label}: ange ett värde.": "{label}: enter a value.",
-  "Ingående förlustsaldo för noterade aktier (DKK)": "Opening listed-share loss balance (DKK)",
-  "Ange verifierad kvarvarande avdragsgill förlust från skattebeskedet.": "Enter the verified remaining deductible loss from the tax notice.",
-  "Ange ett giltigt förlustsaldo för noterade aktier.": "Enter a valid listed-share loss balance."
+  "{label}: ange ett värde.": "{label}: enter a value."
 }

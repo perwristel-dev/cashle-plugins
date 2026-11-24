@@ -12,7 +12,7 @@ finance {
     tax {
         country 'DK'
         preliminaryRate 0d
-        options([ruleYear: 2026, residency: 'full-year', municipalRate: 0.25d, churchRate: 0d, civilStatus: 'single', seniorSupplement: false, singleParentSupplement: false])
+        options([ruleYear: 2026, residency: 'full-year', municipality: '101', churchMember: false, civilStatus: 'single', seniorSupplement: false, singleParentSupplement: false])
     }
     salary('job') {
         name 'Example salary'

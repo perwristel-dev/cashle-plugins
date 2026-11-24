@@ -32,3 +32,6 @@ the pension minimum deduction and the reduced national-insurance rate.
 The additional pension tax credit and wealth tax are outside this forecast.
 [2026 minimum deduction](https://www.skatteetaten.no/satser/minstefradrag/?year=2026) ·
 [2026 national-insurance rates](https://www.skatteetaten.no/satser/trygdeavgift/?year=2026)
+
+The forecast uses ordinary tax rules. It excludes the experimental
+young-worker deduction.

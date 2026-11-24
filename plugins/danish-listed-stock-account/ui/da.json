@@ -1,4 +1,6 @@
 {
+  "field.lossCarry": "Fremført tab på børsnoterede aktier ved start (DKK)",
+  "help.lossCarry": "Angiv hvert dokumenteret fremført tab én gang i nominelle danske kroner ved planens start.",
   "label": "Dansk skattepligtigt aktiedepot",
   "help": "Brug én beholdning pr. værdipapir pr. depot. Danske aktier i samme selskab og aktieklasse har en fælles gennemsnitlig købspris på tværs af depoter.",
   "field.confirmed": "Almindelige danske børsnoterede aktier og fuldstændig beholdning",

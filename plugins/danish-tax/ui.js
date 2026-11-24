@@ -1,3 +1,6 @@
+import municipalities from './municipalities-2026.js';
+
+const municipalityCodes = new Set(municipalities.map(([code]) => code));
 export default function (context) {
   const { translations } = context;
   const taxText = (key, parameters = {}) => {
@@ -6,18 +9,11 @@ export default function (context) {
       .replace(/\{([\w]+)\}/g, (match, name) => parameters[name] ?? match);
   };
   const profileChoice = (key, label, options, extra = {}) => ({ key, label, kind: 'select', options, ...extra });
-  const taxRate = (key, label, max, help) => ({ key, label, kind: 'number', percent: true, max, help });
-  const confirm = (key, label) => profileChoice(key, label, [['', 'Välj'], ['false', 'Bekräftat']], { boolean: true });
+  // The published provider models an individual under the fixed 2026 rule set.
+  const profileDefaults = { ruleYear: 2026, residency: 'full-year', civilStatus: 'single', singleParentSupplement: false };
   const profileFields = [
-    profileChoice('ruleYear', 'Regelår', [['2026', '2026']], { numeric: true }),
-    profileChoice('residency', 'Skattskyldig hela året', [['', 'Välj'], ['full-year', 'Ja, hela året']],
-      { help: 'Endast full skatterättslig hemvist hela året stöds.' }),
-    taxRate('municipalRate', 'Kommunalskatt', 0.4, 'Ange den faktiska lokala skattesatsen för regelåret.'),
-    taxRate('churchRate', 'Kyrkoskatt', 0.1, 'Ange 0 om kyrkoskatt inte gäller.'),
-    profileChoice('civilStatus', 'Civilstånd enligt skattereglerna', [['', 'Välj'], ['single', 'Ensamstående']]),
-    confirm('singleParentSupplement', 'Inget extra avdrag för ensamförsörjare'),
-    { key: 'listedShareLossCarry', label: 'Ingående förlustsaldo för noterade aktier (DKK)', kind: 'number',
-      default: 0, min: 0, money: true, help: 'Ange verifierad kvarvarande avdragsgill förlust från skattebeskedet.' },
+    profileChoice('municipality', 'Kommun', [['', 'Välj kommun'], ...municipalities]),
+    { key: 'churchMember', label: 'Medlem i Danska folkkyrkan', kind: 'check', default: false },
   ];
 
   const nativeOptions = options => Object.fromEntries(Object.entries(options).filter(([, value]) => value !== null && value !== undefined && value !== ''));
@@ -55,22 +51,16 @@ export default function (context) {
     sourceTax: { language: 'groovy-cashle-plugin', provider: 'cashle.tax.dk', source: 'danish-tax.cashle' },
     id: 'DK', supportedBases: ['salary', 'pension', 'capitalIncome', 'interestExpenses', 'shareIncome'], label: 'Danmark', currency: 'DKK', ruleYear: 2026,
     description: 'Danska regler 2026 för ensamstående. Senioravdraget beräknas automatiskt på AM-bidragspliktig lön under de fem kalenderåren före folkepensionsåldern.',
-    defaultOptions: { ruleYear: 2026, residency: '', municipalRate: null, churchRate: 0, civilStatus: '', singleParentSupplement: null, listedShareLossCarry: 0 },
+    defaultOptions: { ...profileDefaults, municipality: '', churchMember: false },
     fields: profileFields,
     validate(options) {
       const errors = [];
-      if (options.ruleYear !== 2026) errors.push(taxText('Välj den stödda regelutgåvan {year}.', { year: 2026 }));
-      if (options.residency !== 'full-year') errors.push(taxText('Bekräfta skatterättslig hemvist hela året.'));
-      for (const [key, label, max] of [['municipalRate', 'Kommunalskatt', 40], ['churchRate', 'Kyrkoskatt', 10]]) {
-        if (!Number.isFinite(options[key]) || options[key] < 0 || options[key] > max / 100) {
-          errors.push(taxText('{label}: ange ett värde mellan 0 och {max} %.', { label: taxText(label), max }));
-        }
-      }
-      if (options.civilStatus !== 'single' || options.singleParentSupplement !== false) errors.push(taxText('Bekräfta ensamstående utan det extra avdraget för ensamförsörjare.'));
-      if (options.listedShareLossCarry != null && (!Number.isFinite(options.listedShareLossCarry) || options.listedShareLossCarry < 0))
-        errors.push(taxText('Ange ett giltigt förlustsaldo för noterade aktier.'));
+      const legacy = !options.municipality && Number.isFinite(options.municipalRate) &&
+        options.municipalRate >= 0 && options.municipalRate <= .4 &&
+        Number.isFinite(options.churchRate ?? 0) && (options.churchRate ?? 0) >= 0 && (options.churchRate ?? 0) <= .1;
+      if (!municipalityCodes.has(options.municipality) && !legacy) errors.push(taxText('Välj kommun.'));
       return errors;
-    }, assessmentOptions: nativeOptions,
+    }, assessmentOptions: options => ({ ...nativeOptions(options), ...profileDefaults }),
   };
 
   return { taxes: [danishTax] };

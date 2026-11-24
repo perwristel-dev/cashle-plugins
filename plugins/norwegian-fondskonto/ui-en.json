@@ -2,11 +2,8 @@
   "help": "Norwegian unit-linked endowment insurance with a small insurance component. Withdrawals realize a proportional share of capital and any gain or loss. Use the premiums still invested for the tax basis.",
   "field.equity": "Effective equity share (%)",
   "field.shielding": "Unused verified shielding (NOK)",
-  "field.pastEquity": "Shielding already applied to equity gains this year",
-  "field.pastInterest": "Shielding already applied to interest gains this year",
   "help.equity": "Enter the effective average equity share for withdrawals from your insurer's tax statement, including the annual threshold rule already applied by the insurer.",
   "help.shielding": "Use the verified unused shielding available at the start of the plan. The forecast does not accrue new shielding.",
-  "help.history": "Complete only if you enter gross gains from earlier withdrawals in the current tax year. Use the deduction already applied to that part of those gains.",
   "invalid.equity": "Enter the effective equity percentage from the insurer's tax statement (0–100%).",
   "invalid.shielding": "Enter a non-negative unused verified shielding amount in NOK."
 }

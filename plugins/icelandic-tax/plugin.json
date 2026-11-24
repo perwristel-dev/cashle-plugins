@@ -21,8 +21,12 @@
       "path": "icelandic-tax.cashle",
       "resources": [
         "dev/cashle/tax/iceland/IcelandicTaxSource_en.properties",
-        "dev/cashle/tax/iceland/IcelandicTaxSource_sv.properties"
+        "dev/cashle/tax/iceland/IcelandicTaxSource_sv.properties",
+        "dev/cashle/tax/iceland/municipal-rates-2026.properties"
       ]
     }
+  ],
+  "uiAssets": [
+    "municipalities-2026.js"
   ]
 }

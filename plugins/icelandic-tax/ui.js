@@ -1,3 +1,6 @@
+import municipalities from './municipalities-2026.js';
+
+const municipalityCodes = new Set(municipalities.map(([code]) => code));
 export default function (context) {
   const { translations } = context;
   const taxText = (key, parameters = {}) => {
@@ -7,12 +10,7 @@ export default function (context) {
   };
   const profileChoice = (key, label, options, extra = {}) => ({ key, label, kind: 'select', options, ...extra });
   const profileNumber = (key, label, extra = {}) => ({ key, label, kind: 'number', ...extra });
-  const nordicDefaults = { ruleYear: 2026, residency: '' };
-  const nordicFields = [
-    profileChoice('ruleYear', 'Regelår', [['2026', '2026']], { numeric: true }),
-    profileChoice('residency', 'Skattskyldig hela året', [['', 'Välj'], ['full-year', 'Ja, hela året']],
-      { help: 'Endast full skatterättslig hemvist hela året stöds.' }),
-  ];
+  const nordicDefaults = { ruleYear: 2026, residency: 'full-year', period: 'annual' };
   const nativeOptions = options => Object.fromEntries(Object.entries(options).filter(([, value]) => value !== null && value !== undefined && value !== ''));
 
   const hasSale = (_data, context) => context?.propertySale !== false;
@@ -54,20 +52,17 @@ export default function (context) {
     translations,
     sourceTax: { language: 'groovy-cashle-plugin', provider: 'cashle.tax.is', source: 'icelandic-tax.cashle' },
     id: 'IS', supportedBases: ['salary', 'pension', 'capitalIncome', 'otherCapitalIncome'], label: 'Island', currency: 'ISK', ruleYear: 2026,
-    description: 'Isländska årsregler 2026. Ange faktisk kommunalskatt och faktiska avdragsgilla pensionsinbetalningar. Varje pensionsklass får uppgå till högst 4 % av årslönen. Inga pensionsbetalningar antas automatiskt.',
-    defaultOptions: { ...nordicDefaults, period: 'annual', municipalRate: null, pensionContribution: 0, additionalPensionContribution: 0 },
-    fields: [...nordicFields, profileChoice('period', 'Bedömningsperiod', [['annual', 'Årsbedömning']]), profileNumber('municipalRate', 'Faktisk kommunalskatt', { percent: true }), profileNumber('pensionContribution', 'Årets avdragsgilla pensionsinbetalningar', { money: true }), profileNumber('additionalPensionContribution', 'Årets ytterligare avdragsgilla pensionsinbetalningar', { money: true })],
+    description: 'Isländska årsregler 2026. Välj kommun och ange faktiska avdragsgilla pensionsinbetalningar. Varje pensionsklass får uppgå till högst 4 % av årslönen. Inga pensionsbetalningar antas automatiskt.',
+    defaultOptions: { ...nordicDefaults, municipality: '', pensionContribution: 0, additionalPensionContribution: 0 },
+    fields: [profileChoice('municipality', 'Kommun', [['', 'Välj kommun'], ...municipalities]), profileNumber('pensionContribution', 'Årets avdragsgilla pensionsinbetalningar', { money: true }), profileNumber('additionalPensionContribution', 'Årets ytterligare avdragsgilla pensionsinbetalningar', { money: true })],
     validate(options, profile) {
       const errors = [];
-      if (options.ruleYear !== 2026) errors.push(taxText('Välj den stödda regelutgåvan {year}.', { year: 2026 }));
-      if (options.residency !== 'full-year') errors.push(taxText('Bekräfta skatterättslig hemvist hela året.'));
-      if (options.period !== 'annual') errors.push(taxText('Välj årsbedömning för den årliga skatteavstämningen.'));
-      if (!Number.isFinite(options.municipalRate) || options.municipalRate < 0 || options.municipalRate > .3) {
-        errors.push(taxText('{label}: ange ett värde mellan 0 och {max} %.', { label: taxText('Kommunalskatt'), max: 30 }));
-      }
+      const legacy = !options.municipality && Number.isFinite(options.municipalRate) &&
+        options.municipalRate >= 0 && options.municipalRate <= .3;
+      if (!municipalityCodes.has(options.municipality) && !legacy) errors.push(taxText('Välj kommun.'));
       for (const key of ['pensionContribution', 'additionalPensionContribution']) if (!Number.isFinite(options[key]) || options[key] < 0) errors.push(taxText('Ange faktiska, icke-negativa pensionsinbetalningar.'));
       return errors;
-    }, assessmentOptions: nativeOptions,
+    }, assessmentOptions: options => ({ ...nativeOptions(options), ...nordicDefaults }),
   };
   return { taxes: [icelandicTax] };
 }

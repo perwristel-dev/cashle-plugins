@@ -23,10 +23,21 @@ def bases = ['salary', 'pension', 'capitalIncome', 'otherCapitalIncome'].asImmut
 def monetary = ['salary', 'pension', 'pensionContribution', 'additionalPensionContribution',
     'qualifiedCapitalIncome', 'otherCapitalIncome', 'availablePersonalCredit', 'prepaidTax'].toSet().asImmutable()
 def numeric = (monetary + ['birthYear', 'municipalRate']).asImmutable()
-def allowed = (numeric + ['ruleYear', 'residency', 'period']).asImmutable()
+def allowed = (numeric + ['ruleYear', 'residency', 'period', 'municipality']).asImmutable()
 def eligibleCountries = ['IS','NO','LI','CH','FO','AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE',
     'GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE'].toSet().asImmutable()
 def finite = { value -> value instanceof Number && Double.isFinite(value.doubleValue()) }
+def municipalRates = new Properties()
+def rateResource = this.class.classLoader.getResourceAsStream('dev/cashle/tax/iceland/municipal-rates-2026.properties')
+if (rateResource == null) throw new IllegalStateException('Missing Icelandic municipal rates for 2026.')
+rateResource.withCloseable { municipalRates.load(it) }
+def localRate = { options ->
+    if (options.municipality) {
+        def value = municipalRates.getProperty(options.municipality.toString())
+        return value == null ? Double.NaN : Double.parseDouble(value)
+    }
+    number(options, 'municipalRate', Double.NaN)
+}
 def hasReplacement = { input -> input.containsKey('replacementAcquiredDate') || input.containsKey('replacementConstructionDate') }
 def replacementDate = { input -> date(input, input.containsKey('replacementAcquiredDate') ?
     'replacementAcquiredDate' : 'replacementConstructionDate') }
@@ -48,8 +59,8 @@ countryTaxPolicy('IS') {
         if (!finite(options.ruleYear) || options.ruleYear.doubleValue() != referenceYear) errors.add('profile.ruleYear')
         if (!'full-year'.equals(options.residency)) errors.add('profile.residency')
         if (!'annual'.equals(options.period)) errors.add('profile.period')
-        if (!finite(options.municipalRate) || options.municipalRate < 0d || options.municipalRate > 0.3d)
-            errors.add('profile.range')
+        double municipal = localRate(options)
+        if (!finite(municipal) || municipal < 0d || municipal > 0.3d) errors.add('profile.municipality')
         for (String key : ['pensionContribution', 'additionalPensionContribution']) {
             if (!finite(options.get(key)) || options.get(key) < 0d) errors.add('profile.pensionContributions')
         }
@@ -101,8 +112,8 @@ countryTaxPolicy('IS') {
         double qualified = number(options, 'qualifiedCapitalIncome', 0d)
         double other = number(options, 'otherCapitalIncome', 0d)
         require(!monthly || qualified + other == 0d, 'Capital income needs a separate annual assessment, not salary withholding.')
-        require(!monthly || !options.containsKey('municipalRate'), 'Monthly withholding uses the official average municipal rate; omit municipalRate.')
-        double municipal = monthly ? 0.1494d : number(options, 'municipalRate', Double.NaN)
+        require(!monthly || (!options.containsKey('municipalRate') && !options.containsKey('municipality')), 'Monthly withholding uses the official average municipal rate; omit municipalRate.')
+        double municipal = monthly ? 0.1494d : localRate(options)
         require(Double.isFinite(municipal) && municipal >= 0d && municipal <= 0.3d, 'Provide actual annual municipalRate as a decimal rate.')
         require(monthly || !options.containsKey('availablePersonalCredit'), 'availablePersonalCredit is for monthly withholding only.')
         double taxable = salary + pension - contribution - additional

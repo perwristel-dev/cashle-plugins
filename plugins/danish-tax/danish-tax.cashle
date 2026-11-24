@@ -26,8 +26,26 @@ def acceptedBases = (externalBases + ['netCapitalIncome', 'listedShareIncome']).
 def listedLossField = 'listedShareLossCarry'
 def monetary = ['salary', 'pension', 'netCapitalIncome', 'shareIncome', 'listedShareIncome', 'prepaidTax', listedLossField].toSet().asImmutable()
 def numeric = (monetary + ['birthYear', 'birthMonth', 'assessmentYear', 'municipalRate', 'churchRate']).asImmutable()
-def allowedOptions = (numeric + ['ruleYear', 'residency', 'civilStatus', 'seniorSupplement', 'singleParentSupplement', 'initialState']).asImmutable()
+def allowedOptions = (numeric + ['ruleYear', 'residency', 'civilStatus', 'seniorSupplement', 'singleParentSupplement', 'initialState', 'municipality', 'churchMember']).asImmutable()
 def finite = { value -> value instanceof Number && Double.isFinite(value.doubleValue()) }
+def municipalRates = new Properties()
+def rateResource = this.class.classLoader.getResourceAsStream('dev/cashle/tax/denmark/municipal-rates-2026.properties')
+if (rateResource == null) throw new IllegalStateException('Missing Danish municipal rates for 2026.')
+rateResource.withCloseable { municipalRates.load(it) }
+def localRates = { options ->
+    if (options.municipality) {
+        def entry = municipalRates.getProperty(options.municipality.toString())
+        if (entry == null) return null
+        def rates = entry.split(',').collect { Double.parseDouble(it) }
+        return [rates[0], options.churchMember == true ? rates[1] : 0d]
+    }
+    // A saved profile without a municipality can retain its originally entered rates.
+    def municipal = options.municipalRate
+    def church = options.churchRate == null ? 0d : options.churchRate
+    finite(municipal) && municipal >= 0d && municipal <= 0.4d &&
+        finite(church) && church >= 0d && church <= 0.1d ? [municipal, church] : null
+}
+
 def single = { options ->
     'single'.equals(options.get('civilStatus')) &&
         Boolean.FALSE.equals(options.get('singleParentSupplement'))
@@ -47,8 +65,7 @@ countryTaxPolicy('DK') {
         def errors = []
         if (!finite(options.ruleYear) || options.ruleYear.doubleValue() != referenceYear) errors.add('profile.ruleYear')
         if (!'full-year'.equals(options.residency)) errors.add('profile.residency')
-        if (!finite(options.municipalRate) || options.municipalRate < 0d || options.municipalRate > 0.4d) errors.add('profile.municipalRate')
-        if (!finite(options.churchRate) || options.churchRate < 0d || options.churchRate > 0.1d) errors.add('profile.churchRate')
+        if (localRates(options) == null) errors.add('profile.municipality')
         if (!single(options)) errors.add('profile.supplements')
         def openingLoss = options.get(listedLossField)
         if (openingLoss != null && (!finite(openingLoss) || openingLoss < 0d)) errors.add('profile.listedLossCarry')
@@ -114,10 +131,10 @@ countryTaxPolicy('DK') {
         double listedNet = number(options, 'listedShareIncome', 0d) - number(options, listedLossField, 0d)
         double listedLossRemaining = Math.max(0d, -listedNet)
         double shares = number(options, 'shareIncome', 0d) + Math.max(0d, listedNet)
-        double municipal = number(options, 'municipalRate', Double.NaN)
-        double church = number(options, 'churchRate', 0d)
-        require(Double.isFinite(municipal) && municipal >= 0d && municipal <= 0.4d && church <= 0.1d,
-            'Provide actual 2026 municipalRate and churchRate as decimal rates.')
+        def rates = localRates(options)
+        require(rates != null, 'Select a Danish municipality with published 2026 rates.')
+        double municipal = rates[0]
+        double church = rates[1]
 
         double labour = salary * 0.08d
         double personal = salary - labour + pension

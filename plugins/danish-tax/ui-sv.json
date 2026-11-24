@@ -1,4 +1,8 @@
 {
+  "Kommun": "Kommun",
+  "Välj kommun": "Välj kommun",
+  "Välj kommun.": "Välj kommun.",
+  "Medlem i Danska folkkyrkan": "Medlem i Danska folkkyrkan",
   "Ange 0 om kyrkoskatt inte gäller.": "Ange 0 om kyrkoskatt inte gäller.",
   "Ange den faktiska lokala skattesatsen för regelåret.": "Ange den faktiska lokala skattesatsen för regelåret.",
   "Ange ett nominellt belopp i landets valuta per rad, i samma ordning som datumen. Negativa belopp avser återbetalning. Vid flera datum krävs belopp för varje datum.": "Ange ett nominellt belopp i landets valuta per rad, i samma ordning som datumen. Negativa belopp avser återbetalning. Vid flera datum krävs belopp för varje datum.",
@@ -37,8 +41,5 @@
   "Ja, hela året": "Ja, hela året",
   "Ensamstående": "Ensamstående",
   "Bekräftat": "Bekräftat",
-  "{label}: ange ett värde.": "{label}: ange ett värde.",
-  "Ingående förlustsaldo för noterade aktier (DKK)": "Ingående förlustsaldo för noterade aktier (DKK)",
-  "Ange verifierad kvarvarande avdragsgill förlust från skattebeskedet.": "Ange verifierad kvarvarande avdragsgill förlust från skattebeskedet.",
-  "Ange ett giltigt förlustsaldo för noterade aktier.": "Ange ett giltigt förlustsaldo för noterade aktier."
+  "{label}: ange ett värde.": "{label}: ange ett värde."
 }

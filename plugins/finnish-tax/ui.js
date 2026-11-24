@@ -1,3 +1,12 @@
+import municipalities from './municipalities-2026.js';
+
+const municipalityCodes = new Set(municipalities.map(([code]) => code));
+const householdChildren = profile => {
+  if (profile?.mode === 'couple') return [];
+  return profile?.mode === 'household' && Array.isArray(profile.household?.children)
+    ? profile.household.children : null;
+};
+
 export default function (context) {
   const { translations } = context;
   const taxText = (key, parameters = {}) => {
@@ -7,12 +16,7 @@ export default function (context) {
   };
   const profileChoice = (key, label, options, extra = {}) => ({ key, label, kind: 'select', options, ...extra });
   const profileNumber = (key, label, extra = {}) => ({ key, label, kind: 'number', ...extra });
-  const nordicDefaults = { ruleYear: 2026, residency: '' };
-  const nordicFields = [
-    profileChoice('ruleYear', 'Regelår', [['2026', '2026']], { numeric: true }),
-    profileChoice('residency', 'Skattskyldig hela året', [['', 'Välj'], ['full-year', 'Ja, hela året']],
-      { help: 'Endast full skatterättslig hemvist hela året stöds.' }),
-  ];
+  const nordicDefaults = { ruleYear: 2026, residency: 'full-year', territory: 'mainland' };
   const nativeOptions = options => Object.fromEntries(Object.entries(options).filter(([, value]) => value !== null && value !== undefined && value !== ''));
 
   const hasSale = (_data, context) => context?.propertySale !== false;
@@ -49,24 +53,30 @@ export default function (context) {
     sourceTax: { language: 'groovy-cashle-plugin', provider: 'cashle.tax.fi', source: 'finnish-tax.cashle' },
     id: 'FI', supportedBases: ['salary', 'pension', 'capitalIncome', 'benefits'], label: 'Finland', currency: 'EUR', ruleYear: 2026,
     description: 'Finska regler 2026 för fastlandet. Lön och pension kan ingå samma år. Vid en åldersgräns räknas årets lön som intjänad före gränsen.',
-    defaultOptions: { ...nordicDefaults, territory: '', municipalRate: null, churchRate: 0, children: 0, singleParent: false, productionExpenses: 0 },
-    fields: [...nordicFields, profileChoice('territory', 'Skatteområde', [['', 'Välj'], ['mainland', 'Fastlandsfinland']]), profileNumber('municipalRate', 'Kommunalskatt', { percent: true, max: .3, help: 'Ange den faktiska lokala skattesatsen för regelåret.' }),
-      profileNumber('churchRate', 'Kyrkoskatt', { percent: true, max: .1, help: 'Ange 0 om kyrkoskatt inte gäller.' }), profileNumber('children', 'Antal kvalificerande barn', { integer: true }), { key: 'singleParent', kind: 'check', label: 'Ensamförälder enligt skattereglerna' }, profileNumber('productionExpenses', 'Faktiska årliga kostnader för inkomstens förvärvande', { money: true, help: '0 använder det automatiska standardavdraget. Ange endast avdragsgilla arbetskostnader.' })],
-    validate(options) {
+    defaultOptions: { ...nordicDefaults, municipality: '', churchMembership: 'none', children: 0, singleParent: false },
+    fields: [
+      profileChoice('municipality', 'Kommun', [['', 'Välj kommun'], ...municipalities]),
+      profileChoice('churchMembership', 'Kyrkotillhörighet', [['none', 'Ingen kyrkoskatt'],
+        ['lutheran', 'Evangelisk-luthersk'], ['orthodox', 'Ortodox']]),
+      profileNumber('children', 'Antal kvalificerande barn', { integer: true, when: (_, profile) => householdChildren(profile) === null }),
+      { key: 'singleParent', kind: 'check', label: 'Ensamförälder enligt skattereglerna' },
+    ],
+    validate(options, profile, { householdProfile = profile, personScoped = false } = {}) {
       const errors = [];
-      if (options.ruleYear !== 2026) errors.push(taxText('Välj den stödda regelutgåvan {year}.', { year: 2026 }));
-      if (options.residency !== 'full-year') errors.push(taxText('Bekräfta skatterättslig hemvist hela året.'));
-      for (const [key, label, max] of [['municipalRate', 'Kommunalskatt', .3], ['churchRate', 'Kyrkoskatt', .1]]) {
-        if (!Number.isFinite(options[key]) || options[key] < 0 || options[key] > max) {
-          errors.push(taxText('{label}: ange ett värde mellan 0 och {max} %.', { label: taxText(label), max: max * 100 }));
-        }
-      }
-      if (options.territory !== 'mainland') errors.push(taxText('Bekräfta skatteområde fastlandsfinland.'));
-      if (!Number.isInteger(options.children) || options.children < 0 || options.children > 30) errors.push(taxText('Ange 0–30 kvalificerande barn.'));
+      const legacy = !options.municipality && Number.isFinite(options.municipalRate) &&
+        options.municipalRate >= 0 && options.municipalRate <= .3 &&
+        Number.isFinite(options.churchRate ?? 0) && (options.churchRate ?? 0) >= 0 && (options.churchRate ?? 0) <= .1;
+      if (!municipalityCodes.has(options.municipality) && !legacy) errors.push(taxText('Välj kommun.'));
+      if ((personScoped || householdChildren(householdProfile) === null) && (!Number.isInteger(options.children) || options.children < 0 || options.children > 30)) errors.push(taxText('Ange 0–30 kvalificerande barn.'));
       if (typeof options.singleParent !== 'boolean') errors.push(taxText('Ange ensamförälderstatus.'));
-      if (!Number.isFinite(options.productionExpenses) || options.productionExpenses < 0) errors.push(taxText('Ange icke-negativa arbetskostnader.'));
       return errors;
-    }, assessmentOptions: nativeOptions,
+    },
+    assessmentOptions({ productionExpenses, ...options }, profile, { personScoped = false } = {}) {
+      const data = { ...nativeOptions(options), ...nordicDefaults };
+      const children = personScoped ? null : householdChildren(profile);
+      if (children !== null) data.householdChildBirthYears = children.map(child => child.birthYear).filter(Number.isInteger);
+      return data;
+    },
   };
   return { taxes: [finnishTax] };
 }

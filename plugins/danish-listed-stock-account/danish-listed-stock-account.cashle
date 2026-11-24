@@ -3,6 +3,9 @@ import dev.cashle.sdk.account.tax.SharePoolPolicy.Sale
 import dev.cashle.tax.InvestmentPosition
 import dev.cashle.tax.InvestmentWithdrawalResult
 import dev.cashle.tax.TaxPolicyField
+import dev.cashle.tax.TaxStateField
+import dev.cashle.tax.InvestmentCarry
+import dev.cashle.tax.InvestmentAnnualAssessment
 
 def catalogue = 'danish.listedshares.messages'
 def validAmount = { double value -> Double.isFinite(value) && value >= 0d }
@@ -16,7 +19,7 @@ investmentAccount('cashlab.dk-listed-shares', 1) {
     messages catalogue
     prepaidTax true
     defaults([policyOptions: [ordinaryHoldingConfirmed: false, lossReportingConfirmed: false],
-        reinvestDividends: false])
+        reinvestDividends: false, openingState: [listedShareLossCarry: 0d]])
 
     validateInput { data ->
         def security = data.security
@@ -39,6 +42,8 @@ accountTaxPolicy('listedShares') {
     messages catalogue
     annualOnly 'cashlab.dk-listed-shares'
     annualBases 'listedShareIncome'
+    openingStateInNativeCurrency true
+    stateFields([listedShareLossCarry: new TaxStateField('field.lossCarry', true)])
     dividendsTaxableOnReceipt true
     internalSalesRealizeTax true
     permitsImmediateReinvestment false
@@ -70,9 +75,10 @@ accountTaxPolicy('listedShares') {
         quoteNet(snapshot, desiredNet, 0d, false)
     }
 
-    annualAssessment { accounts, money, options ->
+    annualRules { accounts, money, options ->
         requireInput('invalid.money') { money.ruleYear() == 2026 && accounts*.id().toSet().size() == accounts.size() }
         double eligible = 0d
+        def carries = [:]
         for (def account : accounts) {
             requireInput('invalid.scope') {
                 account.policyOptions().ordinaryHoldingConfirmed == true &&
@@ -80,8 +86,12 @@ accountTaxPolicy('listedShares') {
             }
             eligible += account.dividends() + account.realizedGain()
             if (account.policyOptions().lossReportingConfirmed == true) eligible -= account.realizedLoss()
+            double carried = account.state().getOrDefault('listedShareLossCarry', 0d)
+            require(validAmount(carried), 'invalid.money')
+            eligible -= carried
+            carries[account.id()] = new InvestmentCarry(0d, 0d, [listedShareLossCarry: 0d])
         }
-        basis 'listedShareIncome', eligible, 'invalid.money'
+        new InvestmentAnnualAssessment([listedShareIncome: eligible], 0d, carries)
     }
 
     sharePool {

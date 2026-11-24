@@ -8,15 +8,9 @@ export default function (context) {
   const choice = (key, label, options, extra = {}) => ({ key, label, kind: 'select', options, ...extra });
   const regionOptions = [['', 'Välj region'], ['ordinary', 'Ordinarie region'],
     ['intervention-zone', 'Verifierad hemvist i Finnmark/Nord-Troms']];
-  const profileFields = [
-    choice('ruleYear', 'Regelår', [['2026', '2026']], { numeric: true }),
-    choice('residency', 'Skattskyldig hela året', [['', 'Välj'], ['full-year', 'Ja, hela året']],
-      { help: 'Endast full skatterättslig hemvist hela året stöds.' }),
-    choice('region', 'Skatteregion', regionOptions),
-    choice('youngWorkerTrialSelected', 'Inte uttagen till arbetsfradragsförsöket', [['', 'Välj'], ['false', 'Bekräftat']],
-      { boolean: true, help: 'Bekräfta endast utifrån faktiskt besked. Uttagna personer stöds inte.' }),
-  ];
-  const nativeOptions = options => Object.fromEntries(Object.entries(options).filter(([, value]) => value !== null && value !== undefined && value !== ''));
+  const profileDefaults = { ruleYear: 2026, residency: 'full-year' };
+  const profileFields = [choice('region', 'Skatteregion', regionOptions)];
+  const nativeOptions = options => ({ ...profileDefaults, region: options.region });
 
   const hasSale = (_data, context) => context?.propertySale !== false;
   const number = (key, label, value = 0, extra = {}) => ({ key, label, kind: 'number', default: value, min: 0, ...extra });
@@ -46,15 +40,12 @@ export default function (context) {
     translations,
     sourceTax: { language: 'groovy-cashle-plugin', provider: 'cashle.tax.no', source: 'norwegian-tax.cashle' },
     id: 'NO', supportedBases: ['salary', 'pension', 'capitalIncome', 'interestExpenses'], label: 'Norge', currency: 'NOK', ruleYear: 2026,
-    description: 'Norska regler 2026 för lön och pension. Särskilt skatteavdrag för pension och förmögenhetsskatt ingår inte. Bekräfta faktisk urvalsstatus för arbetsfradragsförsöket, särskilt för personer födda 1991–2006.',
-    defaultOptions: { ruleYear: 2026, residency: '', region: '', youngWorkerTrialSelected: null },
+    description: 'Norska regler 2026 för lön och pension. Särskilt skatteavdrag för pension och förmögenhetsskatt ingår inte.',
+    defaultOptions: { ...profileDefaults, region: '' },
     fields: profileFields,
     validate(options) {
       const errors = [];
-      if (options.ruleYear !== 2026) errors.push(taxText('Välj den stödda regelutgåvan {year}.', { year: 2026 }));
-      if (options.residency !== 'full-year') errors.push(taxText('Bekräfta skatterättslig hemvist hela året.'));
       if (!['ordinary', 'intervention-zone'].includes(options.region)) errors.push(taxText('Välj norsk skatteregion.'));
-      if (options.youngWorkerTrialSelected !== false) errors.push(taxText('Bekräfta att personen inte är uttagen till arbetsfradragsförsöket (pilot).'));
       return errors;
     }, assessmentOptions: nativeOptions,
   };

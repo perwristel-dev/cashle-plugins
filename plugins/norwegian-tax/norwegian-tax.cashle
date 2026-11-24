@@ -27,7 +27,7 @@ int referenceYear = 2026
 def externalBases = ['salary', 'pension', 'capitalIncome', 'interestExpenses'].asImmutable()
 def acceptedBases = (externalBases + ['shareIncome', 'investmentCapitalLoss']).asImmutable()
 def amounts = (acceptedBases + ['prepaidTax']).toSet().asImmutable()
-def allowedOptions = (amounts + ['birthYear', 'ruleYear', 'residency', 'region', 'youngWorkerTrialSelected']).asImmutable()
+def allowedOptions = (amounts + ['birthYear', 'ruleYear', 'residency', 'region']).asImmutable()
 def brackets = [
     [226100d, 318300d, 0.017d],
     [318300d, 725050d, 0.04d],
@@ -56,16 +56,13 @@ countryTaxPolicy('NO') {
         }
         if (!'full-year'.equals(options.get('residency'))) errors.add('profile.residency')
         if (!validRegion(options.get('region'))) errors.add('profile.region')
-        if (!Boolean.FALSE.equals(options.get('youngWorkerTrialSelected'))) {
-            errors.add('profile.youngWorkerTrial')
-        }
         List.copyOf(errors)
     }
 
     assessmentOptions { Map<String, Object> options ->
         Map<String, Object> result = new LinkedHashMap<>()
         options.each { String key, Object value ->
-            if (value != null && !''.equals(value)) result.put(key, value)
+            if (allowedOptions.contains(key) && value != null && !''.equals(value)) result.put(key, value)
         }
         result
     }
@@ -82,7 +79,7 @@ countryTaxPolicy('NO') {
             require(acceptedBases.contains(entry.key), "NO does not support tax basis: ${entry.key}")
             require(entry.value != null && Double.isFinite(entry.value), "Tax basis must be finite: ${entry.key}")
         }
-        def inputs = new LinkedHashMap<String, Object>(options)
+        def inputs = new LinkedHashMap<String, Object>(options.findAll { key, value -> allowedOptions.contains(key) })
         require(number(inputs, 'ruleYear', referenceYear) == referenceYear, 'Unsupported ruleYear for NO')
         inputs.put('ruleYear', referenceYear)
         inputs.put('birthYear', birthYear - assessmentYear + referenceYear)
@@ -111,8 +108,6 @@ countryTaxPolicy('NO') {
         double birthYear = number(options, 'birthYear', 0d)
         require(birthYear == Math.floor(birthYear) && birthYear >= 1900 && birthYear <= 2007,
                 'Provide a supported adult birthYear (1900–2007).')
-        boolean pilot = bool(options, 'youngWorkerTrialSelected', birthYear >= 1991 && birthYear <= 2006)
-        require(!pilot, 'Confirm official pilot selection status; selected young-worker pilot participants are unsupported.')
         Object region = options.get('region')
         require(validRegion(region), 'Choose ordinary or verified intervention-zone residence explicitly.')
         boolean interventionZone = 'intervention-zone'.equals(region)

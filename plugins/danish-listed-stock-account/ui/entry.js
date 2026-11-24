@@ -6,7 +6,7 @@ const validAmount = value => Number.isFinite(value) && value >= 0;
 
 export default function createPlugin(context) {
   const sv = context.translations.sv;
-  const labels = ['label', 'help', 'field.confirmed', 'field.reporting', 'help.confirmed', 'help.reporting'];
+  const labels = ['label', 'help', 'field.confirmed', 'field.reporting', 'help.confirmed', 'help.reporting', 'field.lossCarry', 'help.lossCarry'];
   const translations = Object.fromEntries(Object.entries(context.translations).map(([locale, messages]) => [
     locale, { ...messages, ...Object.fromEntries(labels.map(key => [sv[key], messages[key]])) },
   ]));
@@ -16,10 +16,13 @@ export default function createPlugin(context) {
   return { modules: [context.investmentAccount({
     type: 'cashlab.dk-listed-shares', version: 1, pluginId: provider, kind, country: 'DK',
     label: sv.label, help: sv.help, translations,
-    defaults: { policyOptions: { ordinaryHoldingConfirmed: false, lossReportingConfirmed: false } },
+    defaults: { policyOptions: { ordinaryHoldingConfirmed: false, lossReportingConfirmed: false }, openingState: { listedShareLossCarry: 0 } },
     policyFields: [
       { key: 'ordinaryHoldingConfirmed', label: sv['field.confirmed'], kind: 'check', help: sv['help.confirmed'] },
       { key: 'lossReportingConfirmed', label: sv['field.reporting'], kind: 'check', help: sv['help.reporting'] },
+    ],
+    stateFields: [
+      { key: 'listedShareLossCarry', label: sv['field.lossCarry'], help: sv['help.lossCarry'], kind: 'number', min: 0, money: true },
     ],
     features: {
       basis: true, inlineGrowth: true, inlineBasis: true, identifiedSecurity: true, dividendsReinvest: false,

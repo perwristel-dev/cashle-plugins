@@ -12,7 +12,7 @@ finance {
     tax {
         country 'NO'
         preliminaryRate 0d
-        options([ruleYear: 2026, residency: 'full-year', region: 'ordinary', youngWorkerTrialSelected: false])
+        options([ruleYear: 2026, residency: 'full-year', region: 'ordinary'])
     }
     salary('job') {
         name 'Example salary'

@@ -30,3 +30,8 @@ cashle-cli/build/install/cashle/bin/cashle plugins/finnish-tax/doc/direct-model.
 ```
 
 See [rule provenance](doc/rule-provenance.json) for the official sources.
+
+Choose a mainland municipality and any church membership. Rates use the
+published Finnish 2026 table. The income-production deduction always uses
+the standard amount. For an entered household CashLab supplies the children’s
+birth years and counts minors as a planning approximation. [Finnish Tax Administration](https://www.vero.fi/sv/Detaljerade_skatteanvisningar/beslut/47465/kommunernas-och-forsamlingarnas-inkomstskattesatser-ar-2026/)

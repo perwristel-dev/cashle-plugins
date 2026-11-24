@@ -9,13 +9,9 @@ investmentAccount('cashlab.no-ask', 1) {
     transfers true
 
     taxInput { entered, active, messages ->
-        if (active) {
-            def rate = entered.get('shieldingRate')
-            if (!(rate instanceof Number) || !Double.isFinite(rate.doubleValue()) ||
-                    rate.doubleValue() < 0d || rate.doubleValue() > 100d) {
-                throw new IllegalArgumentException(messages.text('tax.input.shieldingRate'))
-            }
-        }
-        entered
+        def settings = new LinkedHashMap(entered)
+        settings.remove('shieldingRate')
+        settings.shieldingReturnProfile = 'low'
+        settings
     }
 }

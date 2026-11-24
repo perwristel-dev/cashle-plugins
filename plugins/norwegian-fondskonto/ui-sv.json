@@ -2,11 +2,8 @@
   "help": "Norsk fondförsäkring med liten försäkringsdel. Vid uttag realiseras en proportionell andel av kapital och vinst eller förlust. Ange de premier som fortfarande finns kvar som skatteunderlag.",
   "field.equity": "Effektiv aktieandel (%)",
   "field.shielding": "Verifierad oanvänd skjerming (NOK)",
-  "field.pastEquity": "Skjerming som redan dragits av mot aktievinster i år",
-  "field.pastInterest": "Skjerming som redan dragits av mot räntevinster i år",
   "help.equity": "Ange den effektiva genomsnittliga aktieandelen för uttag enligt försäkringsbolagets skatteuppgift. Försäkringsbolaget har redan tillämpat gränsregeln för varje år.",
   "help.shielding": "Ange verifierad oanvänd skjerming vid planstart. Prognosen beräknar ingen ny skjerming.",
-  "help.history": "Fyll i om du anger bruttovinster från tidigare uttag under det aktuella skatteåret. Ange avdraget som redan använts mot motsvarande vinster.",
   "invalid.equity": "Ange den effektiva aktieandelen från försäkringsbolagets skatteuppgift (0–100 procent).",
   "invalid.shielding": "Ange ett icke-negativt verifierat oanvänt skjermingsbelopp i NOK."
 }

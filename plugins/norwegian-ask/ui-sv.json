@@ -1,12 +1,9 @@
 {
+  "Prognosen använder Låg avkastning från planinställningarna som skjermingsränta.": "Prognosen använder Låg avkastning från planinställningarna som skjermingsränta.",
   "label": "Aksjesparekonto (ASK)",
   "Oanvänd skjerming": "Oanvänd skjerming",
   "Ingående oanvänd skjerming": "Ingående oanvänd skjerming",
-  "Antagen årlig skjermingsränta (prognos)": "Antagen årlig skjermingsränta (prognos)",
   "Ange vinstdelen av tidigare uttag före årets avdrag för skjerming, inte uttagna tillskott. Årsberäkningen drar av tillgänglig skjerming en gång. Ange återstående tillskjutet kapital separat under skatteunderlag.": "Ange vinstdelen av tidigare uttag före årets avdrag för skjerming, inte uttagna tillskott. Årsberäkningen drar av tillgänglig skjerming en gång. Ange återstående tillskjutet kapital separat under skatteunderlag.",
-  "Norge 2026: tillskjutet kapital tas ut först, därefter används skjerming. Förlust får avdrag först vid uttryckligt avslut. Skjermingsräntan för 2026 fastställs efter årets slut och är ännu inte känd; ange ett eget prognosantagande, även om du väljer 0 %. 2025 års 3,6 % är inte en fastställd ränta för 2026.": "Norge 2026: tillskjutet kapital tas ut först, därefter används skjerming. Förlust får avdrag först vid uttryckligt avslut. Skjermingsräntan för 2026 fastställs efter årets slut och är ännu inte känd; ange ett eget prognosantagande, även om du väljer 0 %. 2025 års 3,6 % är inte en fastställd ränta för 2026.",
   "Årets hittills lägsta tillskjutna kapital (NO ASK)": "Årets hittills lägsta tillskjutna kapital (NO ASK)",
-  "Ange årets hittills lägsta återstående tillskjutna kapital för skjerming.": "Ange årets hittills lägsta återstående tillskjutna kapital för skjerming.",
-  "Ange en antagen skjermingsränta mellan 0 och 100 % för prognosen (0 % är ett uttryckligt val, även för ett tomt konto).": "Ange en antagen skjermingsränta mellan 0 och 100 % för prognosen (0 % är ett uttryckligt val, även för ett tomt konto).",
-  "2026 års officiella skjermingsränta är ännu inte publicerad. Ange ett eget antagande även för ett tomt konto som kan få framtida insättningar; 0 % måste också väljas uttryckligen.": "2026 års officiella skjermingsränta är ännu inte publicerad. Ange ett eget antagande även för ett tomt konto som kan få framtida insättningar; 0 % måste också väljas uttryckligen."
+  "Ange årets hittills lägsta återstående tillskjutna kapital för skjerming.": "Ange årets hittills lägsta återstående tillskjutna kapital för skjerming."
 }

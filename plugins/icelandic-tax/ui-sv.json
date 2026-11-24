@@ -1,4 +1,7 @@
 {
+  "Kommun": "Kommun",
+  "Välj kommun": "Välj kommun",
+  "Välj kommun.": "Välj kommun.",
   "Ange det kvarvarande nominella avdrag som redan har överförts till denna bostads anskaffningsunderlag. Detta är inte ett svenskt uppskov och har ingen svensk frivillig återföring.": "Ange det kvarvarande nominella avdrag som redan har överförts till denna bostads anskaffningsunderlag. Detta är inte ett svenskt uppskov och har ingen svensk frivillig återföring.",
   "Ange faktiska eller planerade förfallodatum när årsavstämningen kräver betalning eller återbetalning. Vid noll saldo behövs inget datum. Ett datum per rad (ÅÅÅÅ-MM-DD), i stigande ordning utan dubbletter.": "Ange faktiska eller planerade förfallodatum när årsavstämningen kräver betalning eller återbetalning. Vid noll saldo behövs inget datum. Ett datum per rad (ÅÅÅÅ-MM-DD), i stigande ordning utan dubbletter.",
   "Ange faktiska, icke-negativa pensionsinbetalningar.": "Ange faktiska, icke-negativa pensionsinbetalningar.",
@@ -23,7 +26,7 @@
   "Faktisk kommunalskatt": "Faktisk kommunalskatt",
   "Island": "Island",
   "Island: ägartid, egen användning och i tillämpliga fall volymgränser prövas. Ett uppskov minskar ersättningsbostadens anskaffningsunderlag enligt landets regler.": "Island: ägartid, egen användning och i tillämpliga fall volymgränser prövas. Ett uppskov minskar ersättningsbostadens anskaffningsunderlag enligt landets regler.",
-  "Isländska årsregler 2026. Ange faktisk kommunalskatt och faktiska avdragsgilla pensionsinbetalningar. Varje pensionsklass får uppgå till högst 4 % av årslönen. Inga pensionsbetalningar antas automatiskt.": "Isländska årsregler 2026. Ange faktisk kommunalskatt och faktiska avdragsgilla pensionsinbetalningar. Varje pensionsklass får uppgå till högst 4 % av årslönen. Inga pensionsbetalningar antas automatiskt.",
+  "Isländska årsregler 2026. Välj kommun och ange faktiska avdragsgilla pensionsinbetalningar. Varje pensionsklass får uppgå till högst 4 % av årslönen. Inga pensionsbetalningar antas automatiskt.": "Isländska årsregler 2026. Välj kommun och ange faktiska avdragsgilla pensionsinbetalningar. Varje pensionsklass får uppgå till högst 4 % av årslönen. Inga pensionsbetalningar antas automatiskt.",
   "Kommunalskatt": "Kommunalskatt",
   "Laglig ägarandel (för beloppsgränser)": "Laglig ägarandel (för beloppsgränser)",
   "Lämna tomt för samma datum som Försäljning → Sälj vid. Likviddagen och kontraktsdagen kan vara olika.": "Lämna tomt för samma datum som Försäljning → Sälj vid. Likviddagen och kontraktsdagen kan vara olika.",

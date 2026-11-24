@@ -1,4 +1,6 @@
 {
+  "field.lossCarry": "Ingående förlustsaldo för noterade aktier (DKK)",
+  "help.lossCarry": "Ange varje verifierat förlustsaldo endast en gång, i nominella danska kronor vid planstart.",
   "label": "Dansk beskattad aktiedepå",
   "help": "Använd ett innehav per värdepapper och depå. Danska innehav i samma bolag och aktieslag delar genomsnittligt anskaffningsvärde mellan depåer.",
   "field.confirmed": "Vanliga danska noterade aktier och kompletta innehav",

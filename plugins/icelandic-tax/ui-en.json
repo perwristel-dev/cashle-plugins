@@ -1,4 +1,7 @@
 {
+  "Kommun": "Municipality",
+  "Välj kommun": "Select municipality",
+  "Välj kommun.": "Select a municipality.",
   "Ange det kvarvarande nominella avdrag som redan har överförts till denna bostads anskaffningsunderlag. Detta är inte ett svenskt uppskov och har ingen svensk frivillig återföring.": "Enter the remaining nominal deduction already transferred to this property’s cost basis. This is not a Swedish deferral and has no Swedish voluntary recapture.",
   "Ange faktiska eller planerade förfallodatum när årsavstämningen kräver betalning eller återbetalning. Vid noll saldo behövs inget datum. Ett datum per rad (ÅÅÅÅ-MM-DD), i stigande ordning utan dubbletter.": "Enter actual or planned due dates when annual settlement requires payment or refund. No date is required for a zero balance. One date per line (YYYY-MM-DD), in ascending order without duplicates.",
   "Ange faktiska, icke-negativa pensionsinbetalningar.": "Enter actual, nonnegative pension contributions.",
@@ -23,7 +26,7 @@
   "Faktisk kommunalskatt": "Actual municipal tax",
   "Island": "Iceland",
   "Island: ägartid, egen användning och i tillämpliga fall volymgränser prövas. Ett uppskov minskar ersättningsbostadens anskaffningsunderlag enligt landets regler.": "Iceland: ownership duration, personal use and, where applicable, volume limits are assessed. A deferral reduces the replacement home’s cost basis under national rules.",
-  "Isländska årsregler 2026. Ange faktisk kommunalskatt och faktiska avdragsgilla pensionsinbetalningar. Varje pensionsklass får uppgå till högst 4 % av årslönen. Inga pensionsbetalningar antas automatiskt.": "Icelandic annual rules for 2026. Enter actual municipal tax and actual deductible pension contributions. Each pension class may be at most 4% of annual salary. No pension contributions are assumed automatically.",
+  "Isländska årsregler 2026. Välj kommun och ange faktiska avdragsgilla pensionsinbetalningar. Varje pensionsklass får uppgå till högst 4 % av årslönen. Inga pensionsbetalningar antas automatiskt.": "Icelandic annual rules for 2026. Select a municipality and enter actual deductible pension contributions. Each pension class may be at most 4% of annual salary. No pension contributions are assumed automatically.",
   "Kommunalskatt": "Municipal tax",
   "Laglig ägarandel (för beloppsgränser)": "Legal ownership share (for amount limits)",
   "Lämna tomt för samma datum som Försäljning → Sälj vid. Likviddagen och kontraktsdagen kan vara olika.": "Leave blank to use the same date as Sale → Sell at. The settlement and contract dates may differ.",

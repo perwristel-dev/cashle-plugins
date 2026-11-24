@@ -1,4 +1,6 @@
 {
+  "field.lossCarry": "Opening loss carry for listed shares (DKK)",
+  "help.lossCarry": "Enter each verified loss carry once, in nominal Danish kroner at plan start.",
   "label": "Danish taxable listed-share depot",
   "help": "Use one holding per security per depot. Danish holdings of the same company and class share an average cost across depots.",
   "field.confirmed": "Ordinary Danish listed shares and complete holdings",

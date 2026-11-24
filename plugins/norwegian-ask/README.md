@@ -2,8 +2,9 @@
 
 This bundle provides `cashlab.no-ask` version 1. The account pays out
 contributed capital first, applies the shielding allowance to taxable gains
-and recognizes losses when the account closes. The 2026 shielding rate is a
-required forecast input.
+and recognizes losses when the account closes. The forecast shielding rate follows the plan’s Low return profile, including
+its uncertainty in Monte Carlo simulations. The deduction uses rates between
+0% and 100%.
 
 Build the ZIP from the repository root with
 `node plugins/norwegian-ask/build.mjs`. Upload

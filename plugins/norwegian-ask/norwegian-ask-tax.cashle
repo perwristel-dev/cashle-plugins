@@ -9,6 +9,7 @@ accountTaxPolicy('ask') {
     ruleYear 2026
     messages 'dev.cashle.accounts.no_ask.NorwegianAskTaxPolicy'
     existingYearFacts true
+    annualOnly 'cashlab.no-ask'
     annualBases 'shareIncome'
 
     preliminaryTaxRate { double configuredRate -> configuredRate }
@@ -27,7 +28,7 @@ accountTaxPolicy('ask') {
             require(account.realizedLoss() == 0d || account.closed(),
                 'ASK losses are recognized only on explicit account closure.')
             require(Double.isFinite(account.shieldingRate()),
-                'Norwegian ASK requires an explicit projected shieldingRate; the 2026 official rate is set in January 2027.')
+                'Norwegian ASK requires a forecast shielding rate from the plan.')
             double shieldingBase = account.minimumPrincipal() + account.unusedShielding()
             double allowance = account.unusedShielding() + shieldingBase * account.shieldingRate()
             double taxableGain = Math.max(0d, account.realizedGain() - allowance)

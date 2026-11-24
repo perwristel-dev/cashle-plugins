@@ -21,8 +21,12 @@
       "path": "danish-tax.cashle",
       "resources": [
         "dev/cashle/tax/denmark/DanishTaxSource_en.properties",
-        "dev/cashle/tax/denmark/DanishTaxSource_sv.properties"
+        "dev/cashle/tax/denmark/DanishTaxSource_sv.properties",
+        "dev/cashle/tax/denmark/municipal-rates-2026.properties"
       ]
     }
+  ],
+  "uiAssets": [
+    "municipalities-2026.js"
   ]
 }

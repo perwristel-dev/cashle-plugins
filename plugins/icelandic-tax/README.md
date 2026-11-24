@@ -13,3 +13,7 @@ when running the model so the localized messages are available.
 
 The [rule provenance](doc/rule-provenance.json) records the rules carried over
 from the Icelandic provider and the supported calculation scope.
+
+The selected municipality supplies the actual annual rate. Monthly
+withholding retains the official nationwide average.
+[Association of Icelandic Local Authorities](https://www.samband.is/tekjustofnar)

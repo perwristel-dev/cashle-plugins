@@ -40,3 +40,6 @@ cashle doc/direct-model.cashle --classpath . --classpath ../danish-tax
 Two depots together hold 100 shares with a total basis of DKK 7,000. The first
 depot closes at DKK 5,000. Its 50 shares use DKK 3,500 of the shared basis, so
 the taxable gain is DKK 1,500 and the annual assessment is DKK 405.
+
+Enter a verified opening loss carry in the depot’s tax settings, in nominal
+DKK. Enter each balance only once across depots and existing tax settings.

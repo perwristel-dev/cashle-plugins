@@ -10,18 +10,18 @@ plugins {
 }
 finance {
     language 'en'
-    plan { from '2026-01-01'; until '2027-06-01'; currency 'NOK'; inflation 0d }
+    plan { from '2026-01-01'; until '2027-06-01'; currency 'NOK'; inflation 0d; settings returnProfiles: [low: [mode: 'fixed', rate: 0d, standardDeviation: 0d, basis: 'nominal']] }
     person('self') { name 'Synthetic Norwegian investor'; birthYear 1980; birthMonth 1 }
     tax {
         country 'NO'
         preliminaryRate 0d
-        options([ruleYear:2026, residency:'full-year', region:'ordinary', youngWorkerTrialSelected:false])
+        options([ruleYear:2026, residency:'full-year', region:'ordinary'])
     }
     salary('salary') { name 'Salary'; amount 600000d; frequency 'once'; taxTreatment 'taxable'; taxBasis 'salary' }
     noAsk('portfolio') {
         name 'ASK'
         balance 15000d
-        settings([costBasis:10000d, shieldingRate:0d, closeEnabled:true, closeDate:'2026-06-01',
+        settings([costBasis:10000d, closeEnabled:true, closeDate:'2026-06-01',
                   initialYear:[openingValue:15000d, minimumPrincipal:10000d,
                                quarterOpeningValues:[null, null, null, null]]])
     }
