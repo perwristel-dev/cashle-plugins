@@ -1,0 +1,32 @@
+{
+  "id": "cashle.finance.se-capital-insurance",
+  "requires": [
+    "cashle.finance",
+    "cashle.account.support",
+    "cashle.account.tax.support"
+  ],
+  "sources": [
+    {
+      "path": "swedish-capital-insurance.cashle",
+      "providers": [
+        "cashle.finance.se-capital-insurance",
+        "cashle.finance.se-capital-insurance.policy"
+      ],
+      "resources": [
+        "insurance/messages_en.properties",
+        "insurance/messages_sv.properties"
+      ]
+    }
+  ],
+  "ui": "ui.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui-en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui-sv.json"
+    }
+  ]
+}

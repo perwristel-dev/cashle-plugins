@@ -1,0 +1,61 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.InvestmentCarry
+import dev.cashle.tax.TaxStateField
+import java.time.LocalDate
+
+investmentAccount('cashlab.se-capital-insurance', 1) {
+    pluginId 'cashle.finance.se-capital-insurance'
+    dsl 'swedishCapitalInsurance'
+    country 'SE'
+    kind 'SEcapitalInsurance'
+    taxPolicy 'domestic-capital-insurance'
+    messages 'insurance.messages'
+    supportsUnpaidBankTax true
+}
+
+accountTaxPolicy('domestic-capital-insurance') {
+    pluginId 'cashle.finance.se-capital-insurance.policy'
+    country 'SE'
+    ruleYear 2025
+    messages 'insurance.messages'
+    annualOnly 'cashlab.se-capital-insurance'
+    annualBases 'se.tax.base.isk-insurance-allowance'
+    bankCollectedTax true
+    collectBankTaxOnClosure true
+    existingYearFacts true
+
+    stateFields([
+        firstHalfPremiums: new TaxStateField('premiumState', true),
+        premiumYear: new TaxStateField('premiumYear', false)
+    ])
+
+    bankTaxCollectionDate { int year -> LocalDate.of(year + 1, 1, 1) }
+    proportionalWithdrawals { taxableGain false; economicGain true }
+
+    stateAfterDeposit { deposit ->
+        double year = deposit.money().assessmentYear()
+        double first = deposit.state().getOrDefault('premiumYear', year) == year ?
+            deposit.state().getOrDefault('firstHalfPremiums', 0d) : 0d
+        if (deposit.date().monthValue <= 6) first += deposit.amount()
+        [firstHalfPremiums: first, premiumYear: year]
+    }
+
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        double capital = 0d
+        def charged = [:]
+        def carry = [:]
+        double rateBasisPoints = money.assessmentYear() <= 2025 ? 296d : 355d
+        for (def account : accounts) {
+            def state = account.state()
+            double first = state.getOrDefault('premiumYear', 0d) == money.assessmentYear() ?
+                state.getOrDefault('firstHalfPremiums', 0d) : 0d
+            double premiums = account.externalDeposits()
+            double base = account.openingValue() + (premiums + Math.min(first, premiums)) * 0.5d
+            capital += base
+            charged[account.id()] = base * rateBasisPoints / 10_000d * 0.30d
+            carry[account.id()] = new InvestmentCarry(0d, 0d, [firstHalfPremiums:0d, premiumYear:(double) money.assessmentYear()])
+        }
+        new InvestmentAnnualAssessment(['se.tax.base.isk-insurance-allowance':capital], charged.values().sum(0d), carry, charged)
+    }
+}

@@ -293,7 +293,10 @@ final class SwedishIncomeTax {
     private static final String[] GROUP_sicknessCredit = [
         "se.ink1.1.1.sickness-activity", "se.ink1.1.3.sickness-activity"
     ] as String[]
+    private static final String INSURANCE_ALLOWANCE = "se.tax.base.isk-insurance-allowance"
+    private static final String ACCOUNT_ALLOWANCE = "se.tax.base.isk-account-allowance"
     private static final Set<String> BASES = Set.of(
+        INSURANCE_ALLOWANCE, ACCOUNT_ALLOWANCE,
         "employment", "pension", "capital.income", "interest.eligible", "se.ink1.1.1",
         "se.ink1.1.1.wage-benefits", "se.ink1.1.1.sickness-activity", "se.ink1.1.1.parental-benefit",
         "se.ink1.1.1.unemployment-benefit", "se.ink1.1.1.work-injury-annuity",
@@ -383,13 +386,17 @@ final class SwedishIncomeTax {
         double otherLosses = sum(taxBases, GROUP_otherLosses) * 0.7d + positive(amount(taxBases, "se.ink1.8.5")) * 0.5d
         double unsecuredInterest = positive(amount(taxBases, "se.ink1.8.8")) * 0.5d
         double investorDeduction = positive(amount(taxBases, "se.ink1.8.7"))
-        double capitalNet = capitalIncome - securedInterest - otherLosses - unsecuredInterest - investorDeduction
+        double eligibleSavings = positive(amount(taxBases, INSURANCE_ALLOWANCE)) + positive(amount(taxBases, ACCOUNT_ALLOWANCE))
+        double savingsAllowance = assessmentYear <= 2025 ? 150_000d : 300_000d
+        double rateBasisPoints = assessmentYear <= 2025 ? 296d : 355d
+        double savingsDeduction = Math.min(savingsAllowance, eligibleSavings) * rateBasisPoints / 10_000d
+        double capitalNet = capitalIncome - securedInterest - otherLosses - unsecuredInterest - investorDeduction - savingsDeduction
         double capitalTax = capitalNet < 200 ? 0 : Math.floor(capitalNet * 0.3d)
         double deficit = Math.max(0, -capitalNet)
         double excessDeficit = Math.max(0, deficit - 100_000)
-        double investorInExcess = Math.min(investorDeduction, excessDeficit)
-        double capitalCredit = Math.floor((deficit - excessDeficit + investorInExcess) * 0.3d +
-          (excessDeficit - investorInExcess) * 0.21d)
+        double fullCreditInExcess = Math.min(investorDeduction + savingsDeduction, excessDeficit)
+        double capitalCredit = Math.floor((deficit - excessDeficit + fullCreditInExcess) * 0.3d +
+          (excessDeficit - fullCreditInExcess) * 0.21d)
         double propertyFee = calculatePropertyFee(taxBases, propertyAssessments, assessmentYear)
         double propertyTax = Math.floor(positive(amount(taxBases, "se.ink1.6.1")) * 0.01d) +
           Math.floor(positive(amount(taxBases, "se.ink1.16.home-tax-base")) * 0.01d) +

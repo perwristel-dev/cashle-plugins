@@ -1,7 +1,8 @@
-// Two independent accounts share one owner allowance; synthetic annual regression, version 1.
+// Two independent accounts share one owner's annual allowance.
 plugins {
     id 'cashle.finance'
     id 'cashle.tax'
+    id 'cashle.tax.se' from 'swedish-tax.cashlec'
     id 'cashle.finance.isk' from '../swedish-isk.cashle'
     id 'cashle.finance.isk.policy' from '../swedish-isk.cashle'
 }

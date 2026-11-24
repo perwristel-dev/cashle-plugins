@@ -1,0 +1,16 @@
+{
+  "name": "Swedish capital insurance",
+  "names": {
+    "en": "Swedish capital insurance",
+    "sv": "Kapitalförsäkring (KF)"
+  },
+  "description": {
+    "en": "Swedish insurance savings with yield tax and the shared savings allowance.",
+    "sv": "Svensk kapitalförsäkring med avkastningsskatt och delad grundnivå."
+  },
+  "country": "SE",
+  "category": "accounts",
+  "releases": [
+    "0e8d767fb3e5a67d0375d7e9df5ee23387d1bd1ff3a12b07c2daa0450bacd156"
+  ]
+}
