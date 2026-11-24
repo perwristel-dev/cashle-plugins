@@ -1,0 +1,56 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
+import dev.cashle.sdk.model.ScheduleSpec
+
+import java.time.LocalDate
+
+final class TaxeFonciereDates {
+    static LocalDate parse(Object value) {
+        if (!(value instanceof String) || !value.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')) return null
+        try {
+            return LocalDate.parse(value)
+        } catch (java.time.format.DateTimeParseException ignored) {
+            return null
+        }
+    }
+}
+
+financeModule('cashlab.french-tax-fonciere', 1) {
+    pluginId 'cashle.finance.fr-tax-fonciere'
+    messages 'fonciere.Messages'
+    dsl('frenchTaxFonciere') { id ->
+        [name:id, annualNotice:0d, noticePaymentDate:'', ownershipFrom:'', ownershipUntil:'']
+    }
+
+    calculation {
+        if (!enabled) return
+        requireInput('amount') {
+            input.annualNotice instanceof Number && Double.isFinite(input.annualNotice.doubleValue()) && input.annualNotice >= 0d
+        }
+        LocalDate payment = TaxeFonciereDates.parse(input.noticePaymentDate)
+        LocalDate acquired = TaxeFonciereDates.parse(input.ownershipFrom)
+        LocalDate disposed = TaxeFonciereDates.parse(input.ownershipUntil)
+        requireInput('payment') { payment != null }
+        requireInput('ownership') {
+            acquired != null && (input.ownershipUntil == '' || (disposed != null && disposed.isAfter(acquired)))
+        }
+        double annual = input.annualNotice.doubleValue() * exchangeRate('EUR', profile.currency ?: 'EUR')
+        def taxExpense = household.account {
+            name input.name
+            classify AccountKind.EXPENSE, new AccountTag('cashle.household.economic-nature', 1,
+                'expense.tax.property', [AccountKind.EXPENSE] as Set)
+            reportingRole ReportingRole.TAX_EXPENSE
+        }
+        requiredExpense('taxe-fonciere') {
+            on ScheduleSpec.every(Frequency.YEAR, payment)
+            destination taxExpense
+            amount {
+                LocalDate januaryFirst = LocalDate.of(today.year, 1, 1)
+                if (januaryFirst.isBefore(acquired) || (disposed != null && !januaryFirst.isBefore(disposed))) return 0d
+                annual * inflationFactor(payment, today)
+            }
+        }
+    }
+}

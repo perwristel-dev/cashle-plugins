@@ -1,0 +1,17 @@
+{
+  "name": "Taxe foncière sur les propriétés bâties",
+  "names": {
+    "en": "French annual property tax",
+    "sv": "Fransk årlig fastighetsskatt"
+  },
+  "description": {
+    "fr": "Projetez la taxe foncière à partir de l’avis et de la propriété au 1er janvier.",
+    "en": "Forecast taxe foncière from the notice and ownership on 1 January.",
+    "sv": "Prognostisera taxe foncière utifrån skattebesked och ägandet den 1 januari."
+  },
+  "country": "FR",
+  "category": "expenses",
+  "releases": [
+    "636517c2dfaf5cecf07ecb308313a6dfab1e0e5a250e1e84ec7f16d2623ff8b6"
+  ]
+}

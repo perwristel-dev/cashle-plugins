@@ -1,0 +1,11 @@
+{
+  "Taxe foncière sur les propriétés bâties": "French annual property tax",
+  "Nom": "Name",
+  "Montant annuel figurant sur l’avis": "Annual amount on the notice",
+  "Date de paiement de l’avis": "Payment date on the notice",
+  "Date d’acquisition": "Acquisition date",
+  "Date de cession (facultative)": "Disposal date (optional)",
+  "Indiquez les dates de paiement et d’acquisition.": "Enter the payment and acquisition dates.",
+  "La cession doit être postérieure à l’acquisition.": "Disposal must follow acquisition.",
+  "Montant annuel": "Annual amount"
+}

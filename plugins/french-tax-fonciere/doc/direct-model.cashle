@@ -1,0 +1,15 @@
+plugins {
+    id 'cashle.finance'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.fr-tax-fonciere' from '../french-tax-fonciere.cashle'
+}
+finance {
+    plan { from '2027-09-01'; until '2030-11-01'; currency 'EUR'; inflation 0d }
+    person('self') { birthYear 1980; birthMonth 1 }
+    income 'salary', 4000d
+    frenchTaxFonciere('Owner’s notice') {
+        settings([annualNotice:1200d, noticePaymentDate:'2027-10-15',
+            ownershipFrom:'2027-01-02', ownershipUntil:'2029-06-01'])
+    }
+}
+collect {}
