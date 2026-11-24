@@ -1,0 +1,14 @@
+{
+  "label": "Italian municipal property tax (IMU)",
+  "name": "Name",
+  "year": "Tax year of the confirmed amounts",
+  "advance": "June advance (acconto)",
+  "balance": "December balance (saldo)",
+  "notice": "Use your municipality or tax adviser's confirmed IMU computation for your taxable property and ownership share.",
+  "balanceHelp": "Enter the amount still due in December. Enter zero if the full amount is paid in June.",
+  "repeat": "Repeat through year",
+  "repeatHelp": "Enter zero for only the confirmed tax year. To forecast the same euro amounts, enter the final year.",
+  "financing": "Financing",
+  "summary": "Annual IMU based on {year} amounts",
+  "invalidYears": "Choose a repeat-through year at least as late as the confirmed tax year, or enter zero."
+}

@@ -1,0 +1,14 @@
+{
+  "id": "cashle.finance.expense.it.imu",
+  "requires": ["cashle.finance", "cashle.dsl.groovy"],
+  "sources": [{
+    "path": "italian-imu.cashle",
+    "providers": ["cashle.finance.expense.it.imu"],
+    "resources": ["italian/imu/Messages_en.properties", "italian/imu/Messages_sv.properties"]
+  }],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {"locale": "en", "path": "ui/en.json"},
+    {"locale": "sv", "path": "ui/sv.json"}
+  ]
+}

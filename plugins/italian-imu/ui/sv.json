@@ -1,0 +1,14 @@
+{
+  "label": "Italiensk kommunal fastighetsskatt (IMU)",
+  "name": "Namn",
+  "year": "Skatteår för fastställda belopp",
+  "advance": "Förskott i juni (acconto)",
+  "balance": "Restbelopp i december (saldo)",
+  "notice": "Använd kommunens eller skatterådgivarens beräkning av IMU för din skattepliktiga fastighet och ägarandel.",
+  "balanceHelp": "Ange det belopp som återstår i december. Ange noll om hela skatten betalas i juni.",
+  "repeat": "Upprepa till och med år",
+  "repeatHelp": "Ange noll för enbart det fastställda skatteåret. Ange sista året för att använda samma eurobelopp i prognosen.",
+  "financing": "Finansiering",
+  "summary": "Årsbelopp för IMU enligt beloppen för {year}",
+  "invalidYears": "Välj ett upprepningsår tidigast det fastställda skatteåret eller ange noll."
+}

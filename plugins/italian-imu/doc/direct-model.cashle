@@ -1,0 +1,16 @@
+plugins {
+    id 'cashle.finance'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.expense.it.imu' from '../italian-imu.cashle'
+}
+
+finance {
+    language 'en'
+    plan { from '2028-01-01'; until '2029-01-01'; currency 'EUR'; inflation 0d }
+    person('self') { birthYear 1980; birthMonth 1 }
+    income 'salary', 10000d
+    italianImu('IMU for a second home') {
+        settings([taxYear: 2028, advance: 450d, balance: 525d])
+    }
+}
+collect {}
