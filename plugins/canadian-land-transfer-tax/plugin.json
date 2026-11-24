@@ -1,0 +1,34 @@
+{
+  "id": "cashle.finance.land-transfer-tax.ca",
+  "requires": [
+    "cashle.finance"
+  ],
+  "sources": [
+    {
+      "path": "canadian-land-transfer-tax.cashle",
+      "providers": [
+        "cashle.finance.land-transfer-tax.ca"
+      ],
+      "resources": [
+        "canadian/landtransfer/messages_en.properties",
+        "canadian/landtransfer/messages_sv.properties",
+        "canadian/landtransfer/messages_fr.properties"
+      ]
+    }
+  ],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui/en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui/sv.json"
+    },
+    {
+      "locale": "fr",
+      "path": "ui/fr.json"
+    }
+  ]
+}

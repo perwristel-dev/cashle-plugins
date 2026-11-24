@@ -1,0 +1,23 @@
+{
+  "label": "Kanadensiska avgifter vid bostadsförvärv",
+  "field.name": "Namn",
+  "field.jurisdiction": "Bostadens läge",
+  "region.ontario": "Ontario, utanför staden Toronto",
+  "region.toronto": "Staden Toronto, Ontario",
+  "region.alberta": "Alberta",
+  "field.closingDate": "Tillträdes- eller registreringsdatum",
+  "field.consideration": "Skattepliktigt vederlag eller fastställt marknadsvärde",
+  "field.oneOrTwoHomes": "En eller två enfamiljsbostäder enligt de högre skiktens villkor",
+  "field.provinceRefundShare": "Andel som är berättigad till Ontarios förstagångsåterbetalning",
+  "field.torontoRefundShare": "Andel som är berättigad till Torontos förstagångsrabatt",
+  "field.mortgagePrincipal": "Belopp för registrering av bolån i Alberta",
+  "help.scope": "Använd för ett vanligt bostadsförvärv. Ange bekräftat datum och värde och uppdatera dem om köpet ändras. Särskilda köpartillägg samt juridik- och handläggningsavgifter hanteras separat.",
+  "help.consideration": "Ange nominellt belopp i CAD som avgiften beräknas på vid tillträdet.",
+  "help.refund": "Ange verifierad behörig ägarandel om återbetalningen sker vid tillträdet. Ange annars 0.",
+  "help.mortgage": "Ange 0 om avgift för registrering av bolån inte ska ingå.",
+  "invalid.name": "Ange ett namn på 1 till 80 tecken.",
+  "invalid.jurisdiction": "Välj Ontario, staden Toronto eller Alberta.",
+  "invalid.date": "Ange ett tillträdesdatum som omfattas av vald tariff.",
+  "invalid.amount": "Ange ett positivt skatteunderlag i CAD.",
+  "invalid.facts": "Ange giltiga uppgifter om bostad, återbetalning eller bolåneregistrering."
+}

@@ -1,0 +1,100 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.sdk.model.ScheduleSpec
+import java.time.LocalDate
+
+final class CanadianTransferCosts {
+    static final LocalDate ONTARIO_RATES = LocalDate.of(2017, 1, 1)
+    static final LocalDate TORONTO_RATES = LocalDate.of(2026, 4, 1)
+    static final LocalDate ALBERTA_RATES = LocalDate.of(2024, 10, 20)
+    static final List<Double> BASE_LIMITS = [55000d, 250000d, 400000d].asImmutable()
+    static final List<Double> BASE_RATES = [0.005d, 0.01d, 0.015d, 0.02d].asImmutable()
+
+    static double progressive(double amount, List<Double> limits, List<Double> rates) {
+        double lower = 0d
+        double tax = 0d
+        for (int band = 0; band < rates.size(); band++) {
+            double upper = band < limits.size() ? limits[band] : amount
+            tax += Math.max(0d, Math.min(upper, amount) - lower) * rates[band]
+            lower = upper
+        }
+        tax
+    }
+
+    static double landTransfer(double amount, boolean oneOrTwoHomes, boolean toronto) {
+        if (!oneOrTwoHomes) return progressive(amount, BASE_LIMITS, BASE_RATES)
+        def limits = BASE_LIMITS + [2000000d]
+        def rates = BASE_RATES + [0.025d]
+        if (toronto) {
+            limits += [3000000d, 4000000d, 5000000d, 10000000d, 20000000d]
+            rates += [0.044d, 0.0545d, 0.065d, 0.0755d, 0.086d]
+        }
+        progressive(amount, limits, rates)
+    }
+
+    static double registration(double certifiedValue) {
+        50d + 5d * Math.ceil(certifiedValue / 5000d)
+    }
+
+    static boolean finiteMoney(Object value, double minimum, double maximum) {
+        value instanceof Number && Double.isFinite(value.doubleValue()) && value >= minimum && value <= maximum
+    }
+}
+
+financeModule('cashlab.canadian-land-transfer-tax', 1) {
+    pluginId 'cashle.finance.land-transfer-tax.ca'
+    messages 'canadian.landtransfer.messages'
+    dsl('canadianLandTransferTax') { id ->
+        [name: id, jurisdiction: 'ON', closingDate: '', consideration: 0d, oneOrTwoHomes: true,
+         provinceRefundShare: 0d, torontoRefundShare: 0d, mortgagePrincipal: 0d]
+    }
+
+    calculation {
+        if (!enabled) return
+        requireInput('invalid.name') { input.name instanceof String && !input.name.isBlank() && input.name.trim().length() <= 80 }
+        requireInput('invalid.jurisdiction') { input.jurisdiction in ['ON', 'Toronto', 'AB'] }
+        boolean toronto = input.jurisdiction == 'Toronto'
+        boolean alberta = input.jurisdiction == 'AB'
+        LocalDate closing
+        try {
+            closing = LocalDate.parse(input.closingDate?.toString() ?: '')
+        } catch (java.time.DateTimeException ignored) {
+            requireInput('invalid.date') { false }
+        }
+        LocalDate first = alberta ? CanadianTransferCosts.ALBERTA_RATES :
+            toronto ? CanadianTransferCosts.TORONTO_RATES : CanadianTransferCosts.ONTARIO_RATES
+        requireInput('invalid.date') { !closing.isBefore(first) }
+        requireInput('invalid.amount') { CanadianTransferCosts.finiteMoney(input.consideration, 0.01d, Double.MAX_VALUE) }
+        requireInput('invalid.facts') {
+            alberta ? CanadianTransferCosts.finiteMoney(input.mortgagePrincipal, 0d, Double.MAX_VALUE) :
+                (input.oneOrTwoHomes instanceof Boolean && CanadianTransferCosts.finiteMoney(input.provinceRefundShare, 0d, 100d) &&
+                 (!toronto || CanadianTransferCosts.finiteMoney(input.torontoRefundShare, 0d, 100d)))
+        }
+        if (closing.isBefore(planStart.anchor())) return
+        double value = input.consideration.doubleValue()
+        double charge
+        if (alberta) {
+            double mortgage = input.mortgagePrincipal.doubleValue()
+            charge = CanadianTransferCosts.registration(value)
+            if (mortgage > 0d) charge += CanadianTransferCosts.registration(mortgage)
+        } else {
+            double provincial = CanadianTransferCosts.landTransfer(value, input.oneOrTwoHomes, false)
+            charge = provincial - Math.min(4000d, provincial) * input.provinceRefundShare.doubleValue() / 100d
+            if (toronto) {
+                double municipal = CanadianTransferCosts.landTransfer(value, input.oneOrTwoHomes, true)
+                charge += municipal - Math.min(4475d, municipal) * input.torontoRefundShare.doubleValue() / 100d
+            }
+        }
+        double fx = exchangeRate('CAD', profile.currency ?: 'CAD')
+        def expense = household.account {
+            name input.name
+            classify AccountKind.EXPENSE, new AccountTag('cashle.household.economic-nature', 1, 'expense.other', [AccountKind.EXPENSE] as Set)
+        }
+        requiredExpense('closing') {
+            on ScheduleSpec.on(closing)
+            destination expense
+            amount { charge * fx }
+            savings 'closing'
+        }
+    }
+}

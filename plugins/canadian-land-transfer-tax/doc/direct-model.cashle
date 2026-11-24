@@ -1,0 +1,16 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.cashflow'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.land-transfer-tax.ca' from '../canadian-land-transfer-tax.cashle'
+}
+
+finance {
+    plan { from '2026-05-01'; until '2026-08-01'; currency 'CAD'; inflation 0d }
+    income 'Household income', 10000d
+    canadianLandTransferTax('Transfer taxes on a Toronto home') {
+        settings jurisdiction:'Toronto', closingDate:'2026-06-15', consideration:850000d,
+            provinceRefundShare:100d, torontoRefundShare:100d
+    }
+}
+collect { cashflow {} }
