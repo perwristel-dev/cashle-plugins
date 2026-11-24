@@ -1,0 +1,7 @@
+{
+  "label": "Dansk rådighedsbudget",
+  "description": "Gældsstyrelsens 2026-rådighedsbeløb til husstandens basale leveomkostninger.",
+  "name": "Navn",
+  "adjustment": "Afvigelse fra referencebeløbet",
+  "summary": "Månedligt rådighedsbeløb uden særskilte boligudgifter"
+}

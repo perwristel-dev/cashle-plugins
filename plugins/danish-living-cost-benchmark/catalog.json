@@ -1,0 +1,16 @@
+{
+  "name": "Danish living-cost benchmark",
+  "names": {
+    "en": "Danish living-cost benchmark",
+    "sv": "Danskt referensbelopp för levnadskostnader"
+  },
+  "description": {
+    "en": "2026 Danish Debt Agency basic amounts for household living costs.",
+    "sv": "Danska Gældsstyrelsens 2026-belopp för hushållens grundläggande levnadskostnader."
+  },
+  "country": "DK",
+  "category": "expense",
+  "releases": [
+    "11f7654cb1daf394023be0df0a3d4f4bd6383b309e07fecfaf326870f91df58f"
+  ]
+}
