@@ -18,5 +18,6 @@
   "invalidPerson": "Välj en person med giltigt födelseår och födelsemånad.",
   "invalidBirthDay": "Ange en giltig födelsedag i personens födelsemånad.",
   "invalidCohort": "Ange ett belopp från SSA för den som är född före 1943.",
-  "invalidStart": "Välj start efter ålder, datum, pensionering eller milstolpe."
+  "invalidStart": "Välj start efter ålder, datum, pensionering eller milstolpe.",
+  "age": "Ålder"
 }

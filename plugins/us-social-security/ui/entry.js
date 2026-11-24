@@ -42,7 +42,7 @@ export default function (context) {
   ];
   const payoutFields = [
     { key: 'payoutStart', kind: 'time', label: 'payoutStart', default: defaultStart,
-      choices: startChoices, currentDatePrecision: 'day', information: 'payoutHelp', forecastEditable: true,
+      choices: startChoices, choiceLabels: { age: 'age' }, currentDatePrecision: 'day', information: 'payoutHelp', forecastEditable: true,
       normalize: (time, _model, data) => ['age', 'retirement'].includes(time?.reference)
         ? { ...time, personId: data.owner } : time },
   ];

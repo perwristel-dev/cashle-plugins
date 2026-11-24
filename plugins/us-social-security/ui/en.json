@@ -18,5 +18,6 @@
   "invalidPerson": "Select one person with a valid birth year and month.",
   "invalidBirthDay": "Enter a valid day of birth for the selected person.",
   "invalidCohort": "Use an SSA quote for a person born before 1943.",
-  "invalidStart": "Choose a start by age, date, retirement or milestone."
+  "invalidStart": "Choose a start by age, date, retirement or milestone.",
+  "age": "Age"
 }
