@@ -4,6 +4,7 @@ import dev.cashle.tax.PropertyTaxCalendar
 import dev.cashle.tax.TaxAssessment
 import dev.cashle.tax.TaxMoneyBasis
 import java.time.LocalDate
+import java.time.YearMonth
 
 import static dev.cashle.tax.support.Inputs.bool
 import static dev.cashle.tax.support.Inputs.components
@@ -17,9 +18,10 @@ import static dev.cashle.tax.support.PropertyInputs.noReplacementRollover
 import static dev.cashle.tax.support.PropertyInputs.scope
 
 int referenceYear = 2026
-def incomeKeys = ['salary', 'box3InvestmentsJan1', 'capitalIncome'].asImmutable()
+def receiptKeys = ['salary', 'pension', 'box3InvestmentsJan1', 'capitalIncome'].asImmutable()
+def incomeKeys = (receiptKeys + ['lijfrenteDeduction']).asImmutable()
 def nativeWealth = ['externalSavingsJan1', 'externalInvestmentsJan1', 'externalDebtsJan1'].asImmutable()
-def allowed = (['ruleYear', 'residency', 'birthYear', 'wealthFactsConfirmed', 'box3Mode',
+def allowed = (['ruleYear', 'residency', 'birthYear', 'birthMonth', 'assessmentYear', 'wealthFactsConfirmed', 'box3Mode',
     'box3SavingsRate', 'box3DebtRate', 'settlementDate', 'noticeDatesByYear', 'noticeAmountsByYear',
     'settlementCalendar', 'initialState'] + incomeKeys + nativeWealth).toSet().asImmutable()
 def finite = { value -> value instanceof Number && Double.isFinite(value.doubleValue()) }
@@ -36,12 +38,22 @@ def amount = { options, String key ->
     require(value >= 0d, "$key must be nonnegative.")
     value
 }
+// Statutory and published projected SVB cohort ages in months.
+def aowCohorts = [195606, 195703, 196101, 196610, 197007, 197304,
+    197601, 197810, 198207, 198504, 198901, 199110, 199507, 199904].asImmutable()
+def aowAges = [802, 804, 807, 810, 813, 816, 819, 822, 825, 828, 831, 834, 837, 840].asImmutable()
+def aowStart = { int year, int month ->
+    int key = year * 100 + month
+    int index = aowCohorts.findLastIndexOf { it <= key }
+    YearMonth.of(year, month).plusMonths(index < 0 ? 780 : aowAges[index])
+}
 
 countryTaxPolicy('NL') {
     pluginId 'cashle.tax.nl'
     currency 'EUR'
     ruleYear referenceYear
     incomeBases incomeKeys
+    sourceBases receiptKeys
     nativeMonetaryOptions nativeWealth
     requiresTaxPlan true
     messages 'dev.cashle.tax.netherlands.DutchTaxSource'
@@ -52,11 +64,6 @@ countryTaxPolicy('NL') {
                 !'full-year'.equals(options.residency)) {
             errors.add('profile.ruleYearResidency')
         }
-        if (context.people().any { person ->
-            def value = person.birthYear
-            finite(value) && value.doubleValue() == Math.rint(value.doubleValue()) &&
-                (value.intValue() < 1960 || value.intValue() > 2007)
-        }) errors.add('profile.birthYear')
         def notice = options.settlementDate
         def notices = options.noticeDatesByYear
         def recurring = options.settlementCalendar
@@ -104,7 +111,9 @@ countryTaxPolicy('NL') {
         def inputs = new LinkedHashMap(options)
         inputs.remove('capitalIncome')
         inputs.put('ruleYear', referenceYear)
-        inputs.put('birthYear', birthYear - year + referenceYear)
+        inputs.put('birthYear', birthYear)
+        inputs.put('birthMonth', birthMonth)
+        inputs.put('assessmentYear', year)
         bases.each { basis, value ->
             if (!'capitalIncome'.equals(basis)) {
                 require(incomeKeys.contains(basis), "Unsupported tax basis: $basis")
@@ -125,8 +134,17 @@ countryTaxPolicy('NL') {
         require(number(options, 'ruleYear', 0d) == referenceYear, 'Select explicit ruleYear:2026.')
         require('full-year'.equals(options.residency), 'Only full-year Dutch residence is supported.')
         double birth = number(options, 'birthYear', 0d)
-        require(birth == Math.rint(birth) && birth >= 1960d && birth <= 2007d,
-            'Dutch employee profile requires age below AOW age throughout the year.')
+        double birthMonth = number(options, 'birthMonth', 1d)
+        double assessmentYear = number(options, 'assessmentYear', referenceYear)
+        double age = assessmentYear - birth
+        require(birth == Math.rint(birth) && birth >= 1800d && birthMonth == Math.rint(birthMonth) &&
+            birthMonth >= 1d && birthMonth <= 12d && assessmentYear == Math.rint(assessmentYear) &&
+            assessmentYear <= 9999d && age >= 19d && age <= 130d, 'Provide a supported adult birth date.')
+        YearMonth retirement = aowStart((int) birth, (int) birthMonth)
+        int aowContributionMonths = retirement.year < assessmentYear ? 0 :
+            retirement.year > assessmentYear ? 12 : retirement.monthValue - 1
+        double firstBandRate = 0.1785d + Math.floor(1790d * aowContributionMonths / 12d) / 10000d
+        double insuranceRate = firstBandRate - 0.081d
         require(bool(options, 'wealthFactsConfirmed', false),
             'Confirm complete individual January 1 Box 3 external wealth and debt facts, including second/rental homes, and no fiscal-partner reallocations.')
         require('provisional-deemed'.equals(options.box3Mode),
@@ -146,26 +164,37 @@ countryTaxPolicy('NL') {
         double box3 = net == 0d ? 0d : deemed * Math.max(0d, net - 59357d) / net
 
         double salary = amount(options, 'salary')
-        double first = Math.min(salary, 38883d)
-        double box1 = first * 0.3575d + Math.max(0d, Math.min(salary, 78426d) - 38883d) * 0.3756d +
-            Math.max(0d, salary - 78426d) * 0.495d
-        double general = Math.max(0d, 3115d - Math.max(0d, salary + box3 - 29736d) * 0.06398d)
+        double pension = amount(options, 'pension')
+        double lijfrenteDeduction = amount(options, 'lijfrenteDeduction')
+        require(lijfrenteDeduction <= salary + pension,
+            'A negative Box 1 balance requires a separate assessment.')
+        double earned = salary + pension - lijfrenteDeduction
+        double combinedIncome = earned + box3
+        double firstBandLimit = birth < 1946d ? 41123d : 38883d
+        double first = Math.min(earned, firstBandLimit)
+        double box1 = first * firstBandRate + Math.max(0d, Math.min(earned, 78426d) - firstBandLimit) * 0.3756d +
+            Math.max(0d, earned - 78426d) * 0.495d
+        double general = Math.max(0d, 3115d - Math.max(0d, combinedIncome - 29736d) * 0.06398d)
         double labour
         if (salary <= 11965d) labour = salary * 0.08324d
         else if (salary <= 25845d) labour = 996d + (salary - 11965d) * 0.31009d
         else if (salary <= 45592d) labour = 5300d + (salary - 25845d) * 0.01950d
         else labour = Math.max(0d, 5685d - (salary - 45592d) * 0.06510d)
-        labour = Math.min(5685d, labour)
-
-        // Split the combined credit using the published first-band tax and insurance shares.
-        double credit = general + labour
-        double taxCredit = credit * 0.081d / 0.3575d
-        double insuranceCredit = credit * 0.2765d / 0.3575d
-        double national = Math.max(0d, first * 0.2765d - insuranceCredit)
-        double incomeTax = Math.max(0d, (box1 - first * 0.2765d) + box3 * 0.36d - taxCredit)
-        new TaxAssessment(incomeTax, national, components('box1BeforeCredits', box1, 'generalCredit', general,
-            'labourCredit', labour, 'box3NetWealth', net, 'box3DeemedReturn', deemed, 'box3Income', box3,
-            'box3Tax', box3 * 0.36d, 'provisionalDeemedAssessment', 1))
+        // Reduce the general and labour credits by their AOW-insurance share when the premium ends.
+        double creditFactor = firstBandRate / 0.3575d
+        labour = Math.min(5685d, labour) * creditFactor
+        general *= creditFactor
+        double senior = aowContributionMonths == 12 ? 0d :
+            Math.max(0d, 2067d - Math.max(0d, combinedIncome - 46002d) * 0.15d)
+        double credit = general + labour + senior
+        double taxCredit = credit * 0.081d / firstBandRate
+        double insuranceCredit = credit * insuranceRate / firstBandRate
+        double health = Math.min(pension, Math.max(0d, 79409d - salary)) * 0.0485d
+        double national = Math.max(0d, first * insuranceRate - insuranceCredit)
+        double incomeTax = Math.max(0d, (box1 - first * insuranceRate) + box3 * 0.36d - taxCredit)
+        new TaxAssessment(incomeTax, national + health, components('box1BeforeCredits', box1, 'generalCredit', general,
+            'labourCredit', labour, 'lijfrenteDeduction', lijfrenteDeduction, 'seniorCredit', senior, 'pensionHealthContribution', health, 'box3NetWealth', net,
+            'box3DeemedReturn', deemed, 'box3Income', box3, 'box3Tax', box3 * 0.36d, 'provisionalDeemedAssessment', 1))
     }
 
     foreignInvestmentBases { InvestmentAccountYear account, TaxMoneyBasis prices ->

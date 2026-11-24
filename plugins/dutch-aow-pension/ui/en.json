@@ -1,0 +1,18 @@
+{
+  "label": "AOW state pension",
+  "description": "Dutch statutory AOW old-age pension with a lifetime payout.",
+  "income": "AOW payment",
+  "name": "Name",
+  "owner": "Person",
+  "coverage": "Insured pension share",
+  "coverageHelp": "Use the share estimated by SVB at state pension age.",
+  "living": "Living situation",
+  "alone": "Living alone",
+  "together": "Married or living together",
+  "start": "Exact start date from SVB",
+  "startHelp": "Leave blank to use the statutory month for the birth cohort.",
+  "fixed": "AOW starts at the statutory age.",
+  "right": "AOW entitlement",
+  "statutory": "Statutory start",
+  "lifetime": "Lifetime monthly payments"
+}

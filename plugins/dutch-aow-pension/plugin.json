@@ -1,0 +1,34 @@
+{
+  "id": "cashle.finance.pension.public.nl",
+  "requires": [
+    "cashle.finance"
+  ],
+  "sources": [
+    {
+      "path": "dutch-aow-pension.cashle",
+      "providers": [
+        "cashle.finance.pension.public.nl"
+      ],
+      "resources": [
+        "aow/messages_en.properties",
+        "aow/messages_sv.properties",
+        "aow/messages_nl.properties"
+      ]
+    }
+  ],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui/en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui/sv.json"
+    },
+    {
+      "locale": "nl",
+      "path": "ui/nl.json"
+    }
+  ]
+}
