@@ -1,0 +1,19 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.assets'
+    id 'cashle.finance.income'
+    id 'cashle.cashflow'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.property.nl.transfer-tax' from '../dutch-property-transfer-tax.cashle'
+}
+finance {
+    language 'en'
+    plan { from '2026-07-01'; until '2026-10-01'; currency 'EUR'; inflation 0d }
+    person('self') { birthYear 1980; birthMonth 1 }
+    salary('Cash for purchase') { amount 600000d; frequency 'once'; taxTreatment 'tax-free' }
+    def home = house('home') { name 'Dutch home'; value 400000d; settings purchasePrice: 400000d; purchaseDate '2026-08-01' }
+    dutchPropertyTransferTax('Transfer duty') {
+        settings assetId: home.id(), taxableValueEur: 400000d, use: 'owner-occupied'
+    }
+}
+collect { cashflow { format json; output 'stdout' } }

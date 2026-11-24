@@ -1,0 +1,18 @@
+{
+  "label": "Dutch property transfer tax",
+  "field.name": "Name",
+  "field.asset": "Home to be purchased",
+  "field.value": "Transfer-tax value of the whole home",
+  "field.use": "Residential use at purchase",
+  "field.starter": "Ownership share qualifying for the starter exemption",
+  "field.verified": "Confirm the buyers in this share meet the starter requirements",
+  "option.selectAsset": "Choose a purchase",
+  "option.main": "Buyers will live in the home long term",
+  "option.other": "Second home or rental property",
+  "help.value": "Use the notary’s taxable value in nominal euros at transfer, including applicable appurtenances. Forecasts use 2026 rules.",
+  "help.starter": "Enter the share bought by owners aged 18–34 who will live there long term and have never used the exemption. The whole home must be worth no more than €555,000 under 2026 rules.",
+  "invalid.asset": "Link a residential property with a future acquisition in this plan.",
+  "invalid.value": "Enter the full positive taxable value in EUR.",
+  "invalid.starter": "Confirm the starter conditions for the entered share.",
+  "invalid.duplicate": "A property acquisition can have only one Dutch transfer tax entry."
+}

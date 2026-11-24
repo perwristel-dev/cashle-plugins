@@ -1,0 +1,18 @@
+{
+  "label": "Nederländsk överlåtelseskatt",
+  "field.name": "Namn",
+  "field.asset": "Bostad som ska köpas",
+  "field.value": "Skatteunderlag för hela bostaden",
+  "field.use": "Bostadens användning vid köpet",
+  "field.starter": "Ägarandel berättigad till undantag för förstagångsköpare",
+  "field.verified": "Bekräfta att köparna för denna andel uppfyller villkoren",
+  "option.selectAsset": "Välj ett köp",
+  "option.main": "Köparna ska bo i bostaden under längre tid",
+  "option.other": "Andrabostad eller uthyrningsbostad",
+  "help.value": "Ange notariens skatteunderlag i nominella euro vid överlåtelsen, inklusive tillämpliga tillbehör. Prognosen använder 2026 års regler.",
+  "help.starter": "Ange andelen för köpare mellan 18 och 34 år som ska bo där under längre tid och aldrig har använt undantaget. Enligt reglerna för 2026 får hela bostaden vara värd högst 555 000 euro.",
+  "invalid.asset": "Koppla en bostad med ett framtida förvärv i planen.",
+  "invalid.value": "Ange hela det positiva skatteunderlaget i EUR.",
+  "invalid.starter": "Bekräfta villkoren för undantaget för angiven andel.",
+  "invalid.duplicate": "Ett bostadsförvärv kan bara ha en nederländsk överlåtelseskatt."
+}
