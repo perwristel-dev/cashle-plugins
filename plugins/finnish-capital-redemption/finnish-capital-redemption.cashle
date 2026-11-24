@@ -1,0 +1,94 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.InvestmentNetWithdrawalQuote
+import dev.cashle.tax.InvestmentWithdrawal
+import dev.cashle.tax.InvestmentWithdrawalResult
+import dev.cashle.tax.TaxPolicyField
+
+final class FinnishRedemption {
+    static final double WITHHOLDING_RATE = 0.30d
+    static final double WITHHOLDING_MINIMUM = 20d
+    static final double EPSILON = 1e-9d
+
+    static boolean ordinary(Map options) {
+        options.ordinaryContractConfirmed == true && options.holderControlRights == false
+    }
+}
+
+investmentAccount('cashlab.fi-capital-redemption', 1) {
+    pluginId 'cashle.finance.fi-capital-redemption'
+    dsl 'fiCapitalRedemption'
+    country 'FI'
+    kind 'FIcapitalRedemption'
+    taxPolicy 'capital-redemption'
+    messages 'finnish.redemption.policy'
+    prepaidTax true
+    transfers true
+    defaults([reinvestDividends: true, assetNature: "INSURANCE_ASSET"])
+
+    validateInput { data ->
+        requireInput('invalid.ordinary') { data.policyOptions instanceof Map && FinnishRedemption.ordinary(data.policyOptions) }
+        requireInput('invalid.owner') { data.owner != 'joint' }
+        requireInput('invalid.distributions') { data.reinvestDividends != false }
+    }
+}
+
+accountTaxPolicy('capital-redemption') {
+    pluginId 'cashle.finance.fi-capital-redemption.policy'
+    country 'FI'
+    ruleYear 2026
+    messages 'finnish.redemption.policy'
+    annualOnly 'cashlab.fi-capital-redemption'
+    annualBases 'taxableCapitalIncome', 'investmentCapitalLoss'
+    existingYearFacts true
+    policyFields([
+        ordinaryContractConfirmed: new TaxPolicyField('field.ordinaryContractConfirmed', 'boolean'),
+        holderControlRights: new TaxPolicyField('field.holderControlRights', 'boolean')
+    ])
+
+    def redemption = { rules, request ->
+        rules.require(FinnishRedemption.ordinary(request.policyOptions()), 'invalid.ordinary')
+        def change = rules.withdrawal(request, false, true, false)
+        double withholdingBase = change.realizedGain() > FinnishRedemption.WITHHOLDING_MINIMUM + FinnishRedemption.EPSILON ?
+            change.realizedGain() : 0d
+        new InvestmentWithdrawalResult(change.position(), change.realizedGain(), change.realizedLoss(), withholdingBase)
+    }
+
+    preliminaryTaxRate { double configuredRate -> FinnishRedemption.WITHHOLDING_RATE }
+
+    withdraw { request -> redemption(delegate, request) }
+
+    quoteWithdrawalForNet { snapshot, double desiredNet, double rate ->
+        require(Double.isFinite(desiredNet) && desiredNet >= 0d && Double.isFinite(rate) && rate >= 0d && rate <= 1d &&
+            snapshot.amount() == 0d && !snapshot.closeAccount() && Double.isNaN(snapshot.resolvedCostBasis()), 'invalid.quote')
+        double market = snapshot.position().marketValue()
+        double gainShare = market == 0d ? 0d : Math.max(0d, market - snapshot.position().costBasis()) / market
+        double noWithholding = gainShare == 0d ? market : Math.min(market, FinnishRedemption.WITHHOLDING_MINIMUM / gainShare)
+        double netFraction = 1d - rate * gainShare
+        double gross = noWithholding
+        if (desiredNet <= noWithholding + FinnishRedemption.EPSILON) {
+            gross = Math.min(market, desiredNet)
+        } else if (market * netFraction > noWithholding) {
+            gross = Math.min(market, desiredNet / netFraction)
+        }
+        def request = new InvestmentWithdrawal(snapshot.position(), gross, false, snapshot.date(),
+            snapshot.policyOptions(), snapshot.state(), snapshot.acquiredDate(), Double.NaN)
+        def result = redemption(delegate, request)
+        double withholding = rate * result.taxableWithdrawal()
+        new InvestmentNetWithdrawalQuote(gross, withholding, gross - withholding, result, snapshot.state())
+    }
+
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        double gain = 0d
+        double loss = 0d
+        for (def account in accounts) {
+            require(FinnishRedemption.ordinary(account.policyOptions()), 'invalid.ordinary')
+            require(account.distributedDividends() == 0d, 'invalid.distributions')
+            require(account.realizedLoss() == 0d || account.closed(), 'invalid.loss')
+            gain += account.realizedGain()
+            loss += account.realizedLoss()
+        }
+        // The Finnish ten-year capital-income-category pool is also used for OST.
+        new InvestmentAnnualAssessment([taxableCapitalIncome: gain, investmentCapitalLoss: loss], 0d, [:])
+    }
+}

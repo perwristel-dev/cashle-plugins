@@ -1,0 +1,29 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.finance.expenses'
+    id 'cashle.cashflow'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.fi' from '../../finnish-tax/finnish-tax.cashle'
+    id 'cashle.finance.fi-capital-redemption' from '../finnish-capital-redemption.cashle'
+    id 'cashle.finance.fi-capital-redemption.policy' from '../finnish-capital-redemption.cashle'
+}
+
+finance {
+    plan { from '2026-01-01'; until '2027-05-01'; currency 'EUR'; inflation 0d }
+    person('self') { name 'Example Finnish resident'; birthYear 1985; birthMonth 1 }
+    tax {
+        country 'FI'
+        preliminaryRate 0d
+        options([ruleYear:2026, residency:'full-year', territory:'mainland', municipalRate:0.053d,
+            churchRate:0d, children:0, singleParent:false, productionExpenses:0d])
+    }
+    fiCapitalRedemption('contract') {
+        balance 15000d
+        settings([costBasis:10000d, closeEnabled:true, closeDate:'2026-06-01',
+                  policyOptions:[ordinaryContractConfirmed:true, holderControlRights:false],
+                  initialYear:[quarterOpeningValues:[null,null,null,null]]])
+    }
+}
+collect { cashflow {} }

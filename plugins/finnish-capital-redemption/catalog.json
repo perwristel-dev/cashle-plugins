@@ -1,0 +1,16 @@
+{
+  "name": "Finnish capital redemption contract",
+  "names": {
+    "en": "Finnish capital redemption contract",
+    "sv": "Finländskt kapitaliseringsavtal"
+  },
+  "description": {
+    "en": "Personal capital redemption under Finland’s ordinary contract rules.",
+    "sv": "Personligt kapitaliseringsavtal enligt Finlands ordinarie avtalsregler."
+  },
+  "country": "FI",
+  "category": "accounts",
+  "releases": [
+    "81a1a4043ed5acaecd10e2adac82ebad9b4c942b4645ecb7736d9407084b5a74"
+  ]
+}
