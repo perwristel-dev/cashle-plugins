@@ -19,7 +19,9 @@ import static dev.cashle.tax.support.PropertyInputs.scope
 
 int referenceYear = 2026
 def pensionBases = ['germanStatutoryPension', 'germanVblPension'].asImmutable()
-def bases = (['salary', 'capitalIncome', 'shareIncome', 'privatePropertyIncome'] + pensionBases).asImmutable()
+def insuranceBasis = 'germanInsuranceHalfGain'
+def sourceIncomeBases = (['salary', 'capitalIncome', 'shareIncome', 'privatePropertyIncome'] + pensionBases).asImmutable()
+def bases = (sourceIncomeBases + [insuranceBasis]).asImmutable()
 def employeeMoney = ['employmentExpenses', 'churchTaxPaid'].asImmutable()
 def pensionMoney = ['pensionInsurancePaid', 'statutoryPensionExemptAmount'].asImmutable()
 def nativeMoney = (employeeMoney + pensionMoney).asImmutable()
@@ -49,6 +51,21 @@ def statutoryTaxableShare = { int startYear ->
     if (startYear <= 2022) return 0.80d + (startYear - 2020) * 0.01d
     Math.min(1d, 0.82d + (startYear - 2022) * 0.005d)
 }
+def ageRelief = { double eligibleIncome, int birthYear, int assessmentYear ->
+    // § 24a applies from the year following the age threshold. The rate and cap are fixed by cohort.
+    int firstYear = birthYear + 65
+    if (firstYear > assessmentYear || firstYear >= 2058) return 0d
+    if (firstYear <= 2020) {
+        int steps = Math.max(0, firstYear - 2005)
+        return Math.min(eligibleIncome * (0.40d - steps * 0.016d), 1900d - steps * 76d)
+    }
+    if (firstYear <= 2022) {
+        int steps = firstYear - 2020
+        return Math.min(eligibleIncome * (0.16d - steps * 0.008d), 760d - steps * 38d)
+    }
+    int steps = firstYear - 2022
+    Math.min(eligibleIncome * (0.144d - steps * 0.004d), 684d - steps * 19d)
+}
 def tariff = { double income ->
     double whole = Math.floor(Math.max(0d, income))
     if (whole <= 12348d) return 0d
@@ -71,7 +88,8 @@ countryTaxPolicy('DE') {
     currency 'EUR'
     ruleYear referenceYear
     incomeBases bases
-    preliminaryEligible { basis, options -> bases.contains(basis) && !pensionBases.contains(basis) }
+    sourceBases sourceIncomeBases
+    preliminaryEligible { basis, options -> sourceIncomeBases.contains(basis) && !pensionBases.contains(basis) }
     requiresTaxPlan true
     messages 'dev.cashle.tax.germany.GermanTaxSource'
     nativeMonetaryOptions nativeMoney
@@ -221,7 +239,15 @@ countryTaxPolicy('DE') {
 
         double property = (propertyCurrent > 0d && propertyCurrent < 1000d ? 0d : propertyCurrent) -
             nonnegative(options, 'privatePropertyLossCarry')
-        double taxable = Math.max(0d, salary - work + pensionIncome - pensionExpense - insuranceDeduction -
+        double halfGain = nonnegative(options, insuranceBasis)
+        // BMF Abgeltungsteuer circular, paragraph 129: use the one saver allowance here first.
+        double saverAllowanceOnHalfGain = Math.min(1000d, halfGain)
+        double taxableHalfGain = halfGain - saverAllowanceOnHalfGain
+        if (retiree && taxableHalfGain > 0d) {
+            taxableHalfGain -= ageRelief(taxableHalfGain, options.birthYear.intValue(),
+                options.getOrDefault('assessmentYear', referenceYear))
+        }
+        double taxable = Math.max(0d, salary - work + pensionIncome - pensionExpense + taxableHalfGain - insuranceDeduction -
             Math.max(36d, nonnegative(options, 'churchTaxPaid')) + Math.max(0d, property))
         double ordinary = tariff(taxable)
         double soli = solidarity(ordinary)
@@ -232,7 +258,7 @@ countryTaxPolicy('DE') {
         double other = number(options, 'capitalIncome', 0d) - nonnegative(options, 'otherCapitalLossCarry')
         double total = Math.max(0d, shares) + other
         double otherRemaining = Math.max(0d, -total)
-        double capitalTaxable = Math.max(0d, total - 1000d)
+        double capitalTaxable = Math.max(0d, total - (1000d - saverAllowanceOnHalfGain))
         // §32d(1): church tax is deductible from its own capital-income tax base.
         double capital = capitalTaxable / (4d + church)
         double capitalSoli = capital * 0.055d

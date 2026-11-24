@@ -1,0 +1,14 @@
+{
+  "label": "Tysk fondanknuten livförsäkring",
+  "help": "Använd en befintlig helt fondanknuten försäkring med en kontant utbetalning. Ange bruttovärde vid återköp, betalda premier och försäkringsgivarens skattedatum.",
+  "field.opened": "Avtalsdatum",
+  "field.halfGainFrom": "Försäkringsgivarens datum för halv vinstbeskattning (valfritt)",
+  "halfGainHelp": "Ange tidigaste datum som försäkringsgivaren har bekräftat. Ett tomt fält beskattar hela vinsten efter fondavdraget.",
+  "invalid.contract": "Ange ett avtalsdatum från och med 2018.",
+  "invalid.eligibility": "Datumet från försäkringsgivaren kräver minst tolv års avtalstid.",
+  "invalid.structure": "Använd en befintlig slutbetald försäkring utan ytterligare insättningar, utdelningar eller uttag.",
+  "invalid.close": "Ange ett datum för helt återköp eller kontant slututbetalning från och med avtalsdagen.",
+  "invalid.qualifyingLoss": "En förlust vid tillämpning av halv vinstbeskattning kräver separat bedömning.",
+  "invalid.gain": "Den kvalificerade vinsten överstiger den realiserade försäkringsvinsten.",
+  "state.qualifyingGain": "Kvalificerad vinst före skattefri del"
+}

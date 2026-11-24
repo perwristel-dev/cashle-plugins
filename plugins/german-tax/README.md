@@ -58,3 +58,16 @@ profile.
   income-tax withholding. Use actual notice dates or an explicit recurring
   forecast for settlement. The forecast carries the 2026 tariff parameters
   forward using the case's price assumptions. [DRV tax guidance](https://www.deutsche-rentenversicherung.de/DRV/DE/Rente/Allgemeine-Informationen/Wissenswertes-zur-Rente/FAQs/Rente/Rente_Rentenabzuege_Steuern/Rente_Rentenabzuege_Steuern.html)
+
+## Unit-linked life insurance
+
+The [German unit-linked insurance account](../german-life-insurance/README.md)
+applies statutory deferral and the fund-related exclusion. Its qualifying
+half-gain basis uses the ordinary tariff. The shared EUR 1,000 saver allowance
+is applied to that basis before other positive capital income. For a retiree
+profile, the qualifying gain also receives any applicable § 24a age relief,
+using the year of birth as the cohort proxy. The age relief forecast treats a
+January 1 birthday like other birthdays in the year because the annual tax
+SDK has no day of birth.
+[Income Tax Act § 24a](https://www.gesetze-im-internet.de/estg/__24a.html),
+[BMF paragraph 129](https://www.bundesfinanzministerium.de/Content/DE/Downloads/BMF_Schreiben/Steuerarten/Abgeltungsteuer/2025-05-14-einzelfragen-zur-abgeltungsteuer.pdf?__blob=publicationFile&v=6)
