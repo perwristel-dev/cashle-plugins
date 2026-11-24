@@ -1,0 +1,16 @@
+{
+  "name": "Norwegian fondskonto",
+  "names": {
+    "en": "Norwegian fondskonto",
+    "sv": "Norsk fondförsäkring"
+  },
+  "description": {
+    "en": "Unit-linked insurance with proportional withdrawal taxation and the insurer's effective equity share.",
+    "sv": "Fondförsäkring med proportionell uttagsbeskattning och försäkringsbolagets effektiva aktieandel."
+  },
+  "country": "NO",
+  "category": "accounts",
+  "releases": [
+    "926b2d7218d9a8ad29d993ddcd7d5ba586f57d2a38daf6c74f4f99759392905c"
+  ]
+}

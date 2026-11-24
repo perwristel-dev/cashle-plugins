@@ -1,0 +1,85 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.InvestmentCarry
+import dev.cashle.tax.InvestmentWithdrawalResult
+import dev.cashle.tax.TaxPolicyField
+import dev.cashle.tax.TaxStateField
+
+accountTaxPolicy('fondskonto') {
+    pluginId 'cashle.finance.no-fondskonto.policy'
+    country 'NO'
+    ruleYear 2026
+    messages 'norwegian.fondskonto.policy'
+    annualBases 'shareIncome', 'capitalIncome', 'investmentCapitalLoss'
+    annualOnly 'cashlab.no-fondskonto'
+    dividendsTaxableOnReceipt false
+    reinvestedDividendsIncreaseBasis false
+    internalSalesRealizeTax false
+
+    policyFields([
+        equityShare: new TaxPolicyField('field.equity', 'number'),
+        verifiedShielding: new TaxPolicyField('field.shielding', 'number')
+    ])
+    stateFields([
+        appliedEquityThisYear: new TaxStateField('field.pastEquity', true),
+        appliedInterestThisYear: new TaxStateField('field.pastInterest', true),
+        usedVerifiedShielding: new TaxStateField('state.usedShielding', true)
+    ])
+
+    def equityFraction = { input, checks ->
+        double share = checks.number(input, 'equityShare', -1d)
+        checks.require(share >= 0d && share <= 100d, 'invalid.equity')
+        share / 100d
+    }
+    def shieldingAllocation = { request, double gain, checks ->
+        def state = request.state()
+        double used = state.getOrDefault('usedVerifiedShielding', 0d)
+        double verified = checks.number(request.policyOptions(), 'verifiedShielding', 0d)
+        checks.require(verified >= 0d && used >= 0d, 'invalid.shielding')
+        double available = Math.max(0d, verified - used)
+        double equity = gain * equityFraction(request.policyOptions(), checks)
+        double equityDeduction = Math.min(equity, available)
+        double interestDeduction = Math.min(gain - equity, available - equityDeduction)
+        [equityDeduction, interestDeduction]
+    }
+
+    withdraw { request ->
+        def result = withdrawal(request, false, false, false)
+        def deduction = shieldingAllocation(request, result.realizedGain(), delegate)
+        new InvestmentWithdrawalResult(result.position(), result.realizedGain(), result.realizedLoss(),
+            Math.max(0d, result.realizedGain() - deduction[0] - deduction[1]))
+    }
+    economicWithdrawal { request -> withdrawal(request, false, false, false) }
+    stateAfterWithdrawal { request ->
+        def state = request.state()
+        def result = withdrawal(request, false, false, false)
+        def deduction = shieldingAllocation(request, result.realizedGain(), delegate)
+        [usedVerifiedShielding: state.getOrDefault('usedVerifiedShielding', 0d) + deduction[0] + deduction[1],
+         appliedEquityThisYear: state.getOrDefault('appliedEquityThisYear', 0d) + deduction[0],
+         appliedInterestThisYear: state.getOrDefault('appliedInterestThisYear', 0d) + deduction[1]]
+    }
+
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        double shareIncome = 0d
+        double capitalIncome = 0d
+        double capitalLoss = 0d
+        def carries = new LinkedHashMap()
+        for (def account : accounts) {
+            double equity = equityFraction(account.policyOptions(), delegate)
+            double grossEquity = account.realizedGain() * equity
+            double grossInterest = account.realizedGain() - grossEquity
+            double appliedEquity = account.state().getOrDefault('appliedEquityThisYear', 0d)
+            double appliedInterest = account.state().getOrDefault('appliedInterestThisYear', 0d)
+            require(appliedEquity >= 0d && appliedEquity <= grossEquity + 1e-7d &&
+                appliedInterest >= 0d && appliedInterest <= grossInterest + 1e-7d, 'invalid.pastShielding')
+            require(account.distributedDividends() == 0d, 'invalid.distributed')
+            shareIncome += (Math.max(0d, grossEquity - appliedEquity) - account.realizedLoss() * equity) * 1.72d
+            capitalIncome += Math.max(0d, grossInterest - appliedInterest)
+            capitalLoss += account.realizedLoss() * (1d - equity)
+            carries.put(account.id(), new InvestmentCarry(0d, 0d,
+                [usedVerifiedShielding: account.state().getOrDefault('usedVerifiedShielding', 0d)]))
+        }
+        new InvestmentAnnualAssessment([shareIncome: shareIncome, capitalIncome: capitalIncome,
+            investmentCapitalLoss: capitalLoss], 0d, carries)
+    }
+}
