@@ -1,0 +1,35 @@
+{
+  "id": "cashle.finance.fr-tax-fonciere",
+  "requires": [
+    "cashle.finance",
+    "cashle.dsl.groovy"
+  ],
+  "sources": [
+    {
+      "path": "french-tax-fonciere.cashle",
+      "providers": [
+        "cashle.finance.fr-tax-fonciere"
+      ],
+      "resources": [
+        "fonciere/Messages_fr.properties",
+        "fonciere/Messages_en.properties",
+        "fonciere/Messages_sv.properties"
+      ]
+    }
+  ],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {
+      "locale": "fr",
+      "path": "ui/fr.json"
+    },
+    {
+      "locale": "en",
+      "path": "ui/en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui/sv.json"
+    }
+  ]
+}
