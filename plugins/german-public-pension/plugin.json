@@ -1,0 +1,19 @@
+{
+  "id": "cashle.finance.pension.public.de",
+  "requires": ["cashle.finance"],
+  "sources": [{
+    "path": "german-public-pension.cashle",
+    "providers": ["cashle.finance.pension.public.de"],
+    "resources": [
+      "german/publicpension/messages_en.properties",
+      "german/publicpension/messages_sv.properties",
+      "german/publicpension/messages_de.properties"
+    ]
+  }],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {"locale": "en", "path": "ui/en.json"},
+    {"locale": "sv", "path": "ui/sv.json"},
+    {"locale": "de", "path": "ui/de.json"}
+  ]
+}

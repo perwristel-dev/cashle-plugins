@@ -1,0 +1,16 @@
+{
+  "name": "German unit-linked life insurance",
+  "names": {
+    "en": "German unit-linked life insurance",
+    "sv": "Tysk fondanknuten livförsäkring"
+  },
+  "description": {
+    "en": "Paid-up, fully unit-linked German life insurance with the 15% fund exclusion and qualifying half-gain rule.",
+    "sv": "Slutbetald tysk fondlivförsäkring med 15 % fondavdrag och halv vinstbeskattning vid kvalificerad utbetalning."
+  },
+  "country": "DE",
+  "category": "accounts",
+  "releases": [
+    "2a568fabc162812dbfa0e1b28b9d5a1000112b59960dc98eedb6ec22fcedbb9f"
+  ]
+}

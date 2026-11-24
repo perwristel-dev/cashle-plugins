@@ -1,0 +1,15 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.cashflow'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.public.de' from '../german-public-pension.cashle'
+}
+
+finance {
+    plan { from '2028-01-01'; until '2028-06-01'; currency 'EUR'; inflation 0d }
+    person('self') { name 'Pension recipient'; birthYear 1961; birthMonth 9 }
+    germanPublicPension('DRV old-age pension') {
+        settings grossMonthlyEur: 1650d, payoutStart: [reference: 'date', year: 2028, month: 1, day: 15]
+    }
+}
+collect { cashflow {} }

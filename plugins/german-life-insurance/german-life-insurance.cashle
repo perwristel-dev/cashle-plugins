@@ -1,0 +1,121 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.InvestmentCarry
+import dev.cashle.tax.InvestmentPosition
+import dev.cashle.tax.InvestmentWithdrawalResult
+import dev.cashle.tax.TaxPolicyField
+import dev.cashle.tax.TaxStateField
+import java.time.DateTimeException
+import java.time.LocalDate
+
+final class GermanUnitLinkedContract {
+    static LocalDate date(Object value) {
+        if (!(value instanceof String) || !value.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')) return null
+        try {
+            LocalDate.parse(value)
+        } catch (DateTimeException ignored) {
+            null
+        }
+    }
+
+    static boolean qualifying(Map policy, LocalDate payment) {
+        def first = date(policy.halfGainFrom)
+        first != null && !payment.isBefore(first)
+    }
+}
+
+def eligibleFraction = 0.85d
+def sourceMessages = 'german.lifeinsurance.messages'
+
+investmentAccount('cashlab.de-life-insurance', 1) {
+    pluginId 'cashle.finance.de-life-insurance'
+    dsl 'deLifeInsurance'
+    messages sourceMessages
+    country 'DE'
+    kind 'DEunitLinkedLife'
+    taxPolicy 'unitLinkedLife'
+    prepaidTax true
+    transfers false
+    defaults([liquidity: [withdrawals: 'never', liquid: 'never'], allowTransfers: false,
+        reinvestDividends: false, policyOptions: [acquiredDate: '', halfGainFrom: '']])
+
+    validateInput { data ->
+        def options = data.policyOptions
+        requireInput('invalid.contract') { options instanceof Map }
+        def opened = GermanUnitLinkedContract.date(options.acquiredDate)
+        requireInput('invalid.contract') { opened != null && opened.year >= 2018 }
+        def qualifyingFrom = GermanUnitLinkedContract.date(options.halfGainFrom)
+        requireInput('invalid.eligibility') {
+            !options.halfGainFrom || qualifyingFrom != null && !qualifyingFrom.isBefore(opened.plusYears(12))
+        }
+        requireInput('invalid.structure') {
+            data.dividendRate == 0 && data.liquidity?.withdrawals == 'never' && data.liquidity?.liquid == 'never' &&
+                data.allowTransfers == false && !data.plannedSales &&
+                !['deposits', 'dividends', 'distributedDividends', 'withdrawals', 'realizedGain', 'realizedLoss', 'prepaidTax']
+                    .any { (data.initialYear?.get(it) ?: 0d) != 0d }
+        }
+        requireInput('invalid.close') {
+            data.closeEnabled != true || (GermanUnitLinkedContract.date(data.closeDate) != null &&
+                !GermanUnitLinkedContract.date(data.closeDate).isBefore(opened))
+        }
+    }
+}
+
+accountTaxPolicy('unitLinkedLife') {
+    pluginId 'cashle.finance.de-life-insurance.policy'
+    messages sourceMessages
+    country 'DE'
+    ruleYear 2026
+    annualBases 'capitalIncome', 'germanInsuranceHalfGain'
+    annualOnly 'cashlab.de-life-insurance'
+    resetAcquiredDateWhenEmptyDeposit false
+    dividendsTaxableOnReceipt false
+    internalSalesRealizeTax false
+    policyFields([
+        acquiredDate: new TaxPolicyField('field.opened', 'date'),
+        halfGainFrom: new TaxPolicyField('field.halfGainFrom', 'date')
+    ])
+    stateFields([qualifyingGain: new TaxStateField('state.qualifyingGain', true)])
+
+    maximumDeposit { request -> 0d }
+
+    // Domestic standard withholding, with neither church withholding nor exemption order.
+    preliminaryTaxRate { configuredRate -> 0.25d * 1.055d }
+
+    withdraw { request ->
+        // The funding allocator probes all balances, including this locked contract.
+        // Only a registered full closure can realize a gain or change its tax state.
+        if (!request.closeAccount()) return new InvestmentWithdrawalResult(request.position(), 0d, 0d, 0d)
+        def opened = GermanUnitLinkedContract.date(request.policyOptions().acquiredDate)
+        require(opened != null && request.date() != null && !request.date().isBefore(opened), 'invalid.close')
+        double difference = request.amount() - request.position().costBasis()
+        require(difference >= 0d || !GermanUnitLinkedContract.qualifying(request.policyOptions(), request.date()),
+            'invalid.qualifyingLoss')
+        double gain = Math.max(0d, difference)
+        double loss = Math.max(0d, -difference)
+        new InvestmentWithdrawalResult(new InvestmentPosition(0d, 0d, 0d), gain, loss, gain * eligibleFraction)
+    }
+
+    stateAfterWithdrawal { request ->
+        if (!request.closeAccount() || !GermanUnitLinkedContract.qualifying(request.policyOptions(), request.date())) {
+            return request.state()
+        }
+        [qualifyingGain: Math.max(0d, request.amount() - request.position().costBasis())]
+    }
+
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        double flatIncome = 0d
+        double halfGain = 0d
+        def carry = [:]
+        for (def account : accounts) {
+            require(account.dividends() == 0d && account.distributedDividends() == 0d,
+                'invalid.structure')
+            double qualifyingGain = account.state().getOrDefault('qualifyingGain', 0d)
+            require(qualifyingGain >= 0d && qualifyingGain <= account.realizedGain() + 1e-7d, 'invalid.gain')
+            flatIncome += (Math.max(0d, account.realizedGain() - qualifyingGain) - account.realizedLoss()) * eligibleFraction
+            halfGain += qualifyingGain * eligibleFraction * 0.5d
+            carry[account.id()] = new InvestmentCarry(0d, 0d, [qualifyingGain: 0d])
+        }
+        new InvestmentAnnualAssessment([capitalIncome: flatIncome, germanInsuranceHalfGain: halfGain], 0d, carry)
+    }
+}

@@ -39,25 +39,57 @@ export default function (context) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(o.settlementDate ?? '') && !(o.noticeDatesByYear && typeof o.noticeDatesByYear === 'object' && !Array.isArray(o.noticeDatesByYear) && Object.keys(o.noticeDatesByYear).length) && o.settlementCalendar?.confirmed !== true) errors.push(taxText('Ange ett faktiskt eller uttryckligt prognostiserat betalningsdatum enligt skattebesked.'));
     return errors;
   };
+  const retiree = options => options.profile === 'single-retiree';
+  const employee = options => !retiree(options);
+  const nonnegative = value => Number.isFinite(value) && value >= 0;
   const germanTax = {
     translate: taxText,
     translations,
     requiresTaxPlan: true,
     sourceTax: { language: 'groovy-cashle-plugin', provider: 'cashle.tax.de', source: 'german-tax.cashle' },
-    id: 'DE', label: 'Tyskland', currency: 'EUR', ruleYear: 2026, supportedBases: ['salary', 'capitalIncome', 'shareIncome', 'privatePropertyIncome'], propertyTax: germanPropertyTax,
-    description: 'Individuell tysk bedömning 2026, utan barnskatteförmåner, ålder 24–64, vanlig anställning med lagstadgad försäkring. Årslön måste vara 0 eller över 24 000 EUR. Kyrkoskatt 8 % gäller Bayern/Baden-Württemberg, 9 % övriga delstater. Günstigerprüfung, sambeskattning, pension, fonder och deras Vorabpauschale stöds inte.',
+    id: 'DE', label: 'Tyskland', currency: 'EUR', ruleYear: 2026, supportedBases: ['salary', 'capitalIncome', 'shareIncome', 'privatePropertyIncome', 'germanStatutoryPension', 'germanVblPension'], propertyTax: germanPropertyTax,
+    description: 'Individuell tysk bedömning enligt 2026 års regler. Välj profil för vanlig anställning eller pension. Pensionsprofilen omfattar GRV, VBLklassik och kapitalinkomster.',
     source: 'https://www.gesetze-im-internet.de/estg/__32a.html',
-    defaultOptions: { ruleYear: 2026, residency: '', profile: '', churchRate: 0, healthAdditionalRate: .029, saxony: false, employmentExpenses: 0, churchTaxPaid: 0, initialState: { shareLossCarry: 0, otherCapitalLossCarry: 0, privatePropertyLossCarry: 0 }, settlementDate: '', noticeDatesByYear: {}, noticeAmountsByYear: {}, settlementCalendar: {} },
+    defaultOptions: { ruleYear: 2026, residency: '', profile: '', churchRate: 0, healthAdditionalRate: .029, saxony: false, employmentExpenses: 0, churchTaxPaid: 0, pensionInsurancePaid: null, statutoryPensionStartYear: null, statutoryPensionExemptAmount: null, vblTaxableShare: null, initialState: { shareLossCarry: 0, otherCapitalLossCarry: 0, privatePropertyLossCarry: 0 }, settlementDate: '', noticeDatesByYear: {}, noticeAmountsByYear: {}, settlementCalendar: {} },
     fields: [...commonFields,
-      choice('profile', 'Bekräftad tysk skatteprofil', [['', 'Välj'], ['single-childless-statutory', 'Individuell, barnlös, vanlig lagstadgad anställningsförsäkring']]),
+      choice('profile', 'Bekräftad tysk skatteprofil', [['', 'Välj'], ['single-childless-statutory', 'Individuell, barnlös, vanlig lagstadgad anställningsförsäkring'], ['single-retiree', 'Individuell pensionär']]),
       choice('churchRate', 'Kyrkoskatt som andel av inkomstskatten', [['0', 'Ingen'], ['0.08', '8 % (Bayern/Baden-Württemberg)'], ['0.09', '9 % (övriga delstater)']], { numeric: true }),
-      number('healthAdditionalRate', 'Faktisk Zusatzbeitrag till sjukförsäkring', { percent: true, help: '2,9 % är det publicerade genomsnittet 2026. Ange den faktiska försäkringskassans tillägg.' }),
-      { key: 'saxony', kind: 'check', label: 'Bosatt i Sachsen (annan arbetstagarandel av vårdförsäkringen)' },
-      number('employmentExpenses', 'Faktiska avdragsgilla arbetskostnader per år (EUR)', { money: true, min: 0 }),
+      number('healthAdditionalRate', 'Faktisk Zusatzbeitrag till sjukförsäkring', { percent: true, when: employee, help: '2,9 % är det publicerade genomsnittet 2026. Ange den faktiska försäkringskassans tillägg.' }),
+      { key: 'saxony', kind: 'check', when: employee, label: 'Bosatt i Sachsen (annan arbetstagarandel av vårdförsäkringen)' },
+      number('employmentExpenses', 'Faktiska avdragsgilla arbetskostnader per år (EUR)', { money: true, min: 0, when: employee }),
+      number('statutoryPensionStartYear', 'GRV-pensionens första kalenderår', { min: 1900, max: 9999, when: retiree }),
+      number('statutoryPensionExemptAmount', 'Fast årligt skattefritt GRV-belopp (EUR)', { money: true, min: 0, when: retiree,
+        help: 'Använd skattebeskedet eller ett prognosbelopp från året efter pensionsstart.' }),
+      number('vblTaxableShare', 'Skattepliktig andel av VBLklassik', { percent: true, min: 0, max: 100, when: retiree,
+        help: 'Använd den skattepliktiga andelen enligt VBL:s uppgifter. Ange 100 % om hela pensionen är skattepliktig.' }),
+      number('pensionInsurancePaid', 'Avdragsgilla sjuk- och vårdförsäkringspremier som pensionär (EUR per år)', { money: true, min: 0, when: retiree,
+        help: 'Ange betalda avdragsgilla premier eller noll. Registrera även själva premiebetalningen som en utgift.' }),
       number('churchTaxPaid', 'Faktiskt betald avdragsgill kyrkoskatt under året (EUR)', { money: true, min: 0 }),
       { key: 'initialState', label: 'Ingående förlustsaldon per person (JSON, nominella EUR)', kind: 'json', money: true, help: 'Separata saldon: shareLossCarry för aktieförsäljning, otherCapitalLossCarry för övrigt kapital, privatePropertyLossCarry för §23. Exempel: {"shareLossCarry":1000,"otherCapitalLossCarry":0,"privatePropertyLossCarry":0}.' },
     ],
-    validate(o, p) { const errors = commonValidation(o, p, 1962, 2002); if (o.profile !== 'single-childless-statutory') errors.push(taxText('Bekräfta den stödda tyska individuella profilen.')); if (![0, .08, .09].includes(o.churchRate)) errors.push(taxText('Välj korrekt regional kyrkoskatt.')); if (!Number.isFinite(o.healthAdditionalRate) || o.healthAdditionalRate < 0 || o.healthAdditionalRate > .1) errors.push(taxText('Ange faktisk Zusatzbeitrag (0–10 %).')); if (typeof o.saxony !== 'boolean') errors.push(taxText('Bekräfta Sachsenstatus.')); for (const key of ['employmentExpenses', 'churchTaxPaid']) if (!Number.isFinite(o[key]) || o[key] < 0) errors.push(taxText('Ange icke-negativa avdrag.')); return errors; },
+    validate(o, p) {
+      const retired = retiree(o);
+      const errors = commonValidation(o, p, retired ? 1900 : 1962, 2002);
+      if (!retired && o.profile !== 'single-childless-statutory') errors.push(taxText('Bekräfta den stödda tyska individuella profilen.'));
+      if (![0, .08, .09].includes(o.churchRate)) errors.push(taxText('Välj korrekt regional kyrkoskatt.'));
+      if (retired) {
+        const year = o.statutoryPensionStartYear;
+        const exemption = o.statutoryPensionExemptAmount;
+        const share = o.vblTaxableShare;
+        if (!nonnegative(o.pensionInsurancePaid) ||
+            (year != null && (!Number.isInteger(year) || year < 1900 || year > 9999)) ||
+            (exemption != null && !nonnegative(exemption)) ||
+            (share != null && (!nonnegative(share) || share > 1)))
+          errors.push(taxText('Ange giltiga pensionsuppgifter och betalda försäkringspremier.'));
+      } else {
+        if (!Number.isFinite(o.healthAdditionalRate) || o.healthAdditionalRate < 0 || o.healthAdditionalRate > .1)
+          errors.push(taxText('Ange faktisk Zusatzbeitrag (0–10 %).'));
+        if (typeof o.saxony !== 'boolean') errors.push(taxText('Bekräfta Sachsenstatus.'));
+        if (!nonnegative(o.employmentExpenses)) errors.push(taxText('Ange icke-negativa avdrag.'));
+      }
+      if (!nonnegative(o.churchTaxPaid)) errors.push(taxText('Ange icke-negativa avdrag.'));
+      return errors;
+    },
     assessmentOptions: nativeOptions,
   };
 

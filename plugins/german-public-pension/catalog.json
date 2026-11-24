@@ -1,0 +1,16 @@
+{
+  "name": "German statutory old-age pension",
+  "names": {
+    "en": "German statutory old-age pension",
+    "sv": "Tysk allmän ålderspension"
+  },
+  "description": {
+    "en": "Lifelong statutory GRV income based on pension rights earned with Deutsche Rentenversicherung.",
+    "sv": "Livsvarig lagstadgad GRV-pension enligt intjänade rättigheter hos Deutsche Rentenversicherung."
+  },
+  "country": "DE",
+  "category": "income",
+  "releases": [
+    "8fcd47a65033b1a0fc5394325f98f8dbad47c42c82adad2f125a2e174e465d2f"
+  ]
+}

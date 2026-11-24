@@ -1,0 +1,14 @@
+{
+  "label": "German unit-linked life insurance",
+  "help": "Use an existing fully unit-linked policy with one cash payout. Enter the gross surrender value, historical premiums paid, and the insurer’s tax dates.",
+  "field.opened": "Contract date",
+  "field.halfGainFrom": "Insurer-confirmed half-gain date (optional)",
+  "halfGainHelp": "Enter the first eligible date confirmed by the insurer. An empty field uses full-gain treatment.",
+  "invalid.contract": "Enter a contract date from 2018 onwards.",
+  "invalid.eligibility": "The insurer-confirmed date requires at least twelve years of contract duration.",
+  "invalid.structure": "Use an existing paid-up policy with no interim deposits, distributions or withdrawals.",
+  "invalid.close": "Enter a full surrender or cash maturity date on or after contract opening.",
+  "invalid.qualifyingLoss": "A loss on a policy qualifying for the half-gain rule needs a separate assessment.",
+  "invalid.gain": "The qualifying gain exceeds the realized policy gain.",
+  "state.qualifyingGain": "Qualifying gain before exemption"
+}

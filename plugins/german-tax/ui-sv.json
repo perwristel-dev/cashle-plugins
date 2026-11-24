@@ -27,7 +27,6 @@
   "Faktiskt betald avdragsgill kyrkoskatt under året (EUR)": "Faktiskt betald avdragsgill kyrkoskatt under året (EUR)",
   "Hela året": "Hela året",
   "Historiskt bindande förvärvsdatum": "Historiskt bindande förvärvsdatum",
-  "Individuell tysk bedömning 2026, utan barnskatteförmåner, ålder 24–64, vanlig anställning med lagstadgad försäkring. Årslön måste vara 0 eller över 24 000 EUR. Kyrkoskatt 8 % gäller Bayern/Baden-Württemberg, 9 % övriga delstater. Günstigerprüfung, sambeskattning, pension, fonder och deras Vorabpauschale stöds inte.": "Individuell tysk bedömning 2026, utan barnskatteförmåner, ålder 24–64, vanlig anställning med lagstadgad försäkring. Årslön måste vara 0 eller över 24 000 EUR. Kyrkoskatt 8 % gäller Bayern/Baden-Württemberg, 9 % övriga delstater. Günstigerprüfung, sambeskattning, pension, fonder och deras Vorabpauschale stöds inte.",
   "Individuell, barnlös, vanlig lagstadgad anställningsförsäkring": "Individuell, barnlös, vanlig lagstadgad anställningsförsäkring",
   "Ingen": "Ingen",
   "Ingående förlustsaldon per person (JSON, nominella EUR)": "Ingående förlustsaldon per person (JSON, nominella EUR)",
@@ -49,5 +48,15 @@
   "Välj korrekt regional kyrkoskatt.": "Välj korrekt regional kyrkoskatt.",
   "Välj regler 2026 och bekräfta hemvist hela året.": "Välj regler 2026 och bekräfta hemvist hela året.",
   "Årets faktiska betalningsdatum enligt skattebesked": "Årets faktiska betalningsdatum enligt skattebesked",
-  "{label}: ange ett värde.": "{label}: ange ett värde."
+  "{label}: ange ett värde.": "{label}: ange ett värde.",
+  "Individuell tysk bedömning enligt 2026 års regler. Välj profil för vanlig anställning eller pension. Pensionsprofilen omfattar GRV, VBLklassik och kapitalinkomster.": "Individuell tysk bedömning enligt 2026 års regler. Välj profil för vanlig anställning eller pension. Pensionsprofilen omfattar GRV, VBLklassik och kapitalinkomster.",
+  "Individuell pensionär": "Individuell pensionär",
+  "GRV-pensionens första kalenderår": "GRV-pensionens första kalenderår",
+  "Fast årligt skattefritt GRV-belopp (EUR)": "Fast årligt skattefritt GRV-belopp (EUR)",
+  "Använd skattebeskedet eller ett prognosbelopp från året efter pensionsstart.": "Använd skattebeskedet eller ett prognosbelopp från året efter pensionsstart.",
+  "Skattepliktig andel av VBLklassik": "Skattepliktig andel av VBLklassik",
+  "Använd den skattepliktiga andelen enligt VBL:s uppgifter. Ange 100 % om hela pensionen är skattepliktig.": "Använd den skattepliktiga andelen enligt VBL:s uppgifter. Ange 100 % om hela pensionen är skattepliktig.",
+  "Avdragsgilla sjuk- och vårdförsäkringspremier som pensionär (EUR per år)": "Avdragsgilla sjuk- och vårdförsäkringspremier som pensionär (EUR per år)",
+  "Ange betalda avdragsgilla premier eller noll. Registrera även själva premiebetalningen som en utgift.": "Ange betalda avdragsgilla premier eller noll. Registrera även själva premiebetalningen som en utgift.",
+  "Ange giltiga pensionsuppgifter och betalda försäkringspremier.": "Ange giltiga pensionsuppgifter och betalda försäkringspremier."
 }
