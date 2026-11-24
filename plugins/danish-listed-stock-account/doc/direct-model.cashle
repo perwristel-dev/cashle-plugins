@@ -1,0 +1,32 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.cashflow'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.dk' from '../../danish-tax/danish-tax.cashle'
+    id 'cashle.finance.dk-listed-shares' from '../danish-listed-stock-account.cashle'
+    id 'cashle.finance.dk-listed-shares.policy' from '../danish-listed-stock-account.cashle'
+}
+finance {
+    language 'en'
+    plan { from '2026-01-01'; until '2027-01-02'; currency 'DKK'; inflation 0d }
+    person('self') { name 'Example investor'; birthYear 1980; birthMonth 1 }
+    tax {
+        country 'DK'
+        preliminaryRate 0d
+        options([ruleYear: 2026, residency: 'full-year', municipalRate: 0.25d, churchRate: 0d,
+            civilStatus: 'single', seniorSupplement: false, singleParentSupplement: false])
+    }
+    dkListedShares('First depot') {
+        balance 5000d
+        settings costBasis: 2500d, security: [id: 'DK0000000001', quantity: 50d],
+            closeEnabled: true, closeDate: '2026-06-01',
+            policyOptions: [ordinaryHoldingConfirmed: true, lossReportingConfirmed: true]
+    }
+    dkListedShares('Second depot') {
+        balance 5000d
+        settings costBasis: 4500d, security: [id: 'DK0000000001', quantity: 50d],
+            policyOptions: [ordinaryHoldingConfirmed: true, lossReportingConfirmed: true]
+    }
+}
+collect { cashflow {} }

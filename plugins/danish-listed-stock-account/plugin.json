@@ -1,0 +1,37 @@
+{
+  "id": "cashle.finance.dk-listed-shares",
+  "requires": [
+    "cashle.finance",
+    "cashle.account.support",
+    "cashle.account.tax.support"
+  ],
+  "sources": [
+    {
+      "path": "danish-listed-stock-account.cashle",
+      "providers": [
+        "cashle.finance.dk-listed-shares",
+        "cashle.finance.dk-listed-shares.policy"
+      ],
+      "resources": [
+        "danish/listedshares/messages_en.properties",
+        "danish/listedshares/messages_sv.properties",
+        "danish/listedshares/messages_da.properties"
+      ]
+    }
+  ],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui/en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui/sv.json"
+    },
+    {
+      "locale": "da",
+      "path": "ui/da.json"
+    }
+  ]
+}

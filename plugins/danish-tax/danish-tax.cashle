@@ -1,7 +1,9 @@
 import dev.cashle.tax.InvestmentAccountYear
 import dev.cashle.tax.PropertyLossCarry
 import dev.cashle.tax.PropertySaleAssessment
+import dev.cashle.tax.StatefulTaxAssessment
 import dev.cashle.tax.TaxAssessment
+import dev.cashle.tax.TaxStateField
 import dev.cashle.tax.TaxMoneyBasis
 import dev.cashle.tax.support.Inputs
 import dev.cashle.tax.support.PropertyInputs
@@ -20,10 +22,11 @@ import static dev.cashle.tax.support.PropertyInputs.scope
 
 int referenceYear = 2026
 def externalBases = ['salary', 'pension', 'capitalIncome', 'interestExpenses', 'shareIncome'].asImmutable()
-def acceptedBases = (externalBases + ['netCapitalIncome']).asImmutable()
-def monetary = ['salary', 'pension', 'netCapitalIncome', 'shareIncome', 'prepaidTax'].toSet().asImmutable()
+def acceptedBases = (externalBases + ['netCapitalIncome', 'listedShareIncome']).asImmutable()
+def listedLossField = 'listedShareLossCarry'
+def monetary = ['salary', 'pension', 'netCapitalIncome', 'shareIncome', 'listedShareIncome', 'prepaidTax', listedLossField].toSet().asImmutable()
 def numeric = (monetary + ['birthYear', 'birthMonth', 'assessmentYear', 'municipalRate', 'churchRate']).asImmutable()
-def allowedOptions = (numeric + ['ruleYear', 'residency', 'civilStatus', 'seniorSupplement', 'singleParentSupplement']).asImmutable()
+def allowedOptions = (numeric + ['ruleYear', 'residency', 'civilStatus', 'seniorSupplement', 'singleParentSupplement', 'initialState']).asImmutable()
 def finite = { value -> value instanceof Number && Double.isFinite(value.doubleValue()) }
 def single = { options ->
     'single'.equals(options.get('civilStatus')) &&
@@ -36,6 +39,8 @@ countryTaxPolicy('DK') {
     ruleYear referenceYear
     incomeBases acceptedBases
     sourceBases externalBases
+    nativeMonetaryOptions([listedLossField])
+    stateFields([(listedLossField): new TaxStateField('Listed-share losses carried forward (DKK)', true)])
     messages 'dev.cashle.tax.denmark.DanishTaxSource'
 
     validateOptions { options ->
@@ -45,11 +50,13 @@ countryTaxPolicy('DK') {
         if (!finite(options.municipalRate) || options.municipalRate < 0d || options.municipalRate > 0.4d) errors.add('profile.municipalRate')
         if (!finite(options.churchRate) || options.churchRate < 0d || options.churchRate > 0.1d) errors.add('profile.churchRate')
         if (!single(options)) errors.add('profile.supplements')
+        def openingLoss = options.get(listedLossField)
+        if (openingLoss != null && (!finite(openingLoss) || openingLoss < 0d)) errors.add('profile.listedLossCarry')
         errors
     }
 
     assessmentOptions { options -> options.findAll { key, value -> value != null && !''.equals(value) } }
-    optionsInRuleMoney { options, prices -> prices.convertFields(options, monetary) }
+    optionsInRuleMoney { options, prices -> prices.convertFields(options, monetary, [listedLossField] as Set) }
 
     annualInputs { options, int birthYear, int birthMonth, int year, amounts ->
         Objects.requireNonNull(options, 'Tax options are required')
@@ -65,7 +72,7 @@ countryTaxPolicy('DK') {
         inputs.put('birthMonth', birthMonth)
         inputs.put('assessmentYear', year)
         inputs.putIfAbsent('residency', 'full-year')
-        for (String basis : ['salary', 'pension', 'shareIncome']) {
+        for (String basis : ['salary', 'pension', 'shareIncome', 'listedShareIncome']) {
             inputs.put(basis, number(inputs, basis, 0d) + amounts.getOrDefault(basis, 0d))
         }
         double netCapital = amounts.getOrDefault('capitalIncome', 0d) - amounts.getOrDefault('interestExpenses', 0d)
@@ -73,10 +80,19 @@ countryTaxPolicy('DK') {
         inputs
     }
 
+    assessAnnualStateful { options, int birthYear, int birthMonth, int year, annualBases, state, annual ->
+        def entered = new LinkedHashMap(options)
+        entered.putAll(state)
+        def assessment = annual.assess(entered, birthYear, birthMonth, year, annualBases)
+        new StatefulTaxAssessment(assessment, [(listedLossField): assessment.components().get(listedLossField)])
+    }
+
     assess { options ->
         keys(options, allowedOptions)
         for (String key : numeric) {
-            if (options.containsKey(key)) require(number(options, key, 0d) >= 0d, "$key must be nonnegative.")
+            if (options.containsKey(key) && key != 'listedShareIncome') {
+                require(number(options, key, 0d) >= 0d, "$key must be nonnegative.")
+            }
         }
         require(number(options, 'ruleYear', 0d) == referenceYear, 'Select explicit ruleYear:2026; other years are unsupported.')
         require('full-year'.equals(options.residency), 'Only full-year residency is supported.')
@@ -95,7 +111,9 @@ countryTaxPolicy('DK') {
         double salary = number(options, 'salary', 0d)
         double pension = number(options, 'pension', 0d)
         double capital = number(options, 'netCapitalIncome', 0d)
-        double shares = number(options, 'shareIncome', 0d)
+        double listedNet = number(options, 'listedShareIncome', 0d) - number(options, listedLossField, 0d)
+        double listedLossRemaining = Math.max(0d, -listedNet)
+        double shares = number(options, 'shareIncome', 0d) + Math.max(0d, listedNet)
         double municipal = number(options, 'municipalRate', Double.NaN)
         double church = number(options, 'churchRate', 0d)
         require(Double.isFinite(municipal) && municipal >= 0d && municipal <= 0.4d && church <= 0.1d,
@@ -122,6 +140,7 @@ countryTaxPolicy('DK') {
         double ceilingPersonal = Math.max(0d, 0.1201d + 0.075d + municipal - 0.4457d) * middlePersonal
         double ceilingCapital = Math.max(0d, 0.1201d + 0.075d + municipal - 0.42d) * middleCapital
         double eligible = sum(parts) - labour - lowerShares - ceilingPersonal - ceilingCapital
+        parts.put(listedLossField, listedLossRemaining)
         double allowance = Math.min(eligible, 54100d * (0.1201d + municipal + church))
         new TaxAssessment(labour + lowerShares + Math.max(0d, eligible - allowance), 0d, parts)
     }
@@ -142,7 +161,7 @@ countryTaxPolicy('DK') {
         double net = account.dividends() + account.realizedGain() - account.realizedLoss()
         require(net >= 0d, 'Danish excess foreign listed-share losses require unsupported loss carry and reporting rules.')
         require(Double.isFinite(net), 'Foreign investment basis must remain finite: shareIncome')
-        Map.of('shareIncome', net)
+        Map.of('listedShareIncome', net)
     }
 
     propertySales {

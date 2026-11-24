@@ -1,0 +1,13 @@
+{
+  "label": "Dansk beskattad aktiedepå",
+  "help": "Använd ett innehav per värdepapper och depå. Danska innehav i samma bolag och aktieslag delar genomsnittligt anskaffningsvärde mellan depåer.",
+  "field.confirmed": "Vanliga danska noterade aktier och kompletta innehav",
+  "field.reporting": "Rapportering av köp och förluster bekräftad",
+  "help.confirmed": "Bekräfta att planen innehåller bolagets samtliga vanliga innehav förvärvade från 2006 och endast ett aktieslag.",
+  "help.reporting": "Bekräfta att köpet och eventuell förlust redovisas i tid för att få kvitta berättigade förluster.",
+  "invalid.security": "Ange en dansk värdepappersidentifierare och antalet aktier.",
+  "invalid.scope": "Bekräfta vanliga danska noterade aktier förvärvade från 2006, kontant utdelning och kompletta innehav.",
+  "invalid.pool": "Transaktionen kan inte fördelas till det identifierade genomsnittliga anskaffningsvärdet.",
+  "invalid.price": "Samma värdepapper måste ha samma marknadskurs i varje modellerad depå.",
+  "invalid.money": "Beskattning av noterade aktier kräver de danska årsreglerna för 2026."
+}

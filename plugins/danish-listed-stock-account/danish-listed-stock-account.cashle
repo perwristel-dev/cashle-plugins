@@ -1,0 +1,130 @@
+import dev.cashle.sdk.account.tax.SharePoolPolicy.Pool
+import dev.cashle.sdk.account.tax.SharePoolPolicy.Sale
+import dev.cashle.tax.InvestmentPosition
+import dev.cashle.tax.InvestmentWithdrawalResult
+import dev.cashle.tax.TaxPolicyField
+
+def catalogue = 'danish.listedshares.messages'
+def validAmount = { double value -> Double.isFinite(value) && value >= 0d }
+
+investmentAccount('cashlab.dk-listed-shares', 1) {
+    pluginId 'cashle.finance.dk-listed-shares'
+    dsl 'dkListedShares'
+    country 'DK'
+    kind 'DKlistedShares'
+    taxPolicy 'listedShares'
+    messages catalogue
+    prepaidTax true
+    defaults([policyOptions: [ordinaryHoldingConfirmed: false, lossReportingConfirmed: false],
+        reinvestDividends: false])
+
+    validateInput { data ->
+        def security = data.security
+        requireInput('invalid.security') {
+            security instanceof Map && security.id instanceof String && security.id.matches('DK[A-Z0-9]{9}[0-9]') &&
+                security.quantity instanceof Number && validAmount(security.quantity.doubleValue())
+        }
+        requireInput('invalid.scope') {
+            data.policyOptions?.ordinaryHoldingConfirmed == true &&
+                data.policyOptions?.lossReportingConfirmed instanceof Boolean &&
+                data.reinvestDividends == false && !data.plannedSales
+        }
+    }
+}
+
+accountTaxPolicy('listedShares') {
+    pluginId 'cashle.finance.dk-listed-shares.policy'
+    country 'DK'
+    ruleYear 2026
+    messages catalogue
+    annualOnly 'cashlab.dk-listed-shares'
+    annualBases 'listedShareIncome'
+    dividendsTaxableOnReceipt true
+    internalSalesRealizeTax true
+    permitsImmediateReinvestment false
+    preliminaryTaxRate { configuredRate -> 0.27d }
+    policyFields([
+        ordinaryHoldingConfirmed: new TaxPolicyField('field.confirmed', 'boolean'),
+        lossReportingConfirmed: new TaxPolicyField('field.reporting', 'boolean')
+    ])
+
+    withdraw { request ->
+        def position = request.position()
+        double amount = request.amount()
+        double basis = request.resolvedCostBasis()
+        if (Double.isNaN(basis)) {
+            basis = request.closeAccount() ? position.costBasis() :
+                position.marketValue() == 0d ? 0d : position.costBasis() * (amount / position.marketValue())
+        }
+        require(validAmount(basis) && basis <= position.costBasis() + 1e-7d, 'invalid.pool')
+        double gain = Math.max(0d, amount - basis)
+        double loss = Math.max(0d, basis - amount)
+        def remaining = request.closeAccount() ? new InvestmentPosition(0d, 0d, 0d) :
+            new InvestmentPosition(Math.max(0d, position.marketValue() - amount),
+                Math.max(0d, position.costBasis() - basis), 0d)
+        // Ordinary domestic dividend tax is withheld through the dividend flow, not disposals.
+        new InvestmentWithdrawalResult(remaining, gain, loss, 0d)
+    }
+
+    quoteWithdrawalForNet { snapshot, desiredNet, configuredRate ->
+        quoteNet(snapshot, desiredNet, 0d, false)
+    }
+
+    annualAssessment { accounts, money, options ->
+        requireInput('invalid.money') { money.ruleYear() == 2026 && accounts*.id().toSet().size() == accounts.size() }
+        double eligible = 0d
+        for (def account : accounts) {
+            requireInput('invalid.scope') {
+                account.policyOptions().ordinaryHoldingConfirmed == true &&
+                    Math.abs(account.dividends() - account.distributedDividends()) <= 1e-7d
+            }
+            eligible += account.dividends() + account.realizedGain()
+            if (account.policyOptions().lossReportingConfirmed == true) eligible -= account.realizedLoss()
+        }
+        basis 'listedShareIncome', eligible, 'invalid.money'
+    }
+
+    sharePool {
+        def validPool = { Pool pool ->
+            validAmount(pool.quantity()) && validAmount(pool.costBasis()) &&
+                (pool.quantity() > 0d || pool.costBasis() == 0d)
+        }
+        buy { Pool pool, double quantity, double cost ->
+            require(validPool(pool) && validAmount(quantity) && quantity > 0d && validAmount(cost), 'invalid.pool')
+            def next = new Pool(pool.quantity() + quantity, pool.costBasis() + cost)
+            require(validPool(next), 'invalid.pool')
+            next
+        }
+        sell { Pool pool, double quantity, double proceeds ->
+            require(validPool(pool) && validAmount(quantity) && quantity > 0d && quantity <= pool.quantity() &&
+                validAmount(proceeds), 'invalid.pool')
+            double cost = pool.costBasis() * (quantity / pool.quantity())
+            def next = new Pool(pool.quantity() - quantity, Math.max(0d, pool.costBasis() - cost))
+            new Sale(cost, Math.max(0d, proceeds - cost), Math.max(0d, cost - proceeds), next)
+        }
+        allocatedBasis { Pool pool, double quantity ->
+            require(validPool(pool) && validAmount(quantity), 'invalid.pool')
+            pool.quantity() == 0d ? 0d : pool.costBasis() * (quantity / pool.quantity())
+        }
+        validateOpening { holdings ->
+            require(holdings.every { it.securityId() != null &&
+                (it.futureOpening() ? it.freshOpening() :
+                    it.quantity() > 0d || (it.costBasis() == 0d && it.marketValue() == 0d)) }, 'invalid.security')
+        }
+        validateHoldings { holdings ->
+            def prices = [:]
+            for (def holding : holdings) {
+                if (holding.futureOpening() && !holding.active() && !holding.initialized()) continue
+                require(holding.active() && holding.initialized(), 'invalid.security')
+                if (holding.quantity() == 0d) {
+                    require(Math.abs(holding.marketValue()) <= 1e-7d, 'invalid.security')
+                    continue
+                }
+                double price = holding.marketValue() / holding.quantity()
+                def previous = prices.putIfAbsent(holding.securityId(), price)
+                require(previous == null || Math.abs(price - previous) <= Math.max(1e-7d, Math.abs(previous) * 1e-9d),
+                    'invalid.price')
+            }
+        }
+    }
+}

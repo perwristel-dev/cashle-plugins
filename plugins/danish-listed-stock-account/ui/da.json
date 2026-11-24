@@ -1,0 +1,13 @@
+{
+  "label": "Dansk skattepligtigt aktiedepot",
+  "help": "Brug én beholdning pr. værdipapir pr. depot. Danske aktier i samme selskab og aktieklasse har en fælles gennemsnitlig købspris på tværs af depoter.",
+  "field.confirmed": "Almindelige danske børsnoterede aktier og fuldstændig beholdning",
+  "field.reporting": "Indberetning af køb og tab bekræftet",
+  "help.confirmed": "Bekræft, at planen indeholder alle almindelige beholdninger i selskabet købt fra 2006 og kun én aktieklasse.",
+  "help.reporting": "Bekræft rettidig indberetning af købet og eventuelle tab for at få fradrag for berettigede tab.",
+  "invalid.security": "Angiv dansk værdipapiridentifikation og antal aktier.",
+  "invalid.scope": "Bekræft almindelige danske børsnoterede aktier købt fra 2006, kontant udbytte og fuldstændig beholdning.",
+  "invalid.pool": "Handlen kan ikke henføres til den identificerede gennemsnitspulje.",
+  "invalid.price": "Samme værdipapir skal have samme kurs i alle modellerede depoter.",
+  "invalid.money": "Beskatning af børsnoterede aktier kræver de danske årsregler for 2026."
+}
