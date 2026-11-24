@@ -1,0 +1,16 @@
+{
+  "name": "Norwegian property purchase duty (dokumentavgift)",
+  "names": {
+    "en": "Norwegian property purchase duty (dokumentavgift)",
+    "sv": "Norsk stämpelskatt vid fastighetsköp (dokumentavgift)"
+  },
+  "description": {
+    "en": "One-off Norwegian real-property conveyance duty based on the market value at registration.",
+    "sv": "Norsk engångsavgift vid överlåtelse av fast egendom enligt marknadsvärdet vid registrering."
+  },
+  "country": "NO",
+  "category": "expenses",
+  "releases": [
+    "0369146a6b7a5e8e1d42b41373901c978fee8c598a0f7f93a8d7d7dc307fd3e2"
+  ]
+}

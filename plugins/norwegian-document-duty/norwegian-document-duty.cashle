@@ -1,0 +1,62 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.ReportingRole
+import dev.cashle.sdk.model.ScheduleSpec
+import java.time.DateTimeException
+import java.time.LocalDate
+
+final class NorwegianDocumentDuty {
+    static LocalDate date(Object value) {
+        if (!(value instanceof String) || !value.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')) return null
+        try {
+            LocalDate.parse(value)
+        } catch (DateTimeException ignored) {
+            null
+        }
+    }
+
+    static double onMarketValue(double valueNok) {
+        double wholeThousands = Math.floor(valueNok / 1000d)
+        // 2.5% of NOK 1,000 is NOK 25. Round that result down to NOK 10.
+        Math.max(250d, Math.floor(wholeThousands * 2.5d) * 10d)
+    }
+}
+
+financeModule('cashlab.norwegian-document-duty', 1) {
+    pluginId 'cashle.finance.document-duty.no'
+    messages 'norwegian.documentduty.messages'
+    dsl('norwegianDocumentDuty') { id ->
+        [name: id, transferType: 'realProperty', registrationDate: '', paymentDate: '']
+    }
+
+    calculation {
+        if (!enabled) return
+        requireInput('invalid.transfer') { input.transferType in ['realProperty', 'cooperative'] }
+        if (input.transferType == 'cooperative') return
+        requireInput('invalid.amount') {
+            input.marketValueNok instanceof Number && Double.isFinite(input.marketValueNok.doubleValue()) &&
+                input.marketValueNok >= 0d
+        }
+        def registration = NorwegianDocumentDuty.date(input.registrationDate)
+        requireInput('invalid.registration') { registration != null && registration.year >= 2026 }
+        def payment = input.paymentDate == '' ? registration.plusDays(14) : NorwegianDocumentDuty.date(input.paymentDate)
+        requireInput('invalid.payment') { payment != null && !payment.isBefore(registration) }
+
+        def horizon = monthlyFromPlanStart
+        if (payment.isBefore(horizon.fromInclusive()) || !payment.isBefore(horizon.untilExclusive())) return
+        double duty = NorwegianDocumentDuty.onMarketValue(input.marketValueNok.doubleValue()) *
+            exchangeRate('NOK', profile.currency)
+        def expense = household.account {
+            name input.name instanceof String && !input.name.isBlank() ? input.name : text('name')
+            classify AccountKind.EXPENSE, new AccountTag('cashle.household.economic-nature', 1,
+                'expense.tax.property', [AccountKind.EXPENSE] as Set)
+            reportingRole ReportingRole.TAX_EXPENSE
+        }
+        requiredExpense('documentDuty') {
+            on ScheduleSpec.on(payment)
+            destination expense
+            amount { duty }
+            savings 'documentDuty'
+        }
+    }
+}

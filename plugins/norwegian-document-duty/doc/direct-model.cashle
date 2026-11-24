@@ -1,0 +1,17 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.cashflow'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.document-duty.no' from '../norwegian-document-duty.cashle'
+}
+finance {
+    language 'en'
+    plan { from '2026-06-01'; until '2026-09-01'; currency 'NOK'; inflation 0d }
+    person('self') { name 'Example buyer'; birthYear 1980; birthMonth 1 }
+    income 'Example household income', 150000d
+    norwegianDocumentDuty('Home purchase duty') {
+        settings marketValueNok: 4051999.75d, registrationDate: '2026-07-10'
+    }
+}
+collect { cashflow {} }

@@ -1,0 +1,21 @@
+{
+  "label": "Norsk stämpelskatt vid fastighetsköp (dokumentavgift)",
+  "field.name": "Namn",
+  "field.transfer": "Typ av överlåtelse",
+  "option.realProperty": "Överlåtelse av fast egendom",
+  "option.cooperative": "Andel i norskt bostadskooperativ (borettslag)",
+  "field.marketValue": "Avgiftsgrundande marknadsvärde vid registrering",
+  "help.marketValue": "Ange marknadsvärdet i NOK för den andel som överlåts.",
+  "field.registration": "Datum för registrering av äganderätten",
+  "field.payment": "Betalningsdatum (valfritt)",
+  "help.payment": "Lämna tomt för beräknad betalning 14 dagar efter registreringen.",
+  "unit.nok": "NOK",
+  "funding": "Finansiering",
+  "summary.amount": "{amount} NOK",
+  "summary.payment": "Betalning {date}",
+  "summary.cooperative": "Avgiftsfri överlåtelse av andel i borettslag",
+  "invalid.transfer": "Välj fast egendom eller andel i borettslag.",
+  "invalid.amount": "Ange avgiftsgrundande marknadsvärde i NOK.",
+  "invalid.registration": "Ange giltigt registreringsdatum från och med 2026.",
+  "invalid.payment": "Ange ett giltigt betalningsdatum tidigast på registreringsdagen."
+}
