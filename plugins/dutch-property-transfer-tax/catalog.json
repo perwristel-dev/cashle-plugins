@@ -1,0 +1,16 @@
+{
+  "name": "Dutch property transfer tax",
+  "names": {
+    "en": "Dutch property transfer tax",
+    "sv": "Nederländsk överlåtelseskatt"
+  },
+  "description": {
+    "en": "Residential acquisition tax at transfer, including the qualifying starter exemption.",
+    "sv": "Överlåtelseskatt vid bostadsförvärv med undantag för berättigade förstagångsköpare."
+  },
+  "country": "NL",
+  "category": "expenses",
+  "releases": [
+    "4a4a8eb84c4f219b2564e5cd744637b6e6a44a2cfd0258b6b0f1480d2d6d19f2"
+  ]
+}

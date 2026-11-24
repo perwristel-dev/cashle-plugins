@@ -1,0 +1,14 @@
+{
+  "id": "cashle.finance.property.nl.transfer-tax",
+  "requires": ["cashle.finance", "cashle.finance.assets", "cashle.dsl.groovy"],
+  "sources": [{
+    "path": "dutch-property-transfer-tax.cashle",
+    "providers": ["cashle.finance.property.nl.transfer-tax"],
+    "resources": ["property/TransferTax_en.properties", "property/TransferTax_sv.properties"]
+  }],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {"locale": "en", "path": "ui/en.json"},
+    {"locale": "sv", "path": "ui/sv.json"}
+  ]
+}

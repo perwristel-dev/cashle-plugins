@@ -1,0 +1,92 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.ReportingRole
+import dev.cashle.core.i18n.Messages
+import dev.cashle.sdk.composition.ModuleContext
+import dev.cashle.sdk.composition.ModuleInput
+import dev.cashle.sdk.finance.AssetLifecycle
+import dev.cashle.sdk.finance.FinanceContext
+import dev.cashle.sdk.finance.FinanceModule
+import dev.cashle.sdk.finance.FundingPort
+import dev.cashle.sdk.finance.FundingSchedule
+import dev.cashle.sdk.finance.MetricsPort
+import dev.cashle.sdk.model.AccountHandle
+import groovy.transform.CompileStatic
+import java.time.LocalDate
+
+financeModule('cashlab.dutch-property-transfer-tax', 1) {
+    pluginId 'cashle.finance.property.nl.transfer-tax'
+    dsl('dutchPropertyTransferTax') { id -> [name: id, use: 'owner-occupied', taxableValueEur: 0d,
+        starterExemptShare: 0d, starterConfirmed: false] }
+    factory { ModuleInput input -> new DutchPropertyTransferTax(input) }
+}
+
+@CompileStatic
+final class DutchPropertyTransferTax implements FinanceModule {
+    private static final double STARTER_LIMIT = 555_000d
+    private final ModuleInput entry
+    private Messages messages
+    private AssetLifecycle home
+    private AccountHandle expense
+    private double value, exemptShare, exchange
+    private boolean ownerOccupied
+
+    DutchPropertyTransferTax(ModuleInput entry) { this.entry = entry }
+
+    @Override void declare(ModuleContext ignored) {}
+
+    @Override void declareFinance(FinanceContext finance) {
+        messages = finance.messages(DutchPropertyTransferTax, 'property.TransferTax')
+        expense = finance.household().account().classify(AccountKind.EXPENSE,
+            new AccountTag('cashle.household.economic-nature', 1, 'expense.tax.property', Set.of(AccountKind.EXPENSE)))
+        expense.setName(Objects.toString(entry.data().get('name'), messages.text('name')))
+        expense.addReportingRole(ReportingRole.TAX_EXPENSE)
+    }
+
+    @Override void wireFinance(FinanceContext finance) {
+        Map<String,Object> data = entry.data()
+        Object assetId = data.get('assetId')
+        if (!(assetId instanceof String) || ((String) assetId).isBlank()) throw invalid('asset')
+        home = finance.findAssetLifecycle((String) assetId).orElseThrow(() -> invalid('asset'))
+        if (home.acquisitionExpenseId() == null) throw invalid('asset')
+        if (!finance.claimExclusive(home.account(), 'cashle.finance.property.nl.transfer-tax')) throw invalid('duplicate')
+        Object category = data.get('use')
+        if (!(category in ['owner-occupied', 'other-residential'])) throw invalid('use')
+        ownerOccupied = category == 'owner-occupied'
+        value = number(data.get('taxableValueEur'), 'value')
+        if (value <= 0d) throw invalid('value')
+        exemptShare = number(data.get('starterExemptShare'), 'starter')
+        if (exemptShare > 100d || exemptShare > 0d &&
+            (!ownerOccupied || !Boolean.TRUE.equals(data.get('starterConfirmed')))) throw invalid('starter')
+        exchange = finance.exchangeRate('EUR', Objects.toString(finance.profile().get('currency'), 'EUR'))
+    }
+
+    @Override void funding(FundingPort port) {
+        port.requiredExpenseWithSavings(entry.id(), FundingPort.CASH, expense, () -> taxDue(),
+            FundingSchedule.once(home.acquisitionDate()),
+            () -> !home.account().isInactive() && (home.acquisitionPending().getAsBoolean() || home.owned().getAsBoolean()),
+            () -> 1d, home.acquisitionExpenseId(), false, false, () -> false, () -> Double.MAX_VALUE, '*', false)
+    }
+
+    private double taxDue() {
+        LocalDate date = home.acquisitionDate().get()
+        if (date == null) return 0d
+        if (date.year < 2026) throw invalid('year')
+        if (!ownerOccupied) return value * 0.08d * exchange
+        double taxableShare = value <= STARTER_LIMIT ? 1d - exemptShare / 100d : 1d
+        value * taxableShare * 0.02d * exchange
+    }
+
+    @Override void metrics(MetricsPort port) {
+        port.spending(expense, () -> 1d, () -> true)
+    }
+
+    private double number(Object raw, String error) {
+        if (!(raw instanceof Number)) throw invalid(error)
+        double value = ((Number) raw).doubleValue()
+        if (!Double.isFinite(value) || value < 0d) throw invalid(error)
+        value
+    }
+
+    private IllegalArgumentException invalid(String key) { new IllegalArgumentException(messages.text(key)) }
+}
