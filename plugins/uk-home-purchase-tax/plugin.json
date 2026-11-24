@@ -1,0 +1,26 @@
+{
+  "id": "cashle.finance.property.gb.acquisition-tax",
+  "requires": [
+    "cashle.finance"
+  ],
+  "ui": "ui.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui-en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui-sv.json"
+    }
+  ],
+  "sources": [
+    {
+      "path": "home-purchase-tax.cashle",
+      "resources": [
+        "british/hometax/messages_en.properties",
+        "british/hometax/messages_sv.properties"
+      ]
+    }
+  ]
+}

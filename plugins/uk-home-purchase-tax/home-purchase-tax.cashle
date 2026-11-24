@@ -1,0 +1,143 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.i18n.Messages
+import dev.cashle.sdk.composition.ModuleContext
+import dev.cashle.sdk.composition.ModuleInput
+import dev.cashle.sdk.finance.AssetLifecycle
+import dev.cashle.sdk.finance.CollateralAsset
+import dev.cashle.sdk.finance.FinanceContext
+import dev.cashle.sdk.finance.FinanceModule
+import dev.cashle.sdk.finance.FundingPort
+import dev.cashle.sdk.finance.FundingSchedule
+import dev.cashle.sdk.finance.MetricsPort
+import dev.cashle.sdk.model.AccountHandle
+import dev.cashle.sdk.model.Variable
+import java.math.RoundingMode
+import java.time.LocalDate
+
+financeModule('cashlab.uk-home-purchase-tax', 1) {
+    pluginId 'cashle.finance.property.gb.acquisition-tax'
+    dsl('ukHomePurchaseTax') { id ->
+        [name: id, jurisdiction: 'england-ni', treatment: 'standard', nonResidentSurcharge: false]
+    }
+    factory { ModuleInput entry -> new HomePurchaseTax(entry) }
+}
+
+final class HomePurchaseTax implements FinanceModule {
+    private static final LocalDate RULE_START = LocalDate.of(2025, 4, 1)
+    private static final String ROLE = 'cashle.finance.property.gb.acquisition-tax.v1'
+    private final ModuleInput entry
+    private AccountHandle account
+    private AssetLifecycle asset
+    private FinanceContext context
+    private Variable ownedOnce
+    private Messages messages
+    private double tax
+
+    HomePurchaseTax(ModuleInput entry) { this.entry = entry }
+
+    @Override void declare(ModuleContext ignored) {}
+
+    @Override void declareFinance(FinanceContext context) {
+        if (!entry.enabled()) return
+        messages = context.messages(HomePurchaseTax, 'british.hometax.messages')
+        def data = entry.data()
+        require(data.jurisdiction in ['england-ni', 'scotland', 'wales'], 'invalid.jurisdiction')
+        require(data.treatment in ['standard', 'first-time', 'higher'] &&
+            (data.jurisdiction != 'wales' || data.treatment != 'first-time'), 'invalid.treatment')
+        require(data.nonResidentSurcharge instanceof Boolean &&
+            (!data.nonResidentSurcharge || data.jurisdiction == 'england-ni'), 'invalid.treatment')
+        require(data.price instanceof Number && Double.isFinite(data.price.doubleValue()) &&
+            data.price.doubleValue() > 0d, 'invalid.price')
+        BigDecimal price = BigDecimal.valueOf(data.price.doubleValue())
+        require(price.stripTrailingZeros().scale() <= 2, 'invalid.price')
+        double fx = context.exchangeRate('GBP', context.profile().currency ?: 'GBP')
+        tax = liability(price, data.jurisdiction, data.treatment, data.nonResidentSurcharge).doubleValue() * fx
+        account = context.household().account()
+        account.setKind(AccountKind.EXPENSE)
+        account.setName(data.name instanceof String && !data.name.isBlank() ? data.name : messages.text('name'))
+    }
+
+    @Override void wireFinance(FinanceContext context) {
+        if (account == null) return
+        this.context = context
+        Object assetId = entry.data().assetId
+        require(assetId instanceof String && !assetId.isBlank(), 'invalid.asset')
+        asset = context.findAssetLifecycle(assetId).orElse(null)
+        def collateral = context.findCollateralAsset(assetId).orElse(null)
+        require(asset != null && asset.acquisitionExpenseId() != null && collateral?.kind() == CollateralAsset.Kind.DWELLING,
+            'invalid.asset')
+        require(context.claimExclusive(asset.account(), ROLE), 'invalid.duplicate')
+        LocalDate acquisition = asset.acquisitionDate().get()
+        require(acquisition == null || acquisition >= RULE_START, 'invalid.date')
+        ownedOnce = context.model().variable(0d)
+    }
+
+    @Override void funding(FundingPort port) {
+        if (asset == null || tax == 0d) return
+        port.requiredExpenseWithSavings(entry.id(), FundingPort.CASH, account, { tax },
+            FundingSchedule.once(asset.acquisitionDate()), { due() }, { 1d }, asset.acquisitionExpenseId(),
+            false, true, { rejected() }, { tax }, '*', false)
+        port.commitment({
+            LocalDate today = context.model().clock().date
+            LocalDate purchase = asset.acquisitionDate().get()
+            LocalDate next = context.nextReceiptDate().get()
+            purchase != null && purchase > today && next != null && purchase < next && asset.acquisitionRequired().asBoolean ? tax : 0d
+        })
+    }
+
+    @Override void metrics(MetricsPort port) {
+        if (account != null) port.spending(account, { 1d }, { true })
+    }
+
+    private boolean due() {
+        boolean owned = asset.owned().asBoolean
+        if (owned) ownedOnce.value = 1d
+        LocalDate purchase = asset.acquisitionDate().get()
+        require(purchase == null || purchase >= RULE_START, 'invalid.date')
+        !asset.account().inactive && (owned || asset.acquisitionPending().asBoolean)
+    }
+
+    private boolean rejected() {
+        boolean owned = asset.owned().asBoolean
+        if (owned) ownedOnce.value = 1d
+        LocalDate purchase = asset.acquisitionDate().get()
+        purchase != null && purchase <= context.model().clock().date && ownedOnce.value == 0d && !asset.acquisitionPending().asBoolean
+    }
+
+    private static BigDecimal liability(BigDecimal price, String jurisdiction, String treatment, boolean nonResident) {
+        boolean higher = treatment == 'higher' && price >= 40_000G
+        switch (jurisdiction) {
+            case 'england-ni':
+                BigDecimal surcharge = (nonResident && price >= 40_000G ? 0.02G : 0G) + (higher ? 0.05G : 0G)
+                BigDecimal base = treatment == 'first-time' && price <= 500_000G ?
+                    bands(price, [300_000G], [0G, 0.05G]) :
+                    bands(price, [125_000G, 250_000G, 925_000G, 1_500_000G], [0G, 0.02G, 0.05G, 0.10G, 0.12G])
+                return (base + price * surcharge).setScale(0, RoundingMode.DOWN)
+            case 'scotland':
+                BigDecimal threshold = treatment == 'first-time' ? 175_000G : 145_000G
+                BigDecimal base = bands(price, [threshold, 250_000G, 325_000G, 750_000G], [0G, 0.02G, 0.05G, 0.10G, 0.12G])
+                return (base + (higher ? price * 0.08G : 0G)).setScale(0, RoundingMode.DOWN)
+            case 'wales':
+                BigDecimal result = higher ? bands(price, [180_000G, 250_000G, 400_000G, 750_000G, 1_500_000G],
+                    [0.05G, 0.085G, 0.10G, 0.125G, 0.15G, 0.17G]) :
+                    bands(price, [225_000G, 400_000G, 750_000G, 1_500_000G], [0G, 0.06G, 0.075G, 0.10G, 0.12G])
+                return result.setScale(2, RoundingMode.HALF_UP)
+        }
+        throw new IllegalArgumentException('Unsupported UK property jurisdiction')
+    }
+
+    private static BigDecimal bands(BigDecimal price, List<BigDecimal> ceilings, List<BigDecimal> rates) {
+        BigDecimal start = 0G
+        BigDecimal tax = 0G
+        for (int i = 0; i < rates.size() && start < price; i++) {
+            BigDecimal end = i < ceilings.size() ? price.min(ceilings[i]) : price
+            tax += (end - start) * rates[i]
+            start = end
+        }
+        tax
+    }
+
+    private void require(boolean condition, String key) {
+        if (!condition) throw new IllegalArgumentException(messages.text(key))
+    }
+}

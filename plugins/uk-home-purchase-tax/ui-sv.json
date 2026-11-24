@@ -1,0 +1,23 @@
+{
+  "label": "Brittisk bostadsskatt vid köp",
+  "field.name": "Namn",
+  "field.asset": "Bostadsköp",
+  "field.jurisdiction": "Bostadens läge",
+  "field.treatment": "Transaktionskategori",
+  "field.price": "Beskattningsbar köpeskilling",
+  "field.nonResident": "SDLT-tillägg för köpare utan brittisk hemvist gäller",
+  "option.asset": "Välj ett planerat bostadsköp",
+  "option.englandNi": "England eller Nordirland (SDLT)",
+  "option.scotland": "Skottland (LBTT)",
+  "option.wales": "Wales (LTT)",
+  "option.standard": "Bostadsköp enligt ordinarie regler",
+  "option.firstTime": "Förstagångsköpare som uppfyller villkoren",
+  "option.higher": "Högre skattesatser vid köp av ytterligare bostad",
+  "help.price": "Ange hela det nominella beskattningsbara vederlaget i GBP. Skatten betalas i samband med det länkade köpet.",
+  "help.treatment": "Välj den kategori som gäller samtliga köpare vid tillträdet. Wales har ingen lättnad för förstagångsköpare.",
+  "help.nonResident": "Använd SDLT:s hemvistregler. Inkomstskatten har egna regler för hemvist.",
+  "invalid.asset": "Välj en bostad med ett planerat köp.",
+  "invalid.treatment": "Välj en tillämplig transaktionskategori och ett eventuellt skattetillägg.",
+  "invalid.price": "Ange ett positivt beskattningsbart pris i pund och pence.",
+  "invalid.duplicate": "Använd en köpskatt per bostad."
+}
