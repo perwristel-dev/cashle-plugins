@@ -1,0 +1,15 @@
+{
+  "Impuesto sobre Bienes Inmuebles (IBI)": "Spanish annual property tax (IBI)",
+  "Nombre": "Name",
+  "Vivienda del plan": "Dwelling in the plan",
+  "Importe anual del recibo a cargo del hogar": "Household’s annual share on the notice",
+  "Fecha de pago del recibo municipal": "Payment date on the municipal notice",
+  "Sujeto pasivo el 1 de enero del primer año": "Taxpayer on 1 January of the first year",
+  "Usar la fecha de adquisición de la vivienda": "Use the dwelling’s acquisition date",
+  "Este hogar debía pagar el IBI": "This household owed IBI",
+  "Otro titular debía pagar el IBI": "Another owner owed IBI",
+  "Si la vivienda ya existía al inicio del plan y falta la fecha histórica de adquisición, indique quién debía pagar el IBI ese año.": "If the dwelling was already in the plan and has no historical acquisition date, enter who owed IBI for that year.",
+  "Seleccione una vivienda del plan.": "Select a dwelling in the plan.",
+  "Indique la fecha del recibo posterior al 1 de enero.": "Enter the notice date after 1 January.",
+  "Importe anual del hogar": "Household annual amount"
+}

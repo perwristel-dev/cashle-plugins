@@ -1,0 +1,17 @@
+{
+  "name": "Impuesto sobre Bienes Inmuebles (IBI)",
+  "names": {
+    "en": "Spanish annual property tax (IBI)",
+    "sv": "Spansk årlig fastighetsskatt (IBI)"
+  },
+  "description": {
+    "es": "Proyecte el importe anual del recibo municipal y la titularidad de la vivienda el 1 de enero.",
+    "en": "Project the amount on the annual municipal IBI notice and the dwelling’s 1 January ownership.",
+    "sv": "Prognostisera årsbeloppet enligt kommunens IBI-besked och bostadens ägande den 1 januari."
+  },
+  "country": "ES",
+  "category": "expenses",
+  "releases": [
+    "5c37a497821fef79e131c8acf6d241f469861d65676f4985ed9ff73ee98142b3"
+  ]
+}

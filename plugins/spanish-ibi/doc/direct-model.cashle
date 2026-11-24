@@ -1,0 +1,21 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.assets'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.es-ibi' from '../spanish-ibi.cashle'
+}
+finance {
+    plan { from '2027-12-01'; until '2030-01-01'; currency 'EUR'; inflation 0d }
+    person('self') { birthYear 1980; birthMonth 1 }
+    income 'salary', 5000d
+    def dwelling = house('house') {
+        value 1000d
+        settings([purchasePrice:1000d])
+        purchaseDate '2028-01-01'
+        saleDate '2029-01-01'
+    }
+    spanishIbi('IBI') {
+        settings([assetId:'house', annualNoticeShare:800d, noticePaymentDate:'2027-10-15'])
+    }
+}
+collect {}
