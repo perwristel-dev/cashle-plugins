@@ -1,0 +1,21 @@
+plugins {
+    id 'cashle.finance'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.budget.us.thrifty-food-plan' from '../us-thrifty-food-plan.cashle'
+}
+
+finance {
+    language 'en'
+    plan { from '2026-11-01'; until '2026-12-01'; currency 'USD'; inflation 0d }
+    person('self') { birthYear 1986; birthMonth 1 }
+    income 'salary', 3000d
+    usThriftyFoodPlan('Food at home') {
+        settings([members: [
+            [birthYear: 1986, birthMonth: 1, category: 'male', share: 1d, lifeOwner: 'self'],
+            [birthYear: 1986, birthMonth: 1, category: 'female', share: 1d],
+            [birthYear: 2019, birthMonth: 1, category: 'female', share: 1d],
+            [birthYear: 2016, birthMonth: 1, category: 'male', share: 1d],
+        ]])
+    }
+}
+collect {}

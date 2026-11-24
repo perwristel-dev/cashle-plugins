@@ -1,0 +1,89 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.temporal.ChronoUnit
+import java.util.function.Supplier
+
+financeModule('cashlab.us-thrifty-food-plan', 1) {
+    pluginId 'cashle.finance.budget.us.thrifty-food-plan'
+    messages 'us.food.Messages'
+    dsl('usThriftyFoodPlan') { id -> [name: id, members: []] }
+
+    calculation {
+        requireInput('members') { input.members instanceof List && !input.members.isEmpty() }
+        def people = profile.people instanceof List ? profile.people : []
+        def members = []
+        for (def member in input.members) {
+            requireInput('members') {
+                member instanceof Map && ThriftyFoodPlan.whole(member.birthYear, 1900, 9800) &&
+                    ThriftyFoodPlan.whole(member.birthMonth, 1, 12) && member.category in ['female', 'male'] &&
+                    member.share instanceof Number && (member.share == 0.5d || member.share == 1d) && (member.lifeOwner == null || people.any { it.id == member.lifeOwner })
+            }
+            def born = YearMonth.of(member.birthYear.intValue(), member.birthMonth.intValue())
+            Supplier<LocalDate> end = member.lifeOwner == null ? { null } : deathOf(member.lifeOwner)
+            members.add([birth: born, category: member.category, share: member.share, end: end])
+        }
+        double fx = exchangeRate('USD', profile.currency ?: 'USD')
+        def expense = household.account {
+            name input.name ?: text('label')
+            classify AccountKind.EXPENSE, new AccountTag('cashle.household.economic-nature', 1,
+                'expense.consumption.food', Set.of(AccountKind.EXPENSE))
+        }
+        requiredExpense('food') {
+            on monthlyFromPlanStart
+            destination expense
+            amount {
+                def residence = residenceAt('self', today)
+                if (residence != null && residence.country() != 'US') return 0d
+                def amount = ThriftyFoodPlan.householdAt(YearMonth.from(today), today, members)
+                amount * fx * inflationFactor(ThriftyFoodPlan.REFERENCE_DATE, today)
+            }
+            savings 'food'
+        }
+    }
+}
+
+final class ThriftyFoodPlan {
+    static final LocalDate REFERENCE_DATE = LocalDate.of(2026, 10, 1)
+    // USDA October 2026 U.S. average, monthly costs in USD.
+    private static final List<Double> UNDER_TWELVE = [114.20d, 172.60d, 188.50d, 209.30d, 242.00d].asImmutable()
+    private static final List<Integer> AGE_BOUNDS = [12, 14, 20, 51, 71].asImmutable()
+    private static final List<Double> FEMALE = [223.90d, 260.50d, 254.20d, 236.60d, 261.40d].asImmutable()
+    private static final List<Double> MALE = [258.60d, 326.50d, 319.10d, 281.70d, 268.70d].asImmutable()
+    private static final List<Double> HOUSEHOLD_MULTIPLIERS = [1.20d, 1.10d, 1.05d, 1d, 0.95d, 0.95d, 0.90d].asImmutable()
+
+    static double householdAt(YearMonth month, LocalDate day, List<Map> members) {
+        double base = 0d
+        double size = 0d
+        for (def member in members) {
+            LocalDate end = member.end.get()
+            if (month.isBefore(member.birth) || end != null && !day.isBefore(end)) continue
+            int age = (int) ChronoUnit.YEARS.between(member.birth, month)
+            base += individual(age, member.category) * member.share
+            size += member.share
+        }
+        if (size == 0d) return 0d
+        int lower = Math.max(1, Math.min(7, (int) Math.floor(size)))
+        int upper = Math.min(7, lower + 1)
+        double low = HOUSEHOLD_MULTIPLIERS[lower - 1]
+        double high = HOUSEHOLD_MULTIPLIERS[upper - 1]
+        double scaled = base * (low + Math.max(0d, Math.min(1d, size - lower)) * (high - low))
+        Math.round(scaled * 100d) / 100d
+    }
+
+    private static double individual(int age, String category) {
+        if (age < 1) return 0d
+        if (age < 12) {
+            int band = age == 1 ? 0 : age < 4 ? 1 : age < 6 ? 2 : age < 9 ? 3 : 4
+            return UNDER_TWELVE[band]
+        }
+        int band = AGE_BOUNDS.findLastIndexOf { it <= age }
+        (category == 'female' ? FEMALE : MALE)[band]
+    }
+
+    static boolean whole(Object value, int lo, int hi) {
+        value instanceof Number && value.doubleValue() == value.intValue() &&
+            value.intValue() >= lo && value.intValue() <= hi
+    }
+}
