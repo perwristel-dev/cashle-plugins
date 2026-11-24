@@ -1,0 +1,25 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.is' from '../../icelandic-tax/icelandic-tax.cashle'
+    id 'cashle.finance.pension.is.supplementary' from '../icelandic-supplementary-pension.cashle'
+}
+finance {
+    language 'en'
+    plan { from '2026-01-01'; until '2027-02-01'; currency 'ISK'; inflation 0d }
+    person('self') { birthYear 1964; birthMonth 1 }
+    tax {
+        country 'IS'
+        preliminaryRate 0d
+        options([ruleYear:2026, residency:'full-year', period:'annual', municipalRate:0.1494d,
+                 pensionContribution:0d, additionalPensionContribution:30_000d])
+    }
+    salary('Payroll') { amount 6_000_000d; frequency 'once'; taxTreatment 'taxable'; taxBasis 'salary' }
+    icelandicSupplementaryPension('Séreignarsparnaður') {
+        settings([openingCapital:1_000_000d, grossMonthlyPay:500_000d, employeeRate:2d, contributionUntil:'2026-04-01',
+                  approvedHomeAmount:300_000d, homePaymentDate:'2026-03-01', ordinaryPaymentDate:'2026-04-01'])
+    }
+}
+collect { }
