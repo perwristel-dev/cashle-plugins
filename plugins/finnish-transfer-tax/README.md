@@ -33,3 +33,11 @@ registration fees, VAT and annual real estate tax are outside its scope.
 - [Finnish statutory deadline rules](https://www.finlex.fi/fi/lainsaadanto/1930/150)
 
 The [direct model](doc/direct-model.cashle) shows a buyer's share of a brokered housing-company purchase.
+
+Run the DSL regression test from the repository root with an installed Cashle CLI:
+
+```sh
+CASHLE_CLI=/path/to/cashle node --test plugins/finnish-transfer-tax/test/transfer-tax.test.js
+```
+
+When `cashle` is on your PATH, omit `CASHLE_CLI`.

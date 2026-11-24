@@ -36,7 +36,7 @@ export default function (context) {
     summarize: data => ({ title: data.name, detail: data.deedDate }),
   });
   return { modules: [{
-    ...module, pluginId: provider, translations: context.translations,
+    ...module, pluginId: provider, translations: context.translations, usageModel: 'identity',
     sourceModule: { language: 'groovy-cashle-plugin', provider, source: 'finnish-transfer-tax.cashle' },
   }] };
 }
