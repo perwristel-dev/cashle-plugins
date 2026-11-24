@@ -1,0 +1,17 @@
+{
+  "id": "cashle.finance.nl-lijfrente",
+  "requires": ["cashle.finance", "cashle.account.support", "cashle.account.tax.support", "cashle.tax.nl"],
+  "sources": [
+    {
+      "path": "dutch-bancaire-lijfrente.cashle",
+      "providers": ["cashle.finance.nl-lijfrente", "cashle.finance.nl-lijfrente.policy"],
+      "resources": ["lijfrente/Messages_en.properties", "lijfrente/Messages_sv.properties"]
+    },
+    {"path": "dutch-lijfrente-payout.cashle", "providers": ["cashle.finance.nl-lijfrente.payout"]}
+  ],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {"locale": "en", "path": "ui/en.json"},
+    {"locale": "sv", "path": "ui/sv.json"}
+  ]
+}

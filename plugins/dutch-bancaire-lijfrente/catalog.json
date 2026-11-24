@@ -1,0 +1,16 @@
+{
+  "name": "Dutch bank retirement annuity",
+  "names": {
+    "en": "Dutch bank retirement annuity",
+    "sv": "Nederländsk banklivränta"
+  },
+  "description": {
+    "en": "Bancaire lijfrente with verified deductible premiums and long-term bank-quoted Box 1 payments.",
+    "sv": "Bancaire lijfrente med verifierade avdragsgilla premier och långfristiga utbetalningar enligt Box 1."
+  },
+  "country": "NL",
+  "category": "accounts",
+  "releases": [
+    "f7a3aca943f892bb51afe4c247cd4fbd17d75d6119d883f51d9163ca844b5b5f"
+  ]
+}

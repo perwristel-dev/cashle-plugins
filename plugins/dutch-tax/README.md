@@ -4,6 +4,8 @@ The plugin provides the Netherlands' 2026 employment tax, national insurance,
 provisional Box 3 deemed-return assessment and property-sale treatment.
 The residence and property editors include Swedish and English catalogues.
 Enter external wealth separately from investment accounts already in the plan.
+The [Dutch bank annuity plugin](../dutch-bancaire-lijfrente/README.md) contributes
+verified paid premiums and regular bank annuity receipts to Box 1.
 
 Build the installation ZIP with Node.js and `zip` from the repository root.
 

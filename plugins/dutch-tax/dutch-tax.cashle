@@ -18,7 +18,8 @@ import static dev.cashle.tax.support.PropertyInputs.noReplacementRollover
 import static dev.cashle.tax.support.PropertyInputs.scope
 
 int referenceYear = 2026
-def incomeKeys = ['salary', 'pension', 'box3InvestmentsJan1', 'capitalIncome'].asImmutable()
+def receiptKeys = ['salary', 'pension', 'box3InvestmentsJan1', 'capitalIncome'].asImmutable()
+def incomeKeys = (receiptKeys + ['lijfrenteDeduction']).asImmutable()
 def nativeWealth = ['externalSavingsJan1', 'externalInvestmentsJan1', 'externalDebtsJan1'].asImmutable()
 def allowed = (['ruleYear', 'residency', 'birthYear', 'birthMonth', 'assessmentYear', 'wealthFactsConfirmed', 'box3Mode',
     'box3SavingsRate', 'box3DebtRate', 'settlementDate', 'noticeDatesByYear', 'noticeAmountsByYear',
@@ -52,6 +53,7 @@ countryTaxPolicy('NL') {
     currency 'EUR'
     ruleYear referenceYear
     incomeBases incomeKeys
+    sourceBases receiptKeys
     nativeMonetaryOptions nativeWealth
     requiresTaxPlan true
     messages 'dev.cashle.tax.netherlands.DutchTaxSource'
@@ -163,7 +165,10 @@ countryTaxPolicy('NL') {
 
         double salary = amount(options, 'salary')
         double pension = amount(options, 'pension')
-        double earned = salary + pension
+        double lijfrenteDeduction = amount(options, 'lijfrenteDeduction')
+        require(lijfrenteDeduction <= salary + pension,
+            'A negative Box 1 balance requires a separate assessment.')
+        double earned = salary + pension - lijfrenteDeduction
         double combinedIncome = earned + box3
         double firstBandLimit = birth < 1946d ? 41123d : 38883d
         double first = Math.min(earned, firstBandLimit)
@@ -188,7 +193,7 @@ countryTaxPolicy('NL') {
         double national = Math.max(0d, first * insuranceRate - insuranceCredit)
         double incomeTax = Math.max(0d, (box1 - first * insuranceRate) + box3 * 0.36d - taxCredit)
         new TaxAssessment(incomeTax, national + health, components('box1BeforeCredits', box1, 'generalCredit', general,
-            'labourCredit', labour, 'seniorCredit', senior, 'pensionHealthContribution', health, 'box3NetWealth', net,
+            'labourCredit', labour, 'lijfrenteDeduction', lijfrenteDeduction, 'seniorCredit', senior, 'pensionHealthContribution', health, 'box3NetWealth', net,
             'box3DeemedReturn', deemed, 'box3Income', box3, 'box3Tax', box3 * 0.36d, 'provisionalDeemedAssessment', 1))
     }
 
