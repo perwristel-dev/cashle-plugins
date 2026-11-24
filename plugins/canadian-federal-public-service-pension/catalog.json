@@ -1,0 +1,16 @@
+{
+  "name": "Canadian federal public service pension",
+  "names": {
+    "en": "Canadian federal public service pension",
+    "sv": "Kanadensisk statlig tjänstepension"
+  },
+  "description": {
+    "en": "Canadian federal public service lifetime and bridge benefits from Pension Centre quotes.",
+    "sv": "Kanadensisk statlig tjänstepension och tillfälligt tillägg enligt besked."
+  },
+  "country": "CA",
+  "category": "income",
+  "releases": [
+    "93c9eb553d39fddeb4cdcfc1946c9c0f68cecbfe33ff06d878180cdd1d654e15"
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "id": "cashle.finance.pension.federal-public-service.ca",
+  "requires": [
+    "cashle.finance"
+  ],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui/en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui/sv.json"
+    },
+    {
+      "locale": "fr",
+      "path": "ui/fr.json"
+    }
+  ],
+  "sources": [
+    {
+      "path": "canadian-federal-public-service-pension.cashle",
+      "providers": [
+        "cashle.finance.pension.federal-public-service.ca"
+      ],
+      "resources": [
+        "canadian/federalpension/messages_en.properties",
+        "canadian/federalpension/messages_sv.properties",
+        "canadian/federalpension/messages_fr.properties"
+      ]
+    }
+  ]
+}

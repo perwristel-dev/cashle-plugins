@@ -1,0 +1,16 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.cashflow'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.federal-public-service.ca' from '../canadian-federal-public-service-pension.cashle'
+}
+
+finance {
+    plan { from '2027-01-01'; until '2027-07-01'; currency 'CAD'; inflation 0d }
+    person('self') { name 'Example retiree'; birthYear 1962; birthMonth 3 }
+    canadianFederalPublicServicePension('Federal public service pension') {
+        settings group:'group1', serviceYears:30d, annualLifetime:24000d, annualBridge:6000d,
+            payoutStart:[reference:'date', year:2027, month:2, day:1, offset:0]
+    }
+}
+collect { cashflow {} }
