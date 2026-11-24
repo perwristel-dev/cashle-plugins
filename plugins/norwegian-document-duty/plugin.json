@@ -1,0 +1,19 @@
+{
+  "id": "cashle.finance.document-duty.no",
+  "requires": ["cashle.finance"],
+  "sources": [{
+    "path": "norwegian-document-duty.cashle",
+    "providers": ["cashle.finance.document-duty.no"],
+    "resources": [
+      "norwegian/documentduty/messages_en.properties",
+      "norwegian/documentduty/messages_sv.properties",
+      "norwegian/documentduty/messages_nb.properties"
+    ]
+  }],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {"locale": "en", "path": "ui/en.json"},
+    {"locale": "sv", "path": "ui/sv.json"},
+    {"locale": "nb", "path": "ui/nb.json"}
+  ]
+}

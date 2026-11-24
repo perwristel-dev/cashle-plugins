@@ -1,0 +1,21 @@
+{
+  "label": "Dokumentavgift ved eiendomskjøp",
+  "field.name": "Navn",
+  "field.transfer": "Type overføring",
+  "option.realProperty": "Overføring av fast eiendom",
+  "option.cooperative": "Borettslagsandel",
+  "field.marketValue": "Avgiftsgrunnlag ved tinglysing",
+  "help.marketValue": "Angi markedsverdien i NOK for andelen som overføres.",
+  "field.registration": "Tinglysingsdato",
+  "field.payment": "Betalingsdato (valgfri)",
+  "help.payment": "La feltet stå tomt for beregnet betaling 14 dager etter tinglysing.",
+  "unit.nok": "NOK",
+  "funding": "Finansiering",
+  "summary.amount": "{amount} NOK",
+  "summary.payment": "Betaling {date}",
+  "summary.cooperative": "Overføring av borettslagsandel er fritatt",
+  "invalid.transfer": "Velg fast eiendom eller borettslagsandel.",
+  "invalid.amount": "Angi avgiftsgrunnlaget i NOK.",
+  "invalid.registration": "Angi en gyldig tinglysingsdato fra 2026.",
+  "invalid.payment": "Angi en gyldig betalingsdato tidligst på tinglysingsdagen."
+}

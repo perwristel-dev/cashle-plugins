@@ -1,0 +1,21 @@
+{
+  "label": "Norwegian property purchase duty (dokumentavgift)",
+  "field.name": "Name",
+  "field.transfer": "Type of transfer",
+  "option.realProperty": "Transfer of real property",
+  "option.cooperative": "Housing cooperative share (borettslag)",
+  "field.marketValue": "Taxable market value at registration",
+  "help.marketValue": "Enter the value of the interest transferred in NOK.",
+  "field.registration": "Title registration date",
+  "field.payment": "Payment date (optional)",
+  "help.payment": "Leave blank to estimate payment 14 days after registration.",
+  "unit.nok": "NOK",
+  "funding": "Expense funding",
+  "summary.amount": "{amount} NOK",
+  "summary.payment": "Payment {date}",
+  "summary.cooperative": "Exempt housing cooperative transfer",
+  "invalid.transfer": "Choose real property or a housing cooperative share.",
+  "invalid.amount": "Enter the taxable market value in NOK.",
+  "invalid.registration": "Enter a valid title registration date from 2026 onward.",
+  "invalid.payment": "Enter a valid payment date on or after title registration."
+}
