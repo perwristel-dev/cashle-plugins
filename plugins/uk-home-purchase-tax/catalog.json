@@ -1,0 +1,16 @@
+{
+  "name": "UK home purchase tax",
+  "names": {
+    "en": "UK home purchase tax",
+    "sv": "Brittisk bostadsskatt vid köp"
+  },
+  "description": {
+    "en": "UK residential purchase duty on linked property acquisitions.",
+    "sv": "Brittisk skatt vid planerade bostadsköp."
+  },
+  "country": "GB",
+  "category": "tax",
+  "releases": [
+    "8e45aeda2069ff628618db1183058755f1da422441ed07c597c34e3cedfbe11e"
+  ]
+}

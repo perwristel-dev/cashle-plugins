@@ -1,0 +1,23 @@
+{
+  "label": "UK home purchase tax",
+  "field.name": "Name",
+  "field.asset": "Home purchase",
+  "field.jurisdiction": "Property location",
+  "field.treatment": "Transaction category",
+  "field.price": "Chargeable purchase price",
+  "field.nonResident": "SDLT non-resident surcharge applies",
+  "option.asset": "Choose a scheduled home purchase",
+  "option.englandNi": "England or Northern Ireland (SDLT)",
+  "option.scotland": "Scotland (LBTT)",
+  "option.wales": "Wales (LTT)",
+  "option.standard": "Standard residential purchase",
+  "option.firstTime": "Qualifying first-time buyers",
+  "option.higher": "Higher rates for an additional dwelling",
+  "help.price": "Enter the total nominal chargeable consideration for the transaction in GBP. The tax is paid with the linked purchase.",
+  "help.treatment": "Choose the confirmed treatment for all buyers at completion. Wales has no first-time buyer relief.",
+  "help.nonResident": "Use the residence test for SDLT, which differs from income-tax residence.",
+  "invalid.asset": "Choose a residential property with a modeled acquisition.",
+  "invalid.treatment": "Choose an applicable transaction category and surcharge.",
+  "invalid.price": "Enter a positive chargeable price in pounds and pence.",
+  "invalid.duplicate": "Use one purchase tax per property."
+}
