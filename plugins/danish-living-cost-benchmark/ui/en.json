@@ -1,0 +1,7 @@
+{
+  "label": "Danish living-cost benchmark",
+  "description": "2026 Danish Debt Agency basic amounts for household living costs.",
+  "name": "Name",
+  "adjustment": "Adjustment from benchmark",
+  "summary": "Monthly living-cost allowance before separate housing expenses"
+}

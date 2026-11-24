@@ -1,0 +1,7 @@
+{
+  "label": "Danskt referensbelopp för levnadskostnader",
+  "description": "Danska Gældsstyrelsens 2026-belopp för hushållens grundläggande levnadskostnader.",
+  "name": "Namn",
+  "adjustment": "Justering från referensbeloppet",
+  "summary": "Månadsbelopp för levnadskostnader utanför boende"
+}

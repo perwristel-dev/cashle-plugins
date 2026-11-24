@@ -1,0 +1,53 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.temporal.ChronoUnit
+
+financeModule('cashlab.danish-living-cost-benchmark', 1) {
+    pluginId 'cashle.finance.budget.dk.raadighed'
+    messages 'budget.messages'
+    dsl('danishLivingCostBenchmark') { id -> [name:id, extraPercent:0d] }
+
+    calculation {
+        if (!enabled) return
+        def householdProfile = profile.household instanceof Map ? profile.household : [:]
+        boolean couple = profile.mode == 'couple' || (profile.mode == 'household' && householdProfile.hasPartner == true)
+        def adults = profile.people.findAll { it.id == 'self' || (couple && it.id == 'partner') }
+        requireInput('household') { adults.any { it.id == 'self' } && (!couple || adults.any { it.id == 'partner' }) }
+        def life = adults.collect { plannedDeathOf(it.id) }
+        def children = []
+        if (profile.mode == 'household') {
+            for (def child : householdProfile.children ?: []) {
+                def month = child.birthMonth ?: 1
+                requireInput('household') { child.birthYear instanceof Number && month instanceof Number && month >= 1 && month <= 12 }
+                children.add([birth:YearMonth.of(child.birthYear.intValue(), month.intValue()), share:child.residence == 'half' ? 0.5d : 1d])
+            }
+        }
+        children.sort { a, b -> a.birth <=> b.birth }
+        requireInput('percent') { input.extraPercent instanceof Number && Double.isFinite(input.extraPercent.doubleValue()) && input.extraPercent >= -100d }
+        double factor = (1d + input.extraPercent.doubleValue() / 100d) * exchangeRate('DKK', profile.currency ?: 'DKK')
+        LocalDate reference = LocalDate.of(2026, 1, 1)
+        def expense = household.account {
+            name input.name
+            classify AccountKind.EXPENSE, new AccountTag('cashle.household.economic-nature', 1, 'expense.consumption.consumer-budget', [AccountKind.EXPENSE] as Set)
+        }
+        requiredExpense('budget') {
+            on monthlyFromPlanStart
+            destination expense
+            amount {
+                int adultCount = life.count { def death = it.get(); death == null || today.isBefore(death) }
+                if (adultCount == 0) return 0d
+                def currentMonth = YearMonth.from(today)
+                def minor = children.collect { [age:ChronoUnit.MONTHS.between(it.birth, currentMonth), share:it.share] }
+                    .findAll { it.age >= 0 && it.age < 216 }
+                double total = adultCount == 2 ? 13360d : 7880d
+                for (def child : minor) {
+                    double rate = child.age < 24 ? 2150d : child.age < 84 ? 2740d : 3950d
+                    total += rate * child.share
+                }
+                total * factor * inflationFactor(reference, today)
+            }
+        }
+    }
+}
