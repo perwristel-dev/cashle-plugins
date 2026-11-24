@@ -3,7 +3,8 @@
 Ange depåvärde och planerat sparande i en svensk kapitalförsäkring. Uttag
 utlöser ingen separat kapitalvinstskatt. Försäkringsbolagets avkastningsskatt
 beräknas på ingångsvärdet och hela premier första halvåret samt halva premier
-andra halvåret. Prognosen bokför försäkringsavgiften vid följande års början.
+andra halvåret. Ange värdet vid årets början om prognosen börjar senare än
+1 januari. Prognosen bokför försäkringsavgiften vid följande års början.
 Historiska insättningar utan datum räknas till hälften. Börja prognosen den
 1 januari när hela årets premieflöden ska bedömas i detalj.
 

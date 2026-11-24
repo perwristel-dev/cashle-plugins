@@ -10,6 +10,7 @@ investmentAccount('cashlab.se-capital-insurance', 1) {
     kind 'SEcapitalInsurance'
     taxPolicy 'domestic-capital-insurance'
     messages 'insurance.messages'
+    supportsUnpaidBankTax true
 }
 
 accountTaxPolicy('domestic-capital-insurance') {
