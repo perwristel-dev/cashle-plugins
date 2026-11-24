@@ -1,0 +1,104 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.sdk.model.ScheduleSpec
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.MonthDay
+
+final class FinnishTransferDuty {
+    static final LocalDate FROM = LocalDate.of(2024, 1, 1)
+    static final List<String> KINDS = ['existing-shares-broker', 'existing-shares-private', 'new-housing-shares', 'real-estate'].asImmutable()
+
+    static LocalDate parse(Object value) {
+        if (!(value instanceof String) || value.isBlank()) return null
+        try {
+            LocalDate.parse(value)
+        } catch (java.time.DateTimeException ignored) {
+            null
+        }
+    }
+
+    static LocalDate easter(int year) {
+        int a = year % 19
+        int b = year.intdiv(100)
+        int c = year % 100
+        int h = (19 * a + b - b.intdiv(4) - (b - (b + 8).intdiv(25) + 1).intdiv(3) + 15) % 30
+        int l = (32 + 2 * (b % 4) + 2 * c.intdiv(4) - h - (c % 4)) % 7
+        int day = h + l - 7 * (a + 11 * h + 22 * l).intdiv(451) + 114
+        LocalDate.of(year, day.intdiv(31), day % 31 + 1)
+    }
+
+    static boolean businessDay(LocalDate date) {
+        if (date.dayOfWeek in [DayOfWeek.SATURDAY, DayOfWeek.SUNDAY]) return false
+        if (MonthDay.from(date) in [MonthDay.of(1, 1), MonthDay.of(1, 6), MonthDay.of(5, 1),
+            MonthDay.of(12, 6), MonthDay.of(12, 24), MonthDay.of(12, 25), MonthDay.of(12, 26)]) return false
+        if (date.monthValue == 6 && date.dayOfWeek == DayOfWeek.FRIDAY && date.dayOfMonth in 19..25) return false
+        LocalDate easter = easter(date.year)
+        !(date in [easter.minusDays(2), easter.plusDays(1), easter.plusDays(39)])
+    }
+
+    static LocalDate monthDeadline(LocalDate reference, int months) {
+        LocalDate due = reference.plusMonths(months)
+        while (!businessDay(due)) due = due.plusDays(1)
+        due
+    }
+
+    static boolean money(Object value) {
+        value instanceof Number && Double.isFinite(value.doubleValue()) && value >= 0d
+    }
+}
+
+financeModule('cashlab.finnish-transfer-tax', 1) {
+    pluginId 'cashle.finance.transfer-tax.fi'
+    messages 'finnish.transfer.messages'
+    dsl('finnishTransferTax') { id ->
+        [name: id, property: 'existing-shares-broker', deedDate: '', ownershipDate: '', paymentDate: '',
+         purchasePrice: 0d, companyDebt: 0d, buyerShare: 100d]
+    }
+
+    calculation {
+        if (!enabled) return
+        requireInput('invalid.name') { input.name instanceof String && !input.name.isBlank() && input.name.trim().length() <= 80 }
+        requireInput('invalid.kind') { input.property in FinnishTransferDuty.KINDS }
+        boolean land = input.property == 'real-estate'
+        boolean newShares = input.property == 'new-housing-shares'
+        boolean brokered = input.property == 'existing-shares-broker'
+        LocalDate deed = FinnishTransferDuty.parse(input.deedDate)
+        LocalDate ownership = FinnishTransferDuty.parse(input.ownershipDate)
+        LocalDate chosen = FinnishTransferDuty.parse(input.paymentDate)
+        requireInput('invalid.deed') { deed != null && !deed.isBefore(FinnishTransferDuty.FROM) }
+        requireInput('invalid.ownership') { !newShares || (ownership != null && !ownership.isBefore(deed)) }
+        requireInput('invalid.amount') {
+            FinnishTransferDuty.money(input.purchasePrice) && input.purchasePrice > 0d &&
+                (land || FinnishTransferDuty.money(input.companyDebt)) && FinnishTransferDuty.money(input.buyerShare) &&
+                input.buyerShare > 0d && input.buyerShare <= 100d
+        }
+
+        LocalDate reference = newShares ? ownership : deed
+        LocalDate deadline = brokered ? deed : FinnishTransferDuty.monthDeadline(reference, land ? 6 : 2)
+        requireInput('invalid.payment') {
+            !input.paymentDate || (chosen != null && !chosen.isBefore(reference) && !chosen.isAfter(deadline))
+        }
+        // Real-estate tax must also be paid before the title application. Use
+        // signing when its earlier payment date has not been entered.
+        LocalDate paid = chosen ?: (land ? deed : deadline)
+        if (paid.isBefore(planStart.anchor())) return
+
+        BigDecimal price = new BigDecimal(input.purchasePrice.toString())
+        BigDecimal debt = land ? 0G : new BigDecimal(input.companyDebt.toString())
+        BigDecimal factor = (land ? 0.03G : 0.015G) * new BigDecimal(input.buyerShare.toString()) / 100G
+        BigDecimal tax = ((price + debt) * factor).setScale(2, java.math.RoundingMode.HALF_UP)
+        if (tax < 10G) return
+        double fx = exchangeRate('EUR', profile.currency ?: 'EUR')
+        def expense = household.account {
+            name input.name
+            classify AccountKind.EXPENSE, new AccountTag('cashle.household.economic-nature', 1, 'expense.other', [AccountKind.EXPENSE] as Set)
+        }
+        requiredExpense('transfer') {
+            on ScheduleSpec.on(paid)
+            destination expense
+            amount { tax.doubleValue() * fx }
+            savings 'transfer'
+        }
+    }
+}
