@@ -5,7 +5,7 @@ export default function (context) {
     modules: [context.investmentAccount({
       type: 'cashlab.isk', kind: 'SEisk', country: 'SE', label: 'Investeringssparkonto (ISK)',
       translations: context.translations,
-      advisorHelp: 'Sverige 2025: schablonbeskattning med kvartalsvärden och insättningar. Grundnivån 150 000 SEK delas per person mellan ISK, kapitalförsäkring och PEPP; den gäller inte separat för varje konto.',
+      advisorHelp: 'Schablonbeskattning med kvartalsvärden och insättningar. Grundnivån 300 000 SEK från 2026 delas per person mellan ISK, kapitalförsäkring och PEPP; den gäller inte separat för varje konto.',
       features: { inlineGrowth: true, quarterOpeningValues: true },
       emigrationSettings: {
         defaultOptions: { securitiesClassification: 'excluded', securitiesTreatyExemptionConfirmed: false, treatyCouponRate: .30 },

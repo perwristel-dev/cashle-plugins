@@ -1,0 +1,20 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.tax'
+    id 'cashle.tax.se' from 'swedish-tax.cashlec'
+    id 'cashle.finance.se-capital-insurance' from '../swedish-capital-insurance.cashle'
+    id 'cashle.finance.se-capital-insurance.policy' from '../swedish-capital-insurance.cashle'
+}
+finance {
+    plan { from '2026-01-01'; until '2027-07-01'; currency 'SEK'; inflation 0d }
+    person('self') { birthYear 1980; birthMonth 1 }
+    tax {
+        country 'SE'; preliminaryRate 0d
+        options([ruleYear:2025, residentMonths:12, municipality:'0180', municipalRate:0.306d,
+            burialFeeRate:0.0007d, communityMember:false])
+    }
+    salary('work') { amount 500000d; frequency 'annual'; taxTreatment 'taxable' }
+    swedishCapitalInsurance('policy') { name 'KF'; balance 200000d; settings([initialYear:[openingValue:200000d, quarterOpeningValues:[200000d,null,null,null]]]) }
+}
+collect {}
