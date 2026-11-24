@@ -1,0 +1,104 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.InvestmentCarry
+import dev.cashle.tax.InvestmentPosition
+import dev.cashle.tax.InvestmentWithdrawalResult
+import dev.cashle.tax.TaxPolicyField
+import dev.cashle.tax.TaxStateField
+import java.time.LocalDate
+import java.time.YearMonth
+
+investmentAccount('cashlab.us-roth-ira', 1) {
+    pluginId 'cashle.finance.us-roth-ira'
+    dsl 'usRothIra'
+    country 'US'
+    kind 'USrothIRA'
+    taxPolicy 'roth-ira'
+    prepaidTax false
+    transfers true
+    defaults([reinvestDividends: true])
+}
+
+accountTaxPolicy('roth-ira') {
+    pluginId 'cashle.finance.us-roth-ira.tax-policy'
+    messages 'us.rothira.Messages'
+    country 'US'
+    ruleYear 2026
+    annualOnly 'cashlab.us-roth-ira'
+    maxAccountsPerPerson 1
+    resetAcquiredDateWhenEmptyDeposit false
+
+    policyFields([
+        firstRothTaxYear: new TaxPolicyField('First Roth contribution tax year', 'number'),
+        openingRoom: new TaxPolicyField('Verified regular contribution room this year', 'number'),
+        recurringRoom: new TaxPolicyField('Verified regular contribution room per later year', 'number')
+    ])
+    stateFields([
+        firstContributionYear: new TaxStateField('First actual regular contribution tax year', false)
+    ])
+
+    def birthMonth = { rules, options ->
+        double year = rules.number(options, 'ownerBirthYear', Double.NaN)
+        double month = rules.number(options, 'ownerBirthMonth', Double.NaN)
+        rules.require(year >= 1900d && year <= 9800d && year == Math.rint(year) &&
+            month >= 1d && month <= 12d && month == Math.rint(month), 'ownerBirth')
+        YearMonth.of((int) year, (int) month)
+    }
+    def firstYear = { rules, options, state, int year ->
+        double entered = rules.number(options, 'firstRothTaxYear', 0d)
+        double first = state.getOrDefault('firstContributionYear', entered)
+        rules.require(first == 0d || (first >= 1998d && first <= year && first == Math.rint(first)), 'firstRothYear')
+        (int) first
+    }
+    def depositRoom = { rules, deposit ->
+        def options = deposit.policyOptions()
+        int year = deposit.date().year
+        def birth = birthMonth(rules, options)
+        double openingYear = rules.number(options, 'openingRoomYear', (double) year)
+        rules.require(openingYear >= 2026d && openingYear <= year && openingYear == Math.rint(openingYear), 'roomYear')
+        boolean startsThisYear = openingYear == year
+        double room = rules.number(options, startsThisYear ? 'openingRoom' : 'recurringRoom', 0d)
+        rules.require(Double.isFinite(room) && room >= 0d, 'room')
+        double creditedLimit = rules.nominal(year - birth.year >= 50 ? 8600d : 7500d, deposit.money())
+        double allowed = Math.min(creditedLimit, startsThisYear ? room : rules.nominal(room, deposit.money()))
+        Math.max(0d, allowed - deposit.grossDeposits())
+    }
+
+    maximumDeposit { deposit -> depositRoom(delegate, deposit) }
+    stateAfterDeposit { deposit ->
+        require(deposit.amount() <= depositRoom(delegate, deposit) + 1e-7d, 'excess')
+        int year = deposit.date().year
+        int first = firstYear(delegate, deposit.policyOptions(), deposit.state(), year)
+        Map.copyOf(deposit.state() + [firstContributionYear: (double) (first == 0 ? year : first)])
+    }
+
+    withdraw { request ->
+        def position = request.position()
+        double amount = request.amount()
+        double basisUsed = Math.min(position.costBasis(), amount)
+        def date = request.date()
+        if (amount > basisUsed + 1e-7d) {
+            require(date != null, 'gainsDate')
+            int first = firstYear(delegate, request.policyOptions(), request.state(), date.year)
+            // Cashle records a birth month. Start with the first complete month at age 59½.
+            def ageDate = birthMonth(delegate, request.policyOptions()).plusMonths(59L * 12L + 7L).atDay(1)
+            require(first != 0 && date >= ageDate && date >= LocalDate.of(first + 5, 1, 1), 'unqualified')
+        }
+        new InvestmentWithdrawalResult(new InvestmentPosition(
+            Math.max(0d, position.marketValue() - amount), request.closeAccount() ? 0d : position.costBasis() - basisUsed, 0d),
+            0d, 0d, 0d)
+    }
+
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        require(accounts.size() <= 1, 'aggregate')
+        def carry = [:]
+        for (def account in accounts) {
+            require(account.distributedDividends() == 0d, 'reinvest')
+            birthMonth(delegate, account.policyOptions())
+            int first = firstYear(delegate, account.policyOptions(), account.state(), money.assessmentYear())
+            require(account.openingValue() == 0d || first != 0, 'firstRothYear')
+            carry[account.id()] = new InvestmentCarry(0d, 0d, account.state())
+        }
+        new InvestmentAnnualAssessment([:], 0d, carry)
+    }
+}

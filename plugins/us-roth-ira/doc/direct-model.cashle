@@ -1,0 +1,28 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.us-roth-ira' from '../us-roth-ira.cashle'
+    id 'cashle.finance.us-roth-ira.tax-policy' from '../us-roth-ira.cashle'
+    id 'cashle.tax.us' from '../../us-tax/us-tax.cashle'
+}
+
+finance {
+    language 'en'
+    plan { from '2026-01-01'; until '2027-01-01'; currency 'USD'; inflation 0d }
+    person('self') { birthYear 1966; birthMonth 1 }
+    tax {
+        country 'US'
+        preliminaryRate 0d
+        options([ruleYear: 2026, residency: 'full-year', state: 'TX', filingStatus: 'single',
+            openingShortTermCapitalLoss: 0d, openingLongTermCapitalLoss: 0d])
+    }
+    usRothIra('roth') {
+        name 'Roth IRA'
+        balance 15000d
+        settings([costBasis:10000d, closeEnabled:true, closeDate:'2026-10-01',
+            policyOptions:[firstRothTaxYear:2021, ownerBirthYear:1966, ownerBirthMonth:1],
+            initialYear:[quarterOpeningValues:[null, null, null, null]]])
+    }
+}
+collect {}

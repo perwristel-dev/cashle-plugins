@@ -1,0 +1,13 @@
+{
+  "label": "US Roth IRA",
+  "help": "Enter the remaining regular contributions as cost basis, separate from the market value. Use one combined Roth IRA per person. Regular contributions come out first. Earnings withdrawals require both the five-tax-year period and age 59½.",
+  "firstRothTaxYear": "First Roth IRA contribution tax year",
+  "firstYearHelp": "Use the earliest regular contribution tax year across all your Roth IRAs. Enter zero for a new account with no prior contributions.",
+  "openingRoom": "Verified contribution room this year (USD)",
+  "roomHelp": "Subtract contributions to other IRAs. Include any amounts you enter as this Roth IRA’s year-to-date deposits.",
+  "recurringRoom": "Expected permitted contributions in later years (USD)",
+  "recurringHelp": "Keep this at zero unless you expect to qualify for regular contributions in later years.",
+  "invalidOwner": "Enter the Roth IRA owner's birth year and month.",
+  "invalidFirstYear": "Enter a valid first Roth IRA contribution tax year for this balance.",
+  "invalidRoom": "The new Roth IRA deposit exceeds the verified remaining contribution room."
+}

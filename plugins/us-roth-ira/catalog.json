@@ -1,0 +1,16 @@
+{
+  "name": "Roth IRA",
+  "names": {
+    "en": "US Roth IRA",
+    "sv": "Amerikansk Roth IRA"
+  },
+  "description": {
+    "en": "A U.S. Roth retirement account with contribution-first withdrawals and qualified earnings.",
+    "sv": "Amerikanskt Roth-pensionskonto med uttag av insättningar först och skattefri kvalificerad avkastning."
+  },
+  "country": "US",
+  "category": "accounts",
+  "releases": [
+    "85c1148cff07638d74169f645e4c52e6940d2ff01cb88f35ee5944cdca9f2ea3"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "id": "cashle.finance.us-roth-ira",
+  "requires": ["cashle.finance", "cashle.account.support", "cashle.account.tax.support"],
+  "sources": [{
+    "path": "us-roth-ira.cashle",
+    "providers": ["cashle.finance.us-roth-ira", "cashle.finance.us-roth-ira.tax-policy"],
+    "resources": ["us/rothira/Messages_en.properties", "us/rothira/Messages_sv.properties"]
+  }],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {"locale": "en", "path": "ui/en.json"},
+    {"locale": "sv", "path": "ui/sv.json"}
+  ]
+}
