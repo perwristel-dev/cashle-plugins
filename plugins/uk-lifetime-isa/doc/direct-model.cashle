@@ -1,0 +1,17 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.gb-lifetime-isa' from '../lifetime-isa.cashle'
+}
+finance {
+    language 'en'
+    plan { from '2026-04-06'; until '2026-12-01'; currency 'GBP'; inflation 0d }
+    person('self') { birthYear 1992; birthMonth 5 }
+    salary('Payroll') { amount 2_000d; frequency 'monthly' }
+    lifetimeIsa('Lifetime ISA') {
+        settings([firstPaymentDate: '2025-04-06', monthlyDeposit: 1_500d, withdrawalReason: 'first-home',
+                  withdrawalDate: '2026-11-06', homePrice: 500_000d])
+    }
+}
+collect { }

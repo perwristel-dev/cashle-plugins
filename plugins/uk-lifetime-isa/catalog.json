@@ -1,0 +1,16 @@
+{
+  "name": "Lifetime ISA",
+  "names": {
+    "en": "Lifetime ISA",
+    "sv": "Lifetime ISA"
+  },
+  "description": {
+    "en": "UK Lifetime ISA deposits, government bonus and withdrawal charges.",
+    "sv": "Insättningar, statsbonus och uttagsavgifter för brittiskt Lifetime ISA."
+  },
+  "country": "GB",
+  "category": "accounts",
+  "releases": [
+    "09e3eaad5642ea7e7e1b6fcfe46a9da8c766b57be4bcfaddc8ac2d39e80c7978"
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "id": "cashle.finance.gb-lifetime-isa",
+  "requires": [
+    "cashle.finance"
+  ],
+  "ui": "ui.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui-en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui-sv.json"
+    }
+  ],
+  "sources": [
+    {
+      "path": "lifetime-isa.cashle",
+      "resources": [
+        "british/lifetimeisa/messages_en.properties",
+        "british/lifetimeisa/messages_sv.properties"
+      ]
+    }
+  ]
+}

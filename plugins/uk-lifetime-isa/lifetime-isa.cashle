@@ -1,0 +1,233 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
+import dev.cashle.core.i18n.Messages
+import dev.cashle.sdk.composition.ModuleContext
+import dev.cashle.sdk.composition.ModuleInput
+import dev.cashle.sdk.finance.FinanceContext
+import dev.cashle.sdk.finance.FinanceModule
+import dev.cashle.sdk.finance.FundingPort
+import dev.cashle.sdk.finance.FundingSchedule
+import dev.cashle.sdk.finance.MetricsPort
+import dev.cashle.sdk.model.AccountHandle
+import dev.cashle.sdk.model.FlowHandle
+import dev.cashle.sdk.model.ScheduleSpec
+import dev.cashle.sdk.model.Variable
+import java.math.RoundingMode
+import java.time.DateTimeException
+import java.time.LocalDate
+import java.time.YearMonth
+import java.util.function.Supplier
+
+financeModule('cashlab.gb-lifetime-isa', 1) {
+    pluginId 'cashle.finance.gb-lifetime-isa'
+    dsl('lifetimeIsa') { id ->
+        [name: id, owner: 'self', openingBalance: 0d, monthlyDeposit: 0d, subscribedThisYear: 0d,
+         otherIsaAnnual: 0d, annualReturn: 0d, withdrawalReason: 'none', withdrawalGross: 0d]
+    }
+    factory { ModuleInput entry -> new LifetimeIsa(entry) }
+}
+
+final class LifetimeIsa implements FinanceModule {
+    private static final String OWNER_ROLE = 'cashle.finance.gb-lifetime-isa.owner.v1'
+    private static final LocalDate INTRODUCED = LocalDate.of(2017, 4, 6)
+    private static final LocalDate LOWER_HOMEBUYER_CHARGE = LocalDate.of(2026, 10, 29)
+    private static final double LISA_LIMIT = 4_000d
+    private static final double ISA_LIMIT = 20_000d
+    private static final double BONUS = 0.25d
+    private static final double HOME_LIMIT = 450_000d
+    private final ModuleInput entry
+    private String ownerId
+    private Messages messages
+    private FinanceContext context
+    private AccountHandle capital, equity, contributionClearing, chargeExpense
+    private FlowHandle withdrawal
+    private FundingSchedule deposits
+    private Variable balance, year, grossSubscriptions, closed, firstActualPayment
+    private Supplier<LocalDate> death
+    private LocalDate birth, firstPayment, contributionUntil
+    private double fx, monthlyDeposit, otherIsaAnnual
+
+    LifetimeIsa(ModuleInput entry) { this.entry = entry }
+
+    @Override void declare(ModuleContext ignored) {}
+
+    @Override void declareFinance(FinanceContext context) {
+        if (!entry.enabled()) return
+        def data = entry.data()
+        ownerId = data.owner ?: 'self'
+        messages = context.messages(LifetimeIsa, 'british.lifetimeisa.messages')
+        def person = context.profile().people.find { it.id == ownerId && it.id != 'joint' }
+        require(whole(person?.birthYear, 1900, 2300) && whole(person?.birthMonth, 1, 12), 'invalid.owner')
+        YearMonth birthMonth = YearMonth.of(person.birthYear.intValue(), person.birthMonth.intValue())
+        def birthDay = data.birthDay
+        require(birthDay == null || birthDay == '' || whole(birthDay, 1, birthMonth.lengthOfMonth()), 'invalid.owner')
+        birth = birthDay == null || birthDay == '' ? birthMonth.atEndOfMonth() : birthMonth.atDay(birthDay.intValue())
+        AccountOwner first = context.ownerScope(OWNER_ROLE, ownerId, AccountOwner, { new AccountOwner(entry.id()) })
+        require(first.moduleId == entry.id(), 'invalid.duplicate')
+        def owner = context.owner(ownerId)
+        String name = data.name instanceof String && !data.name.isBlank() ? data.name : messages.text('name')
+        capital = owner.account().classify(AccountKind.ASSET,
+            new AccountTag('cashle.household.economic-nature', 1, 'asset.financial.investment', Set.of(AccountKind.ASSET)))
+        capital.setName(name)
+        capital.addReportingRole(ReportingRole.SAVINGS)
+        equity = owner.account()
+        equity.setKind(AccountKind.EQUITY)
+        equity.setName(name + ' – ' + messages.text('equity'))
+        contributionClearing = owner.account()
+        contributionClearing.setKind(AccountKind.EQUITY)
+        contributionClearing.setName(name + ' – ' + messages.text('deposit'))
+        require(data.withdrawalReason in ['none', 'ordinary', 'first-home', 'terminal'], 'invalid.withdrawal')
+        if (data.withdrawalReason in ['ordinary', 'first-home']) {
+            chargeExpense = owner.account()
+            chargeExpense.setKind(AccountKind.EXPENSE)
+            chargeExpense.setName(name + ' – ' + messages.text('charge'))
+        }
+    }
+
+    @Override void wireFinance(FinanceContext context) {
+        if (capital == null) return
+        this.context = context
+        def data = entry.data()
+        def model = context.model()
+        def clock = model.clock()
+        LocalDate from = context.from()
+        LocalDate until = context.until()
+        death = context.lifeEnd(ownerId)
+        fx = context.exchangeRate('GBP', context.profile().currency ?: 'GBP')
+        firstPayment = date(data.firstPaymentDate, 'invalid.firstPayment')
+        require(firstPayment >= INTRODUCED && firstPayment >= birth.plusYears(18) && firstPayment < birth.plusYears(40),
+            'invalid.firstPayment')
+        contributionUntil = date(data.contributionUntil, 'invalid.contribution', true)
+        require(contributionUntil == null || contributionUntil > firstPayment, 'invalid.contribution')
+        double opening = number(data.openingBalance, 0d, Double.MAX_VALUE, 'invalid.amount')
+        double previous = number(data.subscribedThisYear, 0d, LISA_LIMIT, 'invalid.subscription')
+        otherIsaAnnual = number(data.otherIsaAnnual, 0d, ISA_LIMIT, 'invalid.subscription')
+        require(previous + otherIsaAnnual <= ISA_LIMIT && (firstPayment < from || (opening == 0d && previous == 0d)),
+            'invalid.subscription')
+        monthlyDeposit = number(data.monthlyDeposit, 0d, LISA_LIMIT, 'invalid.contribution')
+        double monthlyGrowth = Math.pow(1d + number(data.annualReturn, -99d, 100d, 'invalid.return') / 100d, 1d / 12d)
+        balance = model.variable(opening)
+        year = model.variable(taxYear(from))
+        grossSubscriptions = model.variable(previous)
+        closed = model.variable(0d)
+        firstActualPayment = model.variable(firstPayment < from ? firstPayment.toEpochDay() : 0d)
+        model.valueAccount(capital, equity, { balance.value * fx })
+
+        if (monthlyGrowth != 1d) {
+            ScheduleSpec monthEnds = ScheduleSpec.every(Frequency.MONTH, from.withDayOfMonth(1)).atMonthEnd().within(from, until)
+            model.action(monthEnds, {
+                if (alive(clock.date) && closed.value == 0d) balance.value *= monthlyGrowth
+            })
+        }
+        if (monthlyDeposit > 0d) {
+            LocalDate start = firstPayment < from ? from : firstPayment
+            deposits = FundingSchedule.fixed(ScheduleSpec.every(Frequency.MONTH, start).within(from, until))
+            model.beforeBalanceChange(contributionClearing, { double delta ->
+                if (delta <= 0d) return
+                LocalDate payment = clock.date
+                double amount = rounded(delta / fx, 1d, RoundingMode.HALF_UP)
+                if (amount == 0d) return
+                if (firstActualPayment.value == 0d) firstActualPayment.value = payment.toEpochDay()
+                if (year.value != taxYear(payment)) {
+                    year.value = taxYear(payment)
+                    grossSubscriptions.value = 0d
+                }
+                grossSubscriptions.value += amount
+                balance.value += amount + rounded(amount, BONUS, RoundingMode.UP)
+            })
+        }
+
+        String reason = data.withdrawalReason
+        if (reason == 'none') return
+        LocalDate withdrawalDate = date(data.withdrawalDate, 'invalid.withdrawal')
+        require(withdrawalDate >= from && withdrawalDate < until && withdrawalDate >= firstPayment, 'invalid.withdrawal')
+        double withdrawalGross = number(data.withdrawalGross, 0d, Double.MAX_VALUE, 'invalid.amount')
+        double homePrice = reason == 'first-home' ? number(data.homePrice, 0.01d, Double.MAX_VALUE, 'invalid.home') : 0d
+        require(reason != 'first-home' || withdrawalDate >= firstPayment.plusYears(1), 'invalid.seasoning')
+        def netCash = model.variable(0d)
+        def charge = model.variable(0d)
+        ScheduleSpec withdrawalDay = ScheduleSpec.on(withdrawalDate)
+        def calculate = model.action(withdrawalDay, {
+            if (!alive(clock.date)) return
+            double gross = withdrawalGross == 0d ? balance.value : Math.min(withdrawalGross, balance.value)
+            balance.value -= gross
+            if (withdrawalGross == 0d) closed.value = 1d
+            double rate = chargeRate(withdrawalDate, reason, homePrice)
+            charge.value = rounded(gross, rate, RoundingMode.DOWN)
+            netCash.value = gross - charge.value
+        })
+        withdrawal = model.flow(withdrawalDay, context.cash(), equity, { netCash.value * fx }, calculate)
+        if (chargeExpense != null) model.flow(withdrawalDay, chargeExpense, equity, { charge.value * fx }, calculate)
+    }
+
+    @Override void funding(FundingPort port) {
+        if (deposits != null) {
+            port.requiredExpenseWithSavings(entry.id() + ':subscription', FundingPort.CASH, contributionClearing,
+                { contribution(context.model().clock().date) * fx }, deposits, { true }, { 0d }, null,
+                false, false, { false }, { monthlyDeposit * fx }, '', false)
+        }
+        if (withdrawal != null) port.eventFlow(withdrawal, { false })
+    }
+
+    @Override void metrics(MetricsPort port) {
+        if (capital != null) port.balance(capital, { balance.value * fx })
+        if (chargeExpense != null) port.spending(chargeExpense, { 0d }, { true })
+    }
+
+    private double contribution(LocalDate day) {
+        if (!alive(day) || closed.value != 0d || day >= birth.plusYears(50) ||
+            (contributionUntil != null && day >= contributionUntil)) return 0d
+        double used = year.value == taxYear(day) ? grossSubscriptions.value : 0d
+        Math.max(0d, Math.min(monthlyDeposit, Math.min(LISA_LIMIT, ISA_LIMIT - otherIsaAnnual) - used))
+    }
+
+    private double chargeRate(LocalDate day, String reason, double homePrice) {
+        if (day >= birth.plusYears(60) || reason == 'terminal') return 0d
+        if (reason == 'first-home' && firstActualPayment.value != 0d &&
+                day >= LocalDate.ofEpochDay((long) firstActualPayment.value).plusYears(1)) {
+            if (homePrice <= HOME_LIMIT) return 0d
+            if (day >= LOWER_HOMEBUYER_CHARGE) return 0.20d
+        }
+        0.25d
+    }
+
+    private boolean alive(LocalDate day) {
+        LocalDate end = death.get()
+        end == null || day < end
+    }
+
+    private static int taxYear(LocalDate day) {
+        int year = day.year
+        day < LocalDate.of(year, 4, 6) ? year - 1 : year
+    }
+
+    private static double rounded(double amount, double factor, RoundingMode mode) {
+        BigDecimal.valueOf(amount).multiply(BigDecimal.valueOf(factor)).setScale(2, mode).doubleValue()
+    }
+
+    private static boolean whole(Object value, int min, int max) {
+        value instanceof Number && value.doubleValue() >= min && value.doubleValue() <= max && value.doubleValue() == value.intValue()
+    }
+
+    private LocalDate date(Object value, String key, boolean optional = false) {
+        if (optional && (value == null || value == '')) return null
+        require(value instanceof String, key)
+        try { LocalDate.parse(value) } catch (DateTimeException ignored) { throw new IllegalArgumentException(messages.text(key)) }
+    }
+
+    private double number(Object value, double min, double max, String key) {
+        require(value instanceof Number && Double.isFinite(value.doubleValue()) && value.doubleValue() >= min && value.doubleValue() <= max, key)
+        value.doubleValue()
+    }
+
+    private void require(boolean valid, String key) {
+        if (!valid) throw new IllegalArgumentException(messages.text(key))
+    }
+
+    private static final class AccountOwner {
+        final String moduleId
+        AccountOwner(String moduleId) { this.moduleId = moduleId }
+    }
+}
