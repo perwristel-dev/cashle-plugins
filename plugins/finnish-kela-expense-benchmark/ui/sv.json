@@ -1,0 +1,7 @@
+{
+  "label": "FPA:s referens för nödvändiga utgifter",
+  "description": "Finländsk referens för nödvändiga vardagsutgifter enligt FPA:s grunddel från mars 2026.",
+  "name": "Namn",
+  "adjustment": "Justering från referensbeloppet",
+  "summary": "Nödvändiga månadsutgifter utanför boende"
+}

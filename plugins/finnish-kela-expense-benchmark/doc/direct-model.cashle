@@ -1,0 +1,12 @@
+plugins {
+    id 'cashle.finance'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.budget.fi.kela' from '../finnish-kela-expense-benchmark.cashle'
+}
+finance {
+    plan { from '2026-06-01'; until '2026-08-01'; currency 'EUR'; inflation 0d }
+    person('self') { birthYear 1990; birthMonth 6 }
+    income 'Example income', 50000d
+    finnishKelaExpenseBenchmark('Reference') { }
+}
+collect {}

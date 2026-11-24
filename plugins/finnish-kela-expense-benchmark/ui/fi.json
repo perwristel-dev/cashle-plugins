@@ -1,0 +1,7 @@
+{
+  "label": "Kelan välttämättömien menojen viitebudjetti",
+  "description": "Kelan maaliskuun 2026 perusosan mukaiset välttämättömät arjen menot.",
+  "name": "Nimi",
+  "adjustment": "Poikkeama viitebudjetista",
+  "summary": "Välttämättömät kuukausimenot ilman asumista"
+}
