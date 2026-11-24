@@ -1,0 +1,144 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
+import dev.cashle.sdk.model.ScheduleSpec
+
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.temporal.ChronoUnit
+import java.util.function.Supplier
+
+final class AgircArrcoRules {
+    static final LocalDate UNIFIED_START = LocalDate.of(2019, 1, 1)
+    static final LocalDate LAST_VALUE_CHANGE = LocalDate.of(2026, 11, 1)
+    static final List<Double> SERVICE_VALUE = [1.2588d, 1.2714d, 1.2714d, 1.2841d, 1.3498d,
+        1.4159d, 1.4386d, 1.4386d, 1.4587d].asImmutable()
+    static final double ANNUAL_CEILING = 48_060d
+    static final double PURCHASE_PRICE = 20.1877d
+
+    static LocalDate monthStart(LocalDate date) {
+        date.dayOfMonth == 1 ? date : date.withDayOfMonth(1).plusMonths(1)
+    }
+
+    static LocalDate later(LocalDate first, LocalDate second) {
+        first.isAfter(second) ? first : second
+    }
+
+    static boolean nonnegative(Object value) {
+        value instanceof Number && Double.isFinite(value.doubleValue()) && value >= 0d
+    }
+
+    static double pointValue(LocalDate date) {
+        int index = date.year - 2019 + (date.monthValue >= 11 ? 1 : 0)
+        SERVICE_VALUE[Math.min(index, SERVICE_VALUE.size() - 1)]
+    }
+
+    static double pointsForYear(double salary) {
+        double tierOne = Math.min(salary, ANNUAL_CEILING)
+        double tierTwo = Math.max(0d, Math.min(salary, 8d * ANNUAL_CEILING) - ANNUAL_CEILING)
+        (0.062d * tierOne + 0.17d * tierTwo) / PURCHASE_PRICE
+    }
+
+    static double independentClaimFactor(LocalDate earliestAt57, LocalDate claim) {
+        long quartersAfter57 = ChronoUnit.MONTHS.between(earliestAt57, claim).intdiv(3)
+        if (quartersAfter57 <= 20) return 0.43d + 0.0175d * quartersAfter57
+        if (quartersAfter57 <= 28) return 0.78d + 0.0125d * (quartersAfter57 - 20)
+        Math.min(1d, 0.88d + 0.01d * (quartersAfter57 - 28))
+    }
+}
+
+financeModule('cashlab.french-agirc-arrco-pension', 1) {
+    pluginId 'cashle.finance.pension.occupational.fr.agirc-arrco'
+    messages 'agircarrco.Messages'
+    dsl('frenchAgircArrcoPension') { id ->
+        [name:id, owner:'self', basis:'points', points:0d, annualSalary:0d,
+            claimRoute:'full', bornOnFirst:false, monthlyQuote:0d, quoteDate:'',
+            payoutStart:[reference:'minimum', offset:0]]
+    }
+
+    calculation {
+        if (!enabled) return
+        String ownerId = input.owner ?: 'self'
+        def person = profile.people.find { row -> row.id == ownerId }
+        requireInput('owner') {
+            person?.birthYear instanceof Number && person.birthYear >= 1955 &&
+                person.birthMonth instanceof Number && person.birthMonth in 1..12
+        }
+        requireInput('basis') { input.basis in ['points', 'quote'] }
+
+        LocalDate birth = LocalDate.of(person.birthYear.intValue(), person.birthMonth.intValue(),
+            input.bornOnFirst == true ? 1 : 2)
+        LocalDate age57 = AgircArrcoRules.monthStart(birth.plusYears(57))
+        LocalDate earliest
+        boolean fromPoints = input.basis == 'points'
+        double openingPoints = 0d
+        double annualPoints = 0d
+        double monthlyQuote = 0d
+        if (fromPoints) {
+            requireInput('points') {
+                AgircArrcoRules.nonnegative(input.points) && AgircArrcoRules.nonnegative(input.annualSalary)
+            }
+            requireInput('route') { input.claimRoute in ['full', 'reduced'] }
+            earliest = input.claimRoute == 'full' ? AgircArrcoRules.monthStart(birth.plusYears(67)) : age57
+            earliest = AgircArrcoRules.later(AgircArrcoRules.UNIFIED_START, earliest)
+            openingPoints = input.points.doubleValue()
+            annualPoints = AgircArrcoRules.pointsForYear(input.annualSalary.doubleValue())
+        } else {
+            requireInput('quote') { AgircArrcoRules.nonnegative(input.monthlyQuote) }
+            requireInput('quoteDate') { input.quoteDate instanceof String && input.quoteDate.matches('[0-9]{4}-[0-9]{2}-01') }
+            try {
+                earliest = LocalDate.parse(input.quoteDate)
+            } catch (java.time.format.DateTimeParseException ignored) {
+                throw new IllegalArgumentException(text('quoteDate'))
+            }
+            requireInput('quoteDate') { !earliest.isBefore(AgircArrcoRules.monthStart(birth.plusYears(55))) }
+            monthlyQuote = input.monthlyQuote.doubleValue()
+        }
+
+        LocalDate planDate = planStart.anchor()
+        LocalDate firstWorkMonth = AgircArrcoRules.monthStart(planDate)
+        LocalDate knownValueDate = AgircArrcoRules.later(planDate, AgircArrcoRules.LAST_VALUE_CHANGE)
+        Map time = (Map) input.payoutStart
+        int offset = ((Number) time.getOrDefault('offset', 0)).intValue()
+        Supplier<LocalDate> requested
+        if (time.reference == 'minimum') requested = { earliest.plusMonths(offset) }
+        else if (time.reference == 'age') requested = { birth.plusYears(time.age.intValue()).plusMonths(offset) }
+        else if (time.reference == 'date') requested = { LocalDate.of(time.year.intValue(), time.month.intValue(),
+            ((Number) time.getOrDefault('day', 1)).intValue()).plusMonths(offset) }
+        else if (time.reference == 'retirement') requested = milestone('retirement:' + (time.personId ?: ownerId), offset)
+        else if (time.reference == 'milestone') requested = milestone(time.milestoneId, offset)
+        else requested = { planDate.plusMonths(offset) }
+
+        String monthlyOnly = text('monthlyOnly')
+        double fx = exchangeRate('EUR', profile.currency ?: 'EUR')
+        def pension = owner(ownerId).account {
+            name input.name
+            classify AccountKind.INCOME, new AccountTag('cashle.household.economic-nature', 1,
+                'income.pension.occupational', [AccountKind.INCOME] as Set)
+            reportingRole ReportingRole.INCOME
+        }
+        taxableReceipt(ownerId, 'pension', 'monthly') {
+            on ScheduleSpec.every(Frequency.MONTH, AgircArrcoRules.monthStart(AgircArrcoRules.later(planDate, earliest)))
+            until deathOf(ownerId)
+            debit cash
+            credit pension
+            amount {
+                LocalDate claim = requested.get()
+                if (claim == null) return 0d
+                LocalDate start = AgircArrcoRules.later(earliest, AgircArrcoRules.monthStart(claim))
+                if (today.isBefore(start)) return 0d
+                if (!fromPoints) return monthlyQuote * fx * inflationFactor(planDate, today)
+
+                long workMonths = Math.max(0L, ChronoUnit.MONTHS.between(firstWorkMonth, start))
+                double factor = AgircArrcoRules.independentClaimFactor(age57, start)
+                double effectivePoints = (openingPoints + workMonths * annualPoints / 12d) * factor
+                if (effectivePoints > 0d && effectivePoints < 200d) {
+                    throw new IllegalArgumentException(monthlyOnly)
+                }
+                double index = today.isAfter(knownValueDate) ? inflationFactor(knownValueDate, today) : 1d
+                effectivePoints * AgircArrcoRules.pointValue(today) * fx * index / 12d
+            }
+        }
+    }
+}

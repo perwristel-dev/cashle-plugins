@@ -1,0 +1,17 @@
+{
+  "name": "Retraite complémentaire Agirc-Arrco",
+  "names": {
+    "en": "Agirc-Arrco supplementary pension",
+    "sv": "Agirc-Arrco – fransk tjänstepension"
+  },
+  "description": {
+    "fr": "Projetez la retraite complémentaire des salariés du privé à partir des points Agirc-Arrco ou d’une estimation mensuelle officielle.",
+    "en": "Project the private-sector supplementary pension from Agirc-Arrco points or an official monthly quote.",
+    "sv": "Prognostisera fransk tjänstepension för privatanställda utifrån Agirc-Arrco-poäng eller ett officiellt månadsbelopp."
+  },
+  "category": "accounts",
+  "country": "FR",
+  "releases": [
+    "3f6824638b6bfcf3222bf33374508df23a72a4f095ab76fd3462f88da5d1a2fe"
+  ]
+}
