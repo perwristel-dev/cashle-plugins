@@ -1,0 +1,8 @@
+{
+  "label": "SIFO household reference budget",
+  "description": "Reference costs for everyday consumption in Norway, based on SIFO 2026.",
+  "name": "Name",
+  "adjustment": "Adjustment from reference amount",
+  "summary": "Monthly expenses using SIFO 2026",
+  "transport": "Include Oslo public transport"
+}
