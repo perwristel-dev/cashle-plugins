@@ -1,0 +1,92 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.i18n.Messages
+import dev.cashle.sdk.composition.ModuleContext
+import dev.cashle.sdk.composition.ModuleInput
+import dev.cashle.sdk.finance.FinanceContext
+import dev.cashle.sdk.finance.FinanceModule
+import dev.cashle.sdk.finance.FundingPort
+import dev.cashle.sdk.finance.FundingSchedule
+import dev.cashle.sdk.finance.MetricsPort
+import dev.cashle.sdk.model.AccountHandle
+import dev.cashle.sdk.model.ScheduleSpec
+import groovy.transform.CompileStatic
+import java.time.DayOfWeek
+import java.time.LocalDate
+
+financeModule('cashlab.italian-imu', 1) {
+    pluginId 'cashle.finance.expense.it.imu'
+    dsl('italianImu') { String id -> [name: id, taxYear: 2026, repeatThrough: 0, advance: 0d, balance: 0d] }
+    factory { ModuleInput input -> new ItalianImuNotice(input) }
+}
+
+@CompileStatic
+final class ItalianImuNotice implements FinanceModule {
+    private final ModuleInput entry
+    private FinanceContext context
+    private AccountHandle expense
+    private FundingSchedule paymentDates
+    private FundingPort.Savings savings
+    private double advance, balance, fx
+
+    ItalianImuNotice(ModuleInput entry) { this.entry = entry }
+
+    @Override void declare(ModuleContext ignored) {}
+
+    @Override void declareFinance(FinanceContext finance) {
+        context = finance
+        Messages messages = finance.messages(ItalianImuNotice, 'italian.imu.Messages')
+        Map<String, Object> data = entry.data()
+        Number year = validYear(data.get('taxYear'), 2020, messages)
+        Number through = validYear(data.getOrDefault('repeatThrough', 0), 0, messages)
+        if (through.intValue() != 0 && through.intValue() < year.intValue())
+            throw new IllegalArgumentException(messages.text('invalidYears'))
+        advance = amount(data.get('advance'), messages)
+        balance = amount(data.get('balance'), messages)
+        fx = finance.exchangeRate('EUR', Objects.toString(finance.profile().get('currency'), 'EUR'))
+        savings = finance.savingsFunding(data, 'imu')
+        expense = finance.household().account().classify(AccountKind.EXPENSE,
+            new AccountTag('cashle.household.economic-nature', 1, 'expense.housing.property-tax', Set.of(AccountKind.EXPENSE)))
+        expense.setName(Objects.toString(data.get('name'), entry.id()))
+
+        int first = Math.max(year.intValue(), finance.from().getYear())
+        int last = Math.min(through.intValue() == 0 ? year.intValue() : through.intValue(), finance.until().getYear())
+        List<FundingSchedule> dates = new ArrayList<>()
+        for (int paymentYear = first; paymentYear <= last; paymentYear++) {
+            if (advance > 0d) addDate(dates, paymentYear, 6)
+            if (balance > 0d) addDate(dates, paymentYear, 12)
+        }
+        if (!dates.isEmpty()) paymentDates = FundingSchedule.union(dates.toArray(new FundingSchedule[0]))
+    }
+
+    private void addDate(List<FundingSchedule> dates, int year, int month) {
+        LocalDate due = LocalDate.of(year, month, 16)
+        if (due.getDayOfWeek() == DayOfWeek.SATURDAY) due = due.plusDays(2)
+        if (due.getDayOfWeek() == DayOfWeek.SUNDAY) due = due.plusDays(1)
+        if (!due.isBefore(context.from()) && due.isBefore(context.until()))
+            dates.add(FundingSchedule.fixed(ScheduleSpec.on(due)))
+    }
+
+    private static Number validYear(Object value, int min, Messages messages) {
+        if (!(value instanceof Number) || ((Number) value).doubleValue() != ((Number) value).intValue() ||
+            ((Number) value).intValue() < min || ((Number) value).intValue() > 9800)
+            throw new IllegalArgumentException(messages.text('invalidYears'))
+        (Number) value
+    }
+
+    private static double amount(Object value, Messages messages) {
+        if (!(value instanceof Number) || !Double.isFinite(((Number) value).doubleValue()) || ((Number) value).doubleValue() < 0d)
+            throw new IllegalArgumentException(messages.text('invalidAmount'))
+        ((Number) value).doubleValue()
+    }
+
+    @Override void funding(FundingPort port) {
+        if (paymentDates == null) return
+        port.requiredExpenseWithSavings(entry.id() + ':imu', FundingPort.CASH, expense,
+            () -> (context.model().clock().getDate().getMonthValue() == 6 ? advance : balance) * fx,
+            paymentDates, () -> true, () -> 1d, null, false, true, () -> false,
+            () -> Double.MAX_VALUE, savings.source(), savings.first())
+    }
+
+    @Override void metrics(MetricsPort port) { port.spending(expense, () -> 1d, () -> true) }
+}

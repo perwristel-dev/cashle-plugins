@@ -1,0 +1,16 @@
+{
+  "name": "Imposta municipale propria (IMU)",
+  "names": {
+    "en": "Italian municipal property tax (IMU)",
+    "sv": "Italiensk kommunal fastighetsskatt (IMU)"
+  },
+  "description": {
+    "en": "Schedule confirmed Italian municipal property tax installments on their ordinary June and December due dates.",
+    "sv": "Betala fastställd italiensk kommunal fastighetsskatt på de ordinarie förfallodagarna i juni och december."
+  },
+  "country": "IT",
+  "category": "expenses",
+  "releases": [
+    "97d954370755c499206d15761bdae8be23f0162abe96616733d98df1a9ec72ef"
+  ]
+}
