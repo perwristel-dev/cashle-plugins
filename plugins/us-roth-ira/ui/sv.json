@@ -1,0 +1,13 @@
+{
+  "label": "Amerikansk Roth IRA",
+  "help": "Ange återstående ordinarie insättningar som omkostnadsbelopp, separat från marknadsvärdet. Använd ett samlat Roth IRA per person. Ordinarie insättningar tas ut först. Uttag av avkastning kräver både fem skatteår och 59½ års ålder.",
+  "firstRothTaxYear": "Skatteår för första Roth IRA-insättningen",
+  "firstYearHelp": "Använd det tidigaste skatteåret för en ordinarie insättning på något av dina Roth IRA-konton. Ange noll om du saknar tidigare insättningar.",
+  "openingRoom": "Verifierat insättningsutrymme i år (USD)",
+  "roomHelp": "Dra av insättningar på andra IRA-konton. Räkna med belopp som du anger som årets tidigare insättningar på detta Roth IRA.",
+  "recurringRoom": "Beräknat insättningsutrymme senare år (USD)",
+  "recurringHelp": "Ange noll om du inte räknar med att kvalificera dig för ordinarie insättningar senare år.",
+  "invalidOwner": "Ange Roth IRA-ägarens födelseår och födelsemånad.",
+  "invalidFirstYear": "Ange ett giltigt skatteår för första Roth IRA-insättningen för detta saldo.",
+  "invalidRoom": "Den nya Roth IRA-insättningen överskrider verifierat insättningsutrymme."
+}
