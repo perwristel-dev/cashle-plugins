@@ -1,0 +1,16 @@
+{
+  "name": "Traditional 401(k)",
+  "names": {
+    "en": "US traditional 401(k)",
+    "sv": "Amerikansk traditionell 401(k)"
+  },
+  "description": {
+    "en": "Project an employer 401(k) balance, required withdrawals and plan-permitted retirement distributions.",
+    "sv": "Beräkna saldo, obligatoriska uttag och tillåtna utbetalningar från arbetsgivarens 401(k)."
+  },
+  "country": "US",
+  "category": "accounts",
+  "releases": [
+    "d188c093447525b39ab7bd38265deaa1597912e156ed8ac9ea8d073c4e7ba123"
+  ]
+}
