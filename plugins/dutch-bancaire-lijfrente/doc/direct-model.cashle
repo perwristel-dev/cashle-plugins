@@ -1,0 +1,40 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.finance.savings'
+    id 'cashle.finance.flows'
+    id 'cashle.cashflow'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.nl' from '../../dutch-tax/dutch-tax.cashle'
+    id 'cashle.finance.nl-lijfrente' from '../dutch-bancaire-lijfrente.cashle'
+    id 'cashle.finance.nl-lijfrente.policy' from '../dutch-bancaire-lijfrente.cashle'
+    id 'cashle.finance.nl-lijfrente.payout' from '../dutch-lijfrente-payout.cashle'
+}
+finance {
+    language 'en'
+    plan { from '2026-01-01'; until '2027-06-01'; currency 'EUR'; inflation 0d }
+    person('self') { name 'Investor'; birthYear 1959; birthMonth 6 }
+    tax {
+        country 'NL'
+        preliminaryRate 0d
+        options([
+            ruleYear: 2026, residency: 'full-year', wealthFactsConfirmed: true,
+            box3Mode: 'provisional-deemed', box3SavingsRate: 0.0128d, box3DebtRate: 0.027d,
+            externalSavingsJan1: 0d, externalInvestmentsJan1: 0d, externalDebtsJan1: 0d,
+            settlementDate: '2027-05-01'
+        ])
+    }
+    salary('salary') { amount 40000d; frequency 'once'; taxTreatment 'taxable' }
+    def reserve = savings('reserve') { balance 3000d; settings liquidity: [withdrawals: 'always', liquid: 'always'] }
+    def account = nlLijfrente('bank-pension') {
+        balance 240000d
+        settings costBasis: 240000d, policyOptions: [qualifiedAccountConfirmed: true, verifiedAnnualRoom: 3000d,
+            contractStart: '2026-07-01', contractYears: 20, monthlyPayoutEur: 1000d, aowYear: 2026]
+    }
+    transfer('Verified premium') { source reserve; destination account; amount 3000d; frequency 'once'; start '2026-03-01' }
+    nlLijfrentePayment('Contract pension payments') {
+        settings accountId: account.id(), contractStart: '2026-07-01', contractYears: 20, monthlyPayoutEur: 1000d
+    }
+}
+collect { cashflow { format json; output 'stdout' } }

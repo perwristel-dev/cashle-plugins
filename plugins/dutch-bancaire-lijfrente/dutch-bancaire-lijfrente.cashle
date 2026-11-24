@@ -1,0 +1,97 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.InvestmentWithdrawalResult
+import dev.cashle.tax.TaxPolicyField
+import dev.cashle.tax.TaxStateField
+import java.time.LocalDate
+
+investmentAccount('cashlab.nl-lijfrente', 1) {
+    pluginId 'cashle.finance.nl-lijfrente'
+    dsl 'nlLijfrente'
+    messages 'lijfrente.Messages'
+    country 'NL'
+    kind 'NLlijfrente'
+    taxPolicy 'lijfrente'
+    transfers true
+    defaults([assetNature: 'PENSION_ASSET', liquidity: [withdrawals: 'never', liquid: 'never']])
+    validateInput { data ->
+        requireInput('invalid.product') { data.policyOptions?.qualifiedAccountConfirmed == true }
+        requireInput('invalid.withdrawal') { data.liquidity?.withdrawals == 'never' && data.closeEnabled != true }
+        requireInput('invalid.return') { data.dividendRate == 0 && data.reinvestDividends == false }
+    }
+}
+
+accountTaxPolicy('lijfrente') {
+    pluginId 'cashle.finance.nl-lijfrente.policy'
+    messages 'lijfrente.Messages'
+    country 'NL'
+    ruleYear 2026
+    annualOnly 'cashlab.nl-lijfrente'
+    annualBases 'pension', 'lijfrenteDeduction'
+    maxAccountsPerPerson 1
+    permitsImmediateReinvestment false
+
+    policyFields([
+        qualifiedAccountConfirmed: new TaxPolicyField('Verified Dutch bank contract with fully deductible contributions', 'boolean'),
+        verifiedAnnualRoom: new TaxPolicyField('Verified annual contribution room available to this plan', 'number'),
+        contractStart: new TaxPolicyField('First contractual monthly payout', 'date'),
+        contractYears: new TaxPolicyField('Contractual payout years', 'number'),
+        monthlyPayoutEur: new TaxPolicyField('Bank-quoted gross monthly payment in EUR', 'number'),
+        aowYear: new TaxPolicyField('Verified statutory AOW calendar year', 'number'),
+    ])
+    stateFields([lastBenefitDay: new TaxStateField('Previous paid contract date as epoch day', false)])
+
+    def contract = { Map options, checks ->
+        checks.require(checks.bool(options, 'qualifiedAccountConfirmed', false),
+            'Confirm an eligible bank lijfrente, with fully deductible contributions and no earlier commutation.')
+        double room = checks.requiredAmount(options, 'verifiedAnnualRoom')
+        String raw = Objects.toString(options.get('contractStart'), '')
+        if (raw.isBlank()) return [start: null, end: null, payment: 0d, room: room]
+        LocalDate start = LocalDate.parse(raw)
+        double aowYear = checks.requiredAmount(options, 'aowYear')
+        double years = checks.requiredAmount(options, 'contractYears')
+        double payout = checks.requiredAmount(options, 'monthlyPayoutEur')
+        checks.require(start.dayOfMonth == 1 && aowYear == Math.rint(aowYear) && start.year >= aowYear && start.year <= aowYear + 5d &&
+            years == Math.rint(years) && years >= 20d && years <= 100d && payout > 0d,
+            'Use a monthly bank pension of at least 20 years, starting in the AOW calendar year or within the next five years.')
+        [start: start, end: start.plusYears((long) years), payment: payout, room: room]
+    }
+
+    maximumDeposit { deposit ->
+        def terms = contract(deposit.policyOptions(), delegate)
+        if (terms.start != null && !deposit.date().isBefore(terms.start)) return 0d
+        Math.max(0d, terms.room - deposit.grossDeposits())
+    }
+
+    withdraw { request ->
+        if (request.amount() == 0d && !request.closeAccount())
+            return new InvestmentWithdrawalResult(request.position(), 0d, 0d, 0d)
+        def terms = contract(request.policyOptions(), delegate)
+        LocalDate day = request.date()
+        require(!request.closeAccount() && terms.start != null && day != null && day.dayOfMonth == 1 &&
+            !day.isBefore(terms.start) && day.isBefore(terms.end) && Math.abs(request.amount() - terms.payment) <= 1e-7d,
+            'Only the agreed monthly bank payout can be withdrawn from this account.')
+        require(request.state().getOrDefault('lastBenefitDay', Double.NEGATIVE_INFINITY) < day.toEpochDay(),
+            'Only one bank payout can be recorded for the same month.')
+        withdrawal(request, false, false, true)
+    }
+
+    stateAfterWithdrawal { request ->
+        if (request.amount() == 0d) return request.state()
+        [lastBenefitDay: (double) request.date().toEpochDay()]
+    }
+
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        double deducted = 0d
+        double benefits = 0d
+        for (def account : accounts) {
+            def terms = contract(account.policyOptions(), delegate)
+            require(account.externalDeposits() <= terms.room + 1e-7d && account.dividends() == 0d &&
+                (terms.start != null || account.withdrawals() == 0d),
+                'Use the verified deduction room and declare only ordinary bank payments, with returns retained as value growth.')
+            deducted += account.externalDeposits()
+            benefits += account.withdrawals()
+        }
+        new InvestmentAnnualAssessment([pension: benefits, lijfrenteDeduction: deducted], 0d, [:])
+    }
+}
