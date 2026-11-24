@@ -1,0 +1,16 @@
+{
+  "name": "Australian Age Pension",
+  "names": {
+    "en": "Australian Age Pension",
+    "sv": "Australisk Age Pension"
+  },
+  "description": {
+    "en": "Australian public pension with Centrelink payment estimates and lifelong income from age 67.",
+    "sv": "Australisk statlig pension med uppskattad utbetalning från Centrelink och livsvarig inkomst från 67 års ålder."
+  },
+  "country": "AU",
+  "category": "income",
+  "releases": [
+    "903ee9ecba552313fd27aa882ce678921ef2bacef55c4780d159060992d7d3c6"
+  ]
+}

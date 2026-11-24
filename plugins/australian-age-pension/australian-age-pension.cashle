@@ -1,0 +1,166 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.i18n.Messages
+import dev.cashle.sdk.composition.ModuleContext
+import dev.cashle.sdk.composition.ModuleInput
+import dev.cashle.sdk.finance.FinanceContext
+import dev.cashle.sdk.finance.FinanceModule
+import dev.cashle.sdk.finance.FundingPort
+import dev.cashle.sdk.finance.MetricsPort
+import dev.cashle.sdk.finance.TaxPort
+import dev.cashle.sdk.model.AccountHandle
+import dev.cashle.sdk.model.FlowHandle
+import dev.cashle.sdk.model.ScheduleSpec
+import groovy.transform.CompileStatic
+import java.time.DateTimeException
+import java.time.LocalDate
+import java.time.YearMonth
+import java.util.function.Supplier
+
+financeModule('cashlab.australian-age-pension', 1) {
+    pluginId 'cashle.finance.pension.au.public'
+    dsl('agePension') { id -> [name: id, owner: 'self', rate: 'quoted', grossFortnightly: 0d,
+        taxableFortnightly: 0d, eligibilityConfirmed: false, payoutStart: [reference: 'statutory']] }
+    factory { ModuleInput input -> new AustralianAgePension(input) }
+}
+
+@CompileStatic
+final class AustralianAgePension implements FinanceModule {
+    private static final LocalDate RATES_DATE = LocalDate.of(2026, 9, 20)
+    private static final Set<String> FULL_RATES = Set.of('single', 'partnered')
+    private final ModuleInput entry
+    private FinanceContext context
+    private Messages messages
+    private String owner
+    private LocalDate firstEligiblePayment, scheduleStart
+    private Supplier<LocalDate> requested, lifeEnd
+    private AccountHandle taxableIncome, exemptIncome
+    private FlowHandle taxablePayment, exemptPayment
+    private double gross, taxable, exchange
+    private boolean taxEnabled
+
+    AustralianAgePension(ModuleInput entry) { this.entry = entry }
+
+    @Override void declare(ModuleContext ignored) {}
+
+    @Override void declareFinance(FinanceContext finance) {
+        context = finance
+        messages = finance.messages(AustralianAgePension, 'dev.cashle.pension.au.AgePension')
+        Map<String,Object> data = entry.data()
+        owner = Objects.toString(data.get('owner'), 'self')
+        List<?> people = (List<?>) finance.profile().get('people')
+        Map<?,?> person = (Map<?,?>) people.find { Object candidate -> owner == ((Map<?,?>) candidate).get('id') }
+        if (owner == 'joint' || person == null) throw invalid('owner')
+        YearMonth birth = YearMonth.of(integer(person.get('birthYear'), 1800, 2300, 'owner'),
+            integer(person.get('birthMonth'), 1, 12, 'owner'))
+        firstEligiblePayment = birth.plusYears(67).atEndOfMonth()
+        Map<String,Object> start = data.get('payoutStart') instanceof Map
+            ? (Map<String,Object>) data.get('payoutStart') : Map.of()
+        requested = requestDate(start, birth)
+        scheduleStart = firstEligiblePayment
+        if (start.get('reference') != 'milestone' && requested.get().isAfter(scheduleStart)) {
+            scheduleStart = requested.get()
+        }
+        lifeEnd = finance.lifeEnd(owner)
+
+        String rate = Objects.toString(data.get('rate'), 'quoted')
+        if (rate == 'quoted') {
+            gross = number(data.get('grossFortnightly'), 'amount')
+            taxable = number(data.get('taxableFortnightly'), 'amount')
+            if (taxable > gross) throw invalid('amount')
+        } else if (FULL_RATES.contains(rate)) {
+            gross = rate == 'single' ? 1237.70d : 933d
+            taxable = rate == 'single' ? 1166.10d : 881.20d
+        } else throw invalid('rate')
+        if (gross > 0d && !Boolean.TRUE.equals(data.get('eligibilityConfirmed'))) throw invalid('eligibility')
+
+        String name = Objects.toString(data.get('name'), entry.id())
+        if (taxable > 0d) taxableIncome = incomeAccount(name)
+        if (gross > taxable) exemptIncome = incomeAccount(taxable == 0d ? name : name + ' – ' + messages.text('exempt'))
+        taxEnabled = !finance.taxSettings().isEmpty()
+    }
+
+    private AccountHandle incomeAccount(String name) {
+        def income = context.owner(owner).account().classify(AccountKind.INCOME,
+            new AccountTag('cashle.household.economic-nature', 1, 'income.pension.public', Set.of(AccountKind.INCOME)))
+        income.setName(name)
+        income
+    }
+
+    @Override void wireFinance(FinanceContext finance) {
+        if (gross == 0d) return
+        exchange = finance.exchangeRate('AUD', Objects.toString(finance.profile().get('currency'), 'AUD'))
+        LocalDate anchor = scheduleStart.isAfter(finance.from()) ? scheduleStart : finance.from()
+        ScheduleSpec months = ScheduleSpec.every(Frequency.MONTH, anchor.withDayOfMonth(1))
+            .atMonthEnd().within(finance.from(), finance.until())
+        def model = finance.model()
+        if (taxableIncome != null) taxablePayment = model.flow(months, finance.cash(), taxableIncome,
+            () -> monthlyAmount(model.clock().getDate(), taxable))
+        if (exemptIncome != null) exemptPayment = model.flow(months, finance.cash(), exemptIncome,
+            () -> monthlyAmount(model.clock().getDate(), gross - taxable))
+    }
+
+    private double monthlyAmount(LocalDate date, double fortnightly) {
+        LocalDate start = requested.get()
+        LocalDate death = lifeEnd.get()
+        if (start == null || date.isBefore(start) || date.isBefore(firstEligiblePayment) ||
+                death != null && date.isAfter(death)) return 0d
+        fortnightly * (26d / 12d) * exchange * context.inflationFactor(RATES_DATE, date)
+    }
+
+    @Override void funding(FundingPort port) {
+        if (taxablePayment != null) port.receiptUntil(taxablePayment,
+            taxEnabled ? FundingPort.ReceiptTax.TAXABLE : FundingPort.ReceiptTax.TAX_FREE, false, () -> lifeEnd.get()?.plusDays(1))
+        if (exemptPayment != null) port.receiptUntil(exemptPayment, FundingPort.ReceiptTax.TAX_FREE, false, () -> lifeEnd.get()?.plusDays(1))
+    }
+
+    @Override void metrics(MetricsPort port) {
+        if (taxableIncome != null) port.income(taxableIncome, false)
+        if (exemptIncome != null) port.income(exemptIncome, false)
+    }
+
+    @Override void tax(TaxPort port) {
+        if (taxEnabled && taxableIncome != null) port.income(owner, taxableIncome, 'pension', 'monthly', 'AU',
+            () -> context.from(), () -> true, Map.of())
+    }
+
+    private Supplier<LocalDate> requestDate(Map<String,Object> start, YearMonth birth) {
+        integer(start.getOrDefault('offset', 0), 0, 0, 'start')
+        if (start.get('reference') == 'statutory') {
+            return () -> firstEligiblePayment
+        }
+        if (start.get('reference') == 'age') {
+            LocalDate date = birth.plusYears(integer(start.get('age'), 0, 130, 'start')).atEndOfMonth()
+            return () -> date
+        }
+        if (start.get('reference') == 'date') {
+            LocalDate date
+            try {
+                date = LocalDate.of(integer(start.get('year'), 1800, 2430, 'start'),
+                    integer(start.get('month'), 1, 12, 'start'), integer(start.getOrDefault('day', 1), 1, 31, 'start'))
+            } catch (DateTimeException ignored) { throw invalid('start') }
+            return () -> date
+        }
+        Object milestone = start.get('milestoneId')
+        if (start.get('reference') == 'milestone' && milestone instanceof String && !((String) milestone).isBlank()) {
+            return context.milestoneDate((String) milestone, 0)
+        }
+        throw invalid('start')
+    }
+
+    private int integer(Object raw, int min, int max, String error) {
+        double value = number(raw, error)
+        if (value < min || value > max || value != Math.rint(value)) throw invalid(error)
+        (int) value
+    }
+
+    private double number(Object raw, String error) {
+        if (!(raw instanceof Number)) throw invalid(error)
+        double value = ((Number) raw).doubleValue()
+        if (!Double.isFinite(value) || value < 0d) throw invalid(error)
+        value
+    }
+
+    private IllegalArgumentException invalid(String key) { new IllegalArgumentException(messages.text(key)) }
+}

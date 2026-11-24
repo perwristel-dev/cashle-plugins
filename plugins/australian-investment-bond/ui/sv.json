@@ -1,0 +1,21 @@
+{
+  "label": "Australisk investeringsförsäkring",
+  "help.scope": "Modellera en australisk livförsäkring som beskattas hos försäkringsbolaget och innehas av den ursprungliga ägaren. Ange försäkringsbolagets nettovärdeutveckling och de sammanlagda premierna som omkostnadsbelopp. Ange ett datum för hel återlösen för att beräkna australisk skatt.",
+  "field.inception": "Datum då försäkringsbolaget övertog risken",
+  "help.inception": "Ange datumet då försäkringsbolaget övertog risken, även för en befintlig försäkring.",
+  "field.restart": "Senaste omstartsdatum enligt försäkringsbolaget",
+  "help.restart": "Ange första dagen i det senaste försäkringsåret då tioårsperioden startade om. Lämna tomt om det ursprungliga datumet gäller.",
+  "field.confirmed": "Berättigad australisk beskattad försäkring utan tidigare återlösen eller bonus",
+  "field.premiumYear": "Försäkringsår för angivna premier",
+  "field.premiumTotal": "Premier under det försäkringsåret",
+  "field.priorPremium": "Premier under föregående försäkringsår",
+  "help.premiumHistory": "Fyll i premiehistoriken vid nya premier till en befintlig försäkring. Det första försäkringsåret är år 1. Ange 0 vid nyteckning eller om befintlig försäkring inte får fler premier.",
+  "invalid.scope": "Bekräfta att försäkringen innehas av den ursprungliga ägaren och saknar tidigare återlösen eller bonus.",
+  "invalid.inception": "Ange försäkringsbolagets datum för riskövertagande efter den 7 december 1983.",
+  "invalid.restart": "Ange ett giltigt tidigare omstartsdatum från försäkringsbolaget.",
+  "invalid.dividend": "Ange försäkringsbolagets nettovärdeutveckling och lämna den separata utdelningen på noll.",
+  "invalid.withdrawal": "Använd hel återlösen för att ta ut kapitalet. Vanliga deluttag måste vara avstängda.",
+  "invalid.premiumYear": "Ange försäkringsåret som ett heltal eller noll.",
+  "summary.surrender": "Hel återlösen {date}",
+  "summary.value": "Värde före återlösen"
+}

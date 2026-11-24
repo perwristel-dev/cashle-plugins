@@ -1,0 +1,21 @@
+{
+  "label": "Australian investment bond",
+  "help.scope": "Model a tax-paid Australian life-insurance bond held by its original owner. Enter the insurer's net value growth and total premiums as the cost basis. Set a full surrender date to forecast the Australian tax.",
+  "field.inception": "Date the insurer first took on the risk",
+  "help.inception": "Use the insurer's commencement-of-risk date, even if the policy was purchased before this forecast.",
+  "field.restart": "Latest insurer-confirmed restart date",
+  "help.restart": "The first day of the most recent assurance year that restarted the ten-year period. Leave blank if the period still starts on the initial risk date.",
+  "field.confirmed": "Eligible Australian tax-paid bond with no prior surrender or bonus",
+  "field.premiumYear": "Assurance year of recorded premiums",
+  "field.premiumTotal": "Premiums in that assurance year",
+  "field.priorPremium": "Premiums in the immediately preceding assurance year",
+  "help.premiumHistory": "Complete the premium history if adding money to an existing policy. Count the first assurance year as 1. Enter 0 when forecasting a new policy or leaving an existing policy without further premiums.",
+  "invalid.scope": "Confirm the bond is held by the original owner with no prior surrender or bonus.",
+  "invalid.inception": "Enter the insurer's commencement-of-risk date after 7 December 1983.",
+  "invalid.restart": "Enter a valid historical restart date from the insurer.",
+  "invalid.dividend": "Enter the insurer's net value growth and leave the separate distribution rate at zero.",
+  "invalid.withdrawal": "Use full surrender to release the bond. Ordinary partial withdrawals must be disabled.",
+  "invalid.premiumYear": "Enter a whole assurance year number or zero.",
+  "summary.surrender": "Full surrender {date}",
+  "summary.value": "Value before surrender"
+}

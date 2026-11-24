@@ -18,9 +18,9 @@ import static dev.cashle.tax.support.DatedPropertyInputs.taxYear
 
 // Australia 2026–27 resident ordinary income, CGT, LITO and Medicare.
 int referenceYear = 2026
-def publicBases = ['salary', 'capitalIncome', 'dividendIncome', 'frankingCredits',
+def publicBases = ['salary', 'pension', 'capitalIncome', 'dividendIncome', 'frankingCredits',
     'capitalGains', 'capitalGainsDiscountEligible', 'investmentCapitalLoss'].asImmutable()
-def bases = (publicBases + ['capitalLossBroughtForward']).asImmutable()
+def bases = (publicBases + ['capitalLossBroughtForward', 'lifeInsuranceBonus']).asImmutable()
 def amounts = (bases + ['nonRefundableOffset', 'mlsIncomeAdditions', 'mlsBaseAdditions',
     'declaredMedicareLevy', 'declaredMedicareSurcharge', 'workExpenses']).toSet().asImmutable()
 def allowed = (amounts + ['ruleYear', 'residency', 'birthYear', 'medicareProfile', 'hospitalCover',
@@ -59,7 +59,7 @@ countryTaxPolicy('AU') {
         if ('ordinary-single'.equals(options.medicareProfile) && !(options.hospitalCover in hospitalCover))
             errors.add(messages.text('profile.hospitalCover'))
         if (!Boolean.TRUE.equals(options.paymentTimingConfirmed)) errors.add(messages.text('profile.paymentTiming'))
-        if (context.people().any { person ->
+        if ('ordinary-single'.equals(options.medicareProfile) && context.people().any { person ->
             def birthYear = person.get('birthYear')
             finite(birthYear) && birthYear.doubleValue() == Math.rint(birthYear.doubleValue()) && birthYear.intValue() < 1962
         }) errors.add(messages.text('profile.birthYear'))
@@ -104,8 +104,10 @@ countryTaxPolicy('AU') {
         require(number(options, 'ruleYear', 0d) == referenceYear, 'Select explicit ruleYear:2026 (1 July 2026 to 30 June 2027).')
         require('full-year'.equals(options.residency), 'Only full-year Australian residents are supported.')
         double birth = number(options, 'birthYear', 0d)
-        require(birth == Math.rint(birth) && birth >= 1962d && birth <= 2008d,
-            'Supported ordinary adults have birthYear 1962–2008; SAPTO profiles need separate rules.')
+        require(birth == Math.rint(birth) && birth >= 1900d && birth <= 2008d,
+            'Supported adults have birthYear 1900–2008.')
+        require(birth >= 1962d || 'declared-assessment'.equals(options.medicareProfile),
+            'Use a declared Medicare assessment and enter any verified SAPTO as a non-refundable offset.')
         for (String key : amounts) require(number(options, key, 0d) >= 0d, "$key must be nonnegative.")
         double credits = number(options, 'frankingCredits', 0d)
         require(credits == 0d || bool(options, 'frankingEligibilityConfirmed', false),
@@ -121,7 +123,10 @@ countryTaxPolicy('AU') {
         require(expenses <= salary,
             'Supported work expenses cannot exceed salary; employment-loss profiles need separate rules.')
         double workDeduction = Math.max(Math.min(1000d, salary), expenses)
-        double taxable = salary - workDeduction + number(options, 'capitalIncome', 0d) +
+        double policyBonus = number(options, 'lifeInsuranceBonus', 0d)
+        double policyOffset = policyBonus * 0.30d
+        double taxable = salary - workDeduction + number(options, 'pension', 0d) + policyBonus +
+            number(options, 'capitalIncome', 0d) +
             number(options, 'dividendIncome', 0d) + credits + netGain
         double gross = 0d
         for (def band : bands) {
@@ -132,7 +137,7 @@ countryTaxPolicy('AU') {
         }
         double lito = taxable <= 37500d ? 700d : taxable <= 45000d ?
             Math.max(0d, 700d - (taxable - 37500d) * 0.05d) : Math.max(0d, 325d - (taxable - 45000d) * 0.015d)
-        double beforeCredits = Math.max(0d, gross - lito - number(options, 'nonRefundableOffset', 0d))
+        double beforeCredits = Math.max(0d, gross - lito - policyOffset - number(options, 'nonRefundableOffset', 0d))
         require(bool(options, 'frankingRefundable', true),
             'Qualified franking credits for supported resident individuals are refundable; other credit classes need separate rules.')
         double incomeTax = Math.max(0d, beforeCredits - credits)
@@ -157,7 +162,8 @@ countryTaxPolicy('AU') {
         }
         new TaxAssessment(incomeTax, medicare + surcharge, components('taxableIncome', taxable,
             'workExpenseDeduction', workDeduction, 'incomeTaxBeforeOffsets', gross, 'lowIncomeTaxOffset', Math.min(gross, lito),
-            'netCapitalGain', netGain, 'frankingCredit', credits, 'refundableCredit', refund, 'medicareLevy', medicare,
+            'netCapitalGain', netGain, 'lifeInsuranceBonus', policyBonus, 'lifeInsuranceTaxOffsetAvailable', policyOffset,
+            'frankingCredit', credits, 'refundableCredit', refund, 'medicareLevy', medicare,
             'medicareSurcharge', surcharge, 'investmentCapitalLossRemaining', Math.max(0d, loss - ordinaryLoss - discountLoss)), refund)
     }
 
