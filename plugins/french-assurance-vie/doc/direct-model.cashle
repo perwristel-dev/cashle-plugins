@@ -1,0 +1,35 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.fr-assurance-vie' from '../french-assurance-vie.cashle'
+    id 'cashle.finance.fr-assurance-vie.tax' from '../french-assurance-vie-tax.cashle'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.fr' from '../../french-tax/french-tax.cashle'
+}
+finance {
+    plan { from '2026-01-01'; until '2027-10-01'; currency 'EUR'; inflation 0d }
+    person('self') { birthYear 1980; birthMonth 1 }
+    tax {
+        country 'FR'
+        preliminaryRate 0d
+        options([ruleYear:2025, residency:'full-year', salaryDefinition:'gross-resolved-payroll',
+            civilStatus:'single', familyParts:1d, familyProfile:'ordinary', capitalElection:'pfu',
+            employmentSocialContributions:0d, deductibleEmployeeContributions:0d, payrollTaxableAdditions:0d,
+            settlementCalendar:[month:9, day:30, yearOffset:1, confirmed:true]])
+    }
+    frenchAssuranceVie('first') {
+        balance 130000d
+        settings([costBasis:100000d, closeEnabled:true, closeDate:'2026-06-01',
+            policyOptions:[acquiredDate:'2018-01-01', completePortfolio:true],
+            openingState:[priorYearPremiums:100000d, youngGains:0d],
+            initialYear:[quarterOpeningValues:[null, null, null, null]]])
+    }
+    frenchAssuranceVie('second') {
+        balance 120000d
+        settings([costBasis:100000d, closeEnabled:true, closeDate:'2026-07-01',
+            policyOptions:[acquiredDate:'2018-01-01', completePortfolio:true],
+            openingState:[priorYearPremiums:100000d, youngGains:0d],
+            initialYear:[quarterOpeningValues:[null, null, null, null]]])
+    }
+}
+collect {}
