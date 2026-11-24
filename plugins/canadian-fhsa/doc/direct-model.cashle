@@ -1,0 +1,35 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.cashflow'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.ca' from '../../canadian-tax/canadian-tax.cashle'
+    id 'cashle.finance.ca-fhsa' from '../canadian-fhsa.cashle'
+    id 'cashle.finance.ca-fhsa.tax-policy' from '../canadian-fhsa.cashle'
+}
+
+finance {
+    language 'en'
+    plan { from '2026-01-01'; until '2027-05-01'; currency 'CAD'; inflation 0d }
+    person('self') { name 'First-time purchaser'; birthYear 1980; birthMonth 1 }
+    tax {
+        country 'CA'
+        preliminaryRate 0d
+        options([ruleYear:2026, residency:'full-year', province:'AB', openingCapitalLoss:0d,
+            ontarioReductionDependants:0, propertyFlippingIncomeConfirmed:false, liftEligible:true])
+    }
+    customIncome('interest') {
+        amount 50000d
+        frequency 'annual'
+        settings([taxTreatment:'taxable',taxBasis:'capitalIncome'])
+    }
+    caFhsa('first-home') {
+        balance 15000d
+        settings([costBasis:12000d, closeEnabled:true, closeDate:'2026-06-01', reinvestDividends:true,
+            policyOptions:[eligibilityConfirmed:true, firstFhsaOpened:'2024-04-01', turns71Year:2051,
+                roomYear:2026, openingRoom:8000d, openingLifetimeUsed:12000d, qualifyingDate:'2026-06-01', claimDeduction:true],
+            initialYear:[quarterOpeningValues:[null,null,null,null]]])
+    }
+}
+collect { cashflow {} }

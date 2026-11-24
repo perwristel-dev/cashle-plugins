@@ -6,7 +6,8 @@ tax, CPP and EI, eligible and non-eligible dividends, capital gains and
 losses, and supported private residential sales. Pension income is assessed
 without employment contributions. Eligible registered pensions receive the
 pension income credit. OAS and GIS use the annual social benefits recovery
-and federal supplement deduction rules. Investment account policies
+and federal supplement deduction rules. The FHSA wrapper supplies ordinary
+withdrawal income and eligible contribution deductions. Investment account policies
 are supplied by their respective account plugins.
 
 Build the installation ZIP from the repository root with Node.js and `zip`:
