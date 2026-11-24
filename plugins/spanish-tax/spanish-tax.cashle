@@ -25,14 +25,14 @@ import static dev.cashle.tax.support.PropertyInputs.requiredBool
 int referenceYear = 2025
 double nationalMinimum = 5550d
 double crossOffsetRate = 0.25d
-def assessableBases = ['salary', 'capitalIncome', 'investmentGains', 'investmentLosses',
+def assessableBases = ['salary', 'pension', 'capitalIncome', 'investmentGains', 'investmentLosses',
     'investmentCapitalLoss', 'investmentDividends', 'savingsIncomeLosses', 'savingsIncomeLossBroughtForward'].asImmutable()
-def monetaryFields = Set.of('salary', 'capitalIncome', 'investmentGains', 'investmentLosses', 'investmentCapitalLoss',
+def monetaryFields = Set.of('salary', 'pension', 'capitalIncome', 'investmentGains', 'investmentLosses', 'investmentCapitalLoss',
     'investmentDividends', 'propertyTaxDue', 'savingsIncomeLosses', 'savingsIncomeLossBroughtForward',
     'referenceIncome', 'propertyReferenceIncome', 'employeeSocialContributions', 'employmentSocialContributions',
     'investmentCapitalLossBroughtForward', 'deductibleEmployeeContributions', 'payrollTaxableAdditions')
 def nativeFields = Set.of('employeeSocialContributions')
-def allowedOptions = Set.of('ruleYear', 'residency', 'birthYear', 'salary', 'capitalIncome',
+def allowedOptions = Set.of('ruleYear', 'residency', 'birthYear', 'salary', 'pension', 'capitalIncome',
     'investmentGains', 'investmentLosses', 'investmentCapitalLoss', 'investmentDividends',
     'investmentCapitalLossBroughtForward', 'propertyTaxDue', 'settlementDate', 'noticeDatesByYear',
     'noticeAmountsByYear', 'settlementCalendar', 'autonomousCommunity', 'regionalSchedule', 'regionalMinimum',
@@ -142,7 +142,7 @@ countryTaxPolicy('ES') {
     currency 'EUR'
     ruleYear referenceYear
     incomeBases assessableBases
-    sourceBases(['salary', 'capitalIncome'])
+    sourceBases(['salary', 'pension', 'capitalIncome'])
     requiresTaxPlan true
     nativeMonetaryOptions(['employeeSocialContributions'])
     messages 'dev.cashle.tax.spain.SpanishTaxSource'
@@ -181,10 +181,6 @@ countryTaxPolicy('ES') {
             if (!nonnegative(options.get(key)))
                 errors.add(catalogue.text('profile.actualNonnegative').replace('{field}', key))
         }
-        if (context.people().any { person ->
-            def birthYear = person.get('birthYear')
-            birthYear instanceof Number && (birthYear.doubleValue() < 1961d || birthYear.doubleValue() > 2007d)
-        }) errors.add(catalogue.text('profile.birthYear'))
         errors
     }
     optionsInRuleMoney { Map options, TaxMoneyBasis prices ->
@@ -269,14 +265,14 @@ countryTaxPolicy('ES') {
             .contains(region.toLowerCase(Locale.ROOT)),
             'Provide a verified common-territory autonomousCommunity; Navarra/Basque regimes are unsupported.')
         double age = referenceYear - number(input, 'birthYear', 1990d)
-        require(age >= 18d && age < 65d, 'This Spanish profile supports ordinary adults under 65 without dependent/disability supplements.')
+        require(age >= 18d && age <= 130d, 'Provide an ordinary adult profile.')
         double salary = amount(input, 'salary')
-        double social = requiredAmount(input, 'employeeSocialContributions')
+        double pension = amount(input, 'pension')
+        double social = salary > 0d ? requiredAmount(input, 'employeeSocialContributions') : 0d
         require(social <= salary, 'Social contributions cannot exceed gross salary.')
-        require(salary == 0d || salary > 18276d,
-            'Spanish 2025 low-salary deduction requires a separate resolved profile; gross employment must exceed EUR18,276.')
-
-        double reductionIncome = Math.max(0d, salary - social)
+        double ageMinimum = (age > 65d ? 1150d : 0d) + (age > 75d ? 1400d : 0d)
+        double stateMinimum = nationalMinimum + ageMinimum
+        double reductionIncome = Math.max(0d, salary + pension - social)
         double netWages = Math.max(0d, reductionIncome - 2000d)
         double otherIncome = amount(input, 'capitalIncome') + amount(input, 'investmentDividends')
         double realizedGains = amount(input, 'investmentGains')
@@ -292,10 +288,10 @@ countryTaxPolicy('ES') {
             else if (reductionIncome < 19747.5d) workReduction = 2364.34d - 1.14d * (reductionIncome - 17673.52d)
         }
         double generalBasis = Math.max(0d, netWages - workReduction)
-        double regionalMinimum = requiredAmount(input, 'regionalMinimum')
+        double regionalMinimum = requiredAmount(input, 'regionalMinimum') + ageMinimum
         def schedule = input.get('regionalSchedule')
         double state = Math.max(0d, progressive(generalBasis, nationalBands) -
-            progressive(Math.min(generalBasis, nationalMinimum), nationalBands))
+            progressive(Math.min(generalBasis, stateMinimum), nationalBands))
         double regional = Math.max(0d, regionalTax(generalBasis, schedule) -
             regionalTax(Math.min(generalBasis, regionalMinimum), schedule))
 
@@ -336,10 +332,16 @@ countryTaxPolicy('ES') {
 
         double savingsBasis = Math.max(0d, gains) + Math.max(0d, income)
         double savingsTax = Math.max(0d, progressive(savingsBasis, savingsBands) -
-            0.5d * progressive(Math.min(savingsBasis, Math.max(0d, nationalMinimum - generalBasis)), savingsBands) -
+            0.5d * progressive(Math.min(savingsBasis, Math.max(0d, stateMinimum - generalBasis)), savingsBands) -
             0.5d * progressive(Math.min(savingsBasis, Math.max(0d, regionalMinimum - generalBasis)), savingsBands))
-        new TaxAssessment(state + regional + savingsTax, social, components(
-            'tax.generalBase', generalBasis, 'tax.workReduction', workReduction, 'tax.state', state,
+        double employmentCredit = 0d
+        if (salary > 0d && salary < 18276d && pension + Math.max(0d, otherIncome + currentGain - incomeLosses) <= 6500d) {
+            double credit = 340d - 0.2d * Math.max(0d, salary - 16576d)
+            double wageShare = (salary - social) / Math.max(1d, reductionIncome)
+            employmentCredit = Math.min(credit, (state + regional) * wageShare)
+        }
+        new TaxAssessment(state + regional + savingsTax - employmentCredit, social, components(
+            'tax.generalBase', generalBasis, 'tax.workReduction', workReduction, 'tax.employmentCredit', employmentCredit, 'tax.state', state,
             'tax.regional', regional, 'tax.savingsBase', savingsBasis, 'tax.savings', savingsTax,
             'investmentCapitalLossRemaining', currentGainLoss + priorGainLoss, 'savingsIncomeLossRemaining', currentIncomeLoss + priorIncomeLoss))
     }

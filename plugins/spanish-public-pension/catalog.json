@@ -1,0 +1,16 @@
+{
+  "name": "Spanish state old-age pension",
+  "names": {
+    "en": "Spanish state old-age pension",
+    "sv": "Spansk allmän pension"
+  },
+  "description": {
+    "en": "Spanish contributory old-age pension paid in 14 instalments.",
+    "sv": "Spansk avgiftsbaserad ålderspension med 14 utbetalningar om året."
+  },
+  "country": "ES",
+  "category": "income",
+  "releases": [
+    "b03c661ddb786ffebc6839179d34a3d92f6fec83fd2e8de54e821da77a88a437"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "label": "Spansk allmän pension",
+  "description": "Spansk avgiftsbaserad ålderspension med 14 utbetalningar om året.",
+  "income": "Utbetalning av allmän pension",
+  "name": "Namn",
+  "owner": "Person",
+  "gross": "Brutto per ordinarie utbetalning",
+  "quoteHelp": "Använd INSS prognos för vald uttagsstart.",
+  "coverage": "Avgiftsmånader vid pensionering",
+  "months": "månader",
+  "recent": "Minst två avgiftsår under de senaste 15 åren",
+  "confirmed": "Tidigaste start enligt INSS",
+  "confirmedHelp": "Frivilligt vid bekräftade individuella villkor.",
+  "start": "Önskad uttagsstart",
+  "minimum": "Tidigaste tillåtna start",
+  "age": "Ålder",
+  "window": "Allmän pension är livsvarig, med extra utbetalningar i juni och november.",
+  "right": "Bruttorätt per utbetalning",
+  "lifetime": "Livsvarig pension"
+}

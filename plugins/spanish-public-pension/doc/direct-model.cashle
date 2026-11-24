@@ -1,0 +1,13 @@
+plugins {
+    id 'cashle.finance'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.public.es' from '../spanish-public-pension.cashle'
+}
+finance {
+    plan { from '2026-01-01'; until '2027-01-01'; currency 'EUR'; inflation 0d }
+    person('self') { birthYear 1961; birthMonth 6 }
+    spanishPublicPension('Jubilación') {
+        settings([grossMonthly:1400d, contributionMonths:460, payoutStart:[reference:'age', age:63]])
+    }
+}
+collect {}
