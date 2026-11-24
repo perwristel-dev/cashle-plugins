@@ -1,0 +1,138 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.InvestmentPosition
+import dev.cashle.tax.InvestmentWithdrawalResult
+import dev.cashle.tax.TaxPolicyField
+import dev.cashle.tax.TaxStateField
+import java.time.LocalDate
+
+investmentAccount('cashlab.au-investment-bond', 1) {
+    pluginId 'cashle.finance.au-investment-bond'
+    dsl 'auInvestmentBond'
+    country 'AU'
+    kind 'AUinvestmentBond'
+    taxPolicy 'investment-bond'
+    messages 'bond.Messages'
+    prepaidTax false
+    transfers true
+    defaults([liquidity: [withdrawals: 'never', liquid: 'never']])
+    validateInput { data ->
+        requireInput('invalid.withdrawal') { data.liquidity?.withdrawals == 'never' }
+        requireInput('invalid.dividend') { data.dividendRate == 0 && data.reinvestDividends == false }
+    }
+}
+
+final class AustralianBondPeriod {
+    static int year(LocalDate inception, LocalDate day) {
+        int index = day.year - inception.year
+        (day.isBefore(inception.plusYears(index)) ? index : index + 1)
+    }
+
+    static LocalDate firstDay(LocalDate inception, int year) { inception.plusYears(year - 1L) }
+
+    static int taxYear(LocalDate date) { date.monthValue < 7 ? date.year - 1 : date.year }
+
+    static double assessableFraction(int years) {
+        if (years <= 8) return 1d
+        if (years == 9) return 2d / 3d
+        if (years == 10) return 1d / 3d
+        0d
+    }
+}
+
+accountTaxPolicy('investment-bond') {
+    pluginId 'cashle.finance.au-investment-bond.tax-policy'
+    messages 'bond.Messages'
+    country 'AU'
+    ruleYear 2026
+    annualOnly 'cashlab.au-investment-bond'
+    annualBases 'lifeInsuranceBonus'
+    openingStateInNativeCurrency true
+    resetAcquiredDateWhenEmptyDeposit false
+    permitsImmediateReinvestment false
+
+    policyFields([
+        acquiredDate: new TaxPolicyField('Date the life insurer first took on the risk', 'date'),
+        eligiblePeriodStart: new TaxPolicyField('Insurer-confirmed start of the latest ten-year period', 'date'),
+        domesticPolicyConfirmed: new TaxPolicyField('Eligible domestic policy with no prior surrender or bonus', 'boolean'),
+    ])
+    stateFields([
+        premiumYear: new TaxStateField('Assurance year of the entered premiums', false),
+        premiumTotal: new TaxStateField('Premiums recorded for that assurance year', true),
+        priorPremium: new TaxStateField('Premiums in the immediately preceding assurance year', true),
+        restartYear: new TaxStateField('Forecast assurance year that last restarted the ten-year period', false),
+        assessableBonus: new TaxStateField('Assessable surrender bonus', true),
+        bonusTaxYear: new TaxStateField('Australian fiscal year of the assessable surrender bonus', false),
+    ])
+
+    def period = { Map options, LocalDate on, Map state, checks ->
+        checks.require(checks.bool(options, 'domesticPolicyConfirmed', false),
+            'Confirm an eligible Australian tax-paid life policy held by its original owner, with no prior bonus or surrender.')
+        checks.require(on != null && options.get('acquiredDate') instanceof String, 'Provide the policy commencement and transaction dates.')
+        LocalDate inception = LocalDate.parse(options.acquiredDate)
+        checks.require(inception.isAfter(LocalDate.of(1983, 12, 7)) && !inception.isAfter(on),
+            'Policy risk must have commenced after 7 December 1983 and no later than the transaction.')
+        int currentYear = AustralianBondPeriod.year(inception, on)
+        String reset = Objects.toString(options.get('eligiblePeriodStart'), '')
+        LocalDate declared = reset.isBlank() ? inception : LocalDate.parse(reset)
+        int declaredYear = AustralianBondPeriod.year(inception, declared)
+        checks.require(declaredYear >= 1 && declaredYear <= currentYear && declared == AustralianBondPeriod.firstDay(inception, declaredYear),
+            'A historical restart must be the beginning of a prior or current assurance year.')
+        double forecast = state.getOrDefault('restartYear', 0d)
+        checks.require(forecast == Math.rint(forecast) && forecast >= 0d && forecast <= currentYear, 'Invalid ten-year period state.')
+        [year: currentYear, start: Math.max(declaredYear, (int) forecast)]
+    }
+
+    stateAfterDeposit { deposit ->
+        def timing = period(deposit.policyOptions(), deposit.date(), deposit.state(), delegate)
+        int year = timing.year
+        Map state = deposit.state()
+        double last = state.getOrDefault('premiumYear', 0d)
+        double paid = state.getOrDefault('premiumTotal', 0d)
+        double previous = state.getOrDefault('priorPremium', 0d)
+        require(last == Math.rint(last) && last >= 0d && last <= year && paid >= 0d && previous >= 0d,
+            'Provide valid assurance-year and premium history for the bond.')
+        require(last > 0d || (deposit.remainingPrincipal() == 0d && year == 1 && paid == 0d && previous == 0d),
+            'For top-ups to an existing bond, enter the latest assurance year and its premium history first.')
+        double prior = last == year ? previous : last == year - 1 ? paid : 0d
+        double total = (last == year ? paid : 0d) + deposit.amount()
+        def next = new LinkedHashMap(state)
+        next.putAll([premiumYear: (double) year, premiumTotal: total, priorPremium: prior])
+        if (year > 1 && total - 1.25d * prior > Math.ulp(total) * 8d) next.put('restartYear', (double) year)
+        next
+    }
+
+    withdraw { request ->
+        if (request.amount() == 0d && !request.closeAccount())
+            return new InvestmentWithdrawalResult(request.position(), 0d, 0d, 0d)
+        require(request.closeAccount(), 'Use the full policy surrender. Partial withdrawals are outside this policy model.')
+        period(request.policyOptions(), request.date(), request.state(), delegate)
+        new InvestmentWithdrawalResult(new InvestmentPosition(0d, 0d, 0d), 0d, 0d, 0d)
+    }
+
+    stateAfterWithdrawal { request ->
+        if (!request.closeAccount()) return request.state()
+        def timing = period(request.policyOptions(), request.date(), request.state(), delegate)
+        int yearOfPeriod = timing.year - timing.start + 1
+        double bonus = Math.max(0d, request.amount() - request.position().costBasis())
+        def next = new LinkedHashMap(request.state())
+        next.put('assessableBonus', bonus * AustralianBondPeriod.assessableFraction(yearOfPeriod))
+        next.put('bonusTaxYear', (double) AustralianBondPeriod.taxYear(request.date()))
+        next
+    }
+
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        double bonus = 0d
+        for (def account : accounts) {
+            period(account.policyOptions(), account.date(), account.state(), delegate)
+            require(account.dividends() == 0d && account.realizedGain() == 0d && account.realizedLoss() == 0d &&
+                (account.closed() || account.withdrawals() == 0d),
+                'Use net value growth and no separate dividends, capital sales or previous surrenders.')
+            def state = account.state()
+            if (state.getOrDefault('bonusTaxYear', 0d) == money.assessmentYear()) {
+                bonus += state.getOrDefault('assessableBonus', 0d)
+            }
+        }
+        new InvestmentAnnualAssessment([lifeInsuranceBonus: bonus], 0d, [:])
+    }
+}

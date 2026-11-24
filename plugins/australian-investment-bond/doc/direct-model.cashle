@@ -1,0 +1,33 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.au-investment-bond' from '../australian-investment-bond.cashle'
+    id 'cashle.finance.au-investment-bond.tax-policy' from '../australian-investment-bond.cashle'
+    id 'cashle.finance.income'
+    id 'cashle.cashflow'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.au' from '../../australian-tax/australian-tax.cashle'
+}
+finance {
+    language 'en'
+    plan { from '2026-07-01'; until '2027-12-01'; currency 'AUD'; inflation 0d }
+    person('self') { name 'Synthetic Australian investor'; birthYear 1980; birthMonth 1 }
+    tax {
+        country 'AU'
+        preliminaryRate 0d
+        options([ruleYear:2026, residency:'full-year', openingCapitalLoss:0d, medicareProfile:'ordinary-single',
+                 hospitalCover:'full-year', frankingEligibilityConfirmed:true, frankingRefundable:true,
+                 nonRefundableOffset:0d, workExpenses:0d, mlsIncomeAdditions:0d, mlsBaseAdditions:0d,
+                 settlementMonth:11, settlementDay:21, paymentTimingConfirmed:true,
+                 declaredMedicareLevy:0d, declaredMedicareSurcharge:0d])
+    }
+    salary('salary') { name 'Salary'; amount 60000d; frequency 'once'; taxTreatment 'taxable'; taxBasis 'salary' }
+    auInvestmentBond('policy') {
+        name 'Paid-up Australian investment bond'
+        balance 15000d
+        settings([costBasis:10000d, closeEnabled:true, closeDate:'2026-09-01',
+                  policyOptions:[acquiredDate:'2018-09-01', domesticPolicyConfirmed:true],
+                  initialYear:[openingValue:15000d, quarterOpeningValues:[null, null, null, null]]])
+    }
+}
+collect { cashflow { format json; output 'stdout' } }

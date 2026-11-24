@@ -1,0 +1,14 @@
+{
+  "id": "cashle.finance.au-investment-bond",
+  "requires": ["cashle.finance", "cashle.account.support", "cashle.account.tax.support", "cashle.tax.au"],
+  "sources": [{
+    "path": "australian-investment-bond.cashle",
+    "providers": ["cashle.finance.au-investment-bond", "cashle.finance.au-investment-bond.tax-policy"],
+    "resources": ["bond/Messages_en.properties", "bond/Messages_sv.properties"]
+  }],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {"locale": "en", "path": "ui/en.json"},
+    {"locale": "sv", "path": "ui/sv.json"}
+  ]
+}
