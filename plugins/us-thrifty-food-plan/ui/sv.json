@@ -1,0 +1,15 @@
+{
+  "label": "USDA:s matbudget",
+  "name": "Namn",
+  "categories": "USDA:s matkostnadskategori per person",
+  "choose": "Välj kategori",
+  "male": "Man/pojke",
+  "female": "Kvinna/flicka",
+  "self": "Du",
+  "partner": "Partner",
+  "child": "Barn {number}",
+  "financing": "Finansiering",
+  "help": "Amerikanskt genomsnitt för mat lagad hemma i oktober 2026. Välj USDA:s tabellkategori för varje person i hushållet.",
+  "summary": "Mat lagad hemma per månad · USDA oktober 2026",
+  "invalidMembers": "Ange födelseuppgifter i hushållsprofilen och välj en USDA-matkostnadskategori för varje person."
+}

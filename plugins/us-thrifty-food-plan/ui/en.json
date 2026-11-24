@@ -1,0 +1,15 @@
+{
+  "label": "USDA Thrifty Food Plan",
+  "name": "Name",
+  "categories": "USDA food-cost category by person",
+  "choose": "Choose a category",
+  "male": "Male",
+  "female": "Female",
+  "self": "You",
+  "partner": "Partner",
+  "child": "Child {number}",
+  "financing": "Financing",
+  "help": "An October 2026 U.S. average for food prepared at home. Choose the USDA table category for each person in your household.",
+  "summary": "Monthly food-at-home expense · October 2026 USDA rates",
+  "invalidMembers": "Enter birth details in the household profile and choose a USDA food-cost category for each person."
+}

@@ -1,0 +1,14 @@
+{
+  "id": "cashle.finance.budget.us.thrifty-food-plan",
+  "requires": ["cashle.finance", "cashle.dsl.groovy"],
+  "sources": [{
+    "path": "us-thrifty-food-plan.cashle",
+    "providers": ["cashle.finance.budget.us.thrifty-food-plan"],
+    "resources": ["us/food/Messages_en.properties", "us/food/Messages_sv.properties"]
+  }],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {"locale": "en", "path": "ui/en.json"},
+    {"locale": "sv", "path": "ui/sv.json"}
+  ]
+}

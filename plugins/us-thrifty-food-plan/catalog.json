@@ -1,0 +1,16 @@
+{
+  "name": "USDA Thrifty Food Plan",
+  "names": {
+    "en": "USDA Thrifty Food Plan",
+    "sv": "USDA:s matbudget"
+  },
+  "description": {
+    "en": "USDA’s monthly U.S. average for food prepared at home, adjusted for household ages and size.",
+    "sv": "USDA:s amerikanska månadsbelopp för mat lagad hemma, anpassat till hushållets åldrar och storlek."
+  },
+  "country": "US",
+  "category": "expenses",
+  "releases": [
+    "4facbeee78b881772fb37a4ce828f651f499835a3246a2fc9aee362c4886664c"
+  ]
+}
