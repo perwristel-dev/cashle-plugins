@@ -1,0 +1,35 @@
+{
+  "id": "cashle.finance.pension.public.fr",
+  "requires": [
+    "cashle.finance",
+    "cashle.dsl.groovy"
+  ],
+  "sources": [
+    {
+      "path": "french-public-pension.cashle",
+      "providers": [
+        "cashle.finance.pension.public.fr"
+      ],
+      "resources": [
+        "cnav/Messages_en.properties",
+        "cnav/Messages_sv.properties",
+        "cnav/Messages_fr.properties"
+      ]
+    }
+  ],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui/en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui/sv.json"
+    },
+    {
+      "locale": "fr",
+      "path": "ui/fr.json"
+    }
+  ]
+}

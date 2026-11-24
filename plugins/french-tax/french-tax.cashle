@@ -23,7 +23,7 @@ import static dev.cashle.tax.support.PropertyInputs.requiredBool
 
 int referenceYear = 2025
 int lossYears = 10
-def bases = ['salary', 'capitalIncome', 'investmentGains', 'investmentLosses',
+def bases = ['salary', 'pension', 'capitalIncome', 'investmentGains', 'investmentLosses',
     'investmentCapitalLoss', 'investmentDividends', 'referenceIncome', 'propertyTaxDue', 'propertyReferenceIncome'].asImmutable()
 def payrollOptions = ['employmentSocialContributions', 'deductibleEmployeeContributions', 'payrollTaxableAdditions'].asImmutable()
 def monetary = (bases + payrollOptions + ['investmentCapitalLossBroughtForward', 'savingsIncomeLosses',
@@ -130,7 +130,7 @@ countryTaxPolicy('FR') {
     currency 'EUR'
     ruleYear referenceYear
     incomeBases bases
-    sourceBases(['salary', 'capitalIncome'])
+    sourceBases(['salary', 'pension', 'capitalIncome'])
     requiresTaxPlan true
     messages 'dev.cashle.tax.france.FrenchTaxSource'
     stateFields fields
@@ -271,7 +271,12 @@ countryTaxPolicy('FR') {
             'Deductible payroll contributions must not exceed actual total contributions or gross cash salary.')
         double salary = gross - deductible + (double) requiredAmount(input, 'payrollTaxableAdditions')
         double expenses = Math.min(salary, Math.max(509d, Math.min(14_555d, salary * 0.1d)))
-        double taxable = Math.max(0d, salary - expenses)
+        double taxableEmployment = Math.max(0d, salary - expenses)
+        double pension = amount(input, 'pension')
+        // The pension allowance is applied once to the single taxpayer's combined pensions.
+        double pensionAllowance = Math.min(pension, Math.max(454d, Math.min(4_439d, pension * 0.1d)))
+        double taxablePension = pension - pensionAllowance
+        double taxable = taxableEmployment + taxablePension
         double baseTax = bracketTax(taxable)
         double quotientTax = parts * (double) bracketTax(taxable / parts)
         double capped = Math.max(quotientTax, baseTax - 1_807d * (parts - 1d) * 2d)
@@ -294,7 +299,8 @@ countryTaxPolicy('FR') {
         double propertyTax = amount(input, 'propertyTaxDue')
         double incomeTax = Math.round(Math.max(0d, capped - decote))
         new TaxAssessment(incomeTax + investmentTax + propertyTax, social,
-            components('tax.taxableEmployment', taxable, 'tax.workExpenses', expenses,
+            components('tax.taxableEmployment', taxableEmployment, 'tax.workExpenses', expenses,
+                'tax.taxablePension', taxablePension, 'tax.pensionAllowance', pensionAllowance,
                 'tax.beforeDecote', capped, 'tax.familyBenefit', baseTax - capped, 'tax.decote', decote,
                 'tax.investment', investmentTax, 'tax.property', propertyTax, 'investmentCapitalLossRemaining', losses - offset))
     }
