@@ -1,0 +1,52 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import java.nio.charset.StandardCharsets
+import java.time.LocalDate
+
+financeModule('cashlab.italian-istat-budget', 1) {
+    pluginId 'cashle.finance.budget.it.istat'
+    messages 'italian.istat.Messages'
+    dsl('italianIstatBudget') { id -> [name: id, region: '', municipality: '', householdType: ''] }
+
+    calculation {
+        Double monthly = IstatAbsolutePovertyTable.MONTHLY.get(
+            [input.region, input.municipality, input.householdType].join('|'))
+        requireInput('threshold') { monthly != null }
+        double fx = exchangeRate('EUR', profile.currency ?: 'EUR')
+        def expense = household.account {
+            name input.name ?: text('label')
+            classify AccountKind.EXPENSE, new AccountTag('cashle.household.economic-nature', 1,
+                'expense.consumption.consumer-budget', Set.of(AccountKind.EXPENSE))
+        }
+        requiredExpense('basket') {
+            on monthlyFromPlanStart
+            destination expense
+            amount {
+                def residence = residenceAt('self', today)
+                if (residence != null && residence.country() != 'IT') return 0d
+                monthly * fx * inflationFactor(IstatAbsolutePovertyTable.REFERENCE_DATE, today)
+            }
+            savings 'basket'
+        }
+    }
+}
+
+final class IstatAbsolutePovertyTable {
+    // The annual-average 2025 prices are represented by the middle of the reference year.
+    static final LocalDate REFERENCE_DATE = LocalDate.of(2025, 7, 1)
+    static final Map<String, Double> MONTHLY = readTable()
+
+    private static Map<String, Double> readTable() {
+        def stream = IstatAbsolutePovertyTable.getResourceAsStream('/italian/istat/thresholds-2025.tsv')
+        if (stream == null) throw new IllegalStateException('Missing ISTAT 2025 threshold data')
+        Map<String, Double> table = [:]
+        stream.withReader(StandardCharsets.UTF_8.name()) { reader ->
+            reader.readLine()
+            reader.eachLine { line ->
+                def fields = line.split('\t')
+                table.put([fields[0], fields[1], fields[2]].join('|'), Double.parseDouble(fields[3]))
+            }
+        }
+        Map.copyOf(table)
+    }
+}

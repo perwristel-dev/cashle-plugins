@@ -1,0 +1,16 @@
+plugins {
+    id 'cashle.finance'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.budget.it.istat' from '../italian-istat-budget.cashle'
+}
+
+finance {
+    language 'en'
+    plan { from '2026-01-01'; until '2026-03-01'; currency 'EUR'; inflation 0d }
+    person('self') { birthYear 1980; birthMonth 1 }
+    income 'salary', 2000d
+    italianIstatBudget('Minimum household basket') {
+        settings([region: 'ITC4', municipality: 'metro', householdType: '40'])
+    }
+}
+collect {}

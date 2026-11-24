@@ -1,0 +1,16 @@
+{
+  "name": "Soglia di povertà assoluta ISTAT",
+  "names": {
+    "en": "ISTAT absolute-poverty minimum basket",
+    "sv": "ISTAT:s minimikorg vid absolut fattigdom"
+  },
+  "description": {
+    "en": "Italy’s 2025 essential household consumption minimum including housing, by region and household composition.",
+    "sv": "Italiens miniminivå för hushållets nödvändiga konsumtion inklusive boende 2025, efter region och hushåll."
+  },
+  "country": "IT",
+  "category": "expenses",
+  "releases": [
+    "e6e472eccdf03452741f4eec42229583902a25ba73ab7f5a91fac23dbd66c8ce"
+  ]
+}

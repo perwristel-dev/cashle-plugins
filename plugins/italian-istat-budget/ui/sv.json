@@ -1,0 +1,16 @@
+{
+  "label": "ISTAT:s minimikorg vid absolut fattigdom",
+  "name": "Namn",
+  "region": "Region",
+  "municipality": "Kommuntyp",
+  "choose": "Välj",
+  "metro": "Storstadens centralort",
+  "large": "Storstadens förort eller kommun över 50 000 invånare",
+  "small": "Annan kommun med högst 50 000 invånare",
+  "household": "Hushållets ålderssammansättning",
+  "householdHelp": "Välj antal personer i varje åldersgrupp. Använd ISTAT:s räknare om kombinationen saknas i listan.",
+  "help": "Minimikorgen för 2025 omfattar boende, mat och andra nödvändiga utgifter. Använd den för hushållets samlade minimiutgifter.",
+  "summary": "Minimibelopp per månad inklusive boende · ISTAT 2025",
+  "financing": "Finansiering",
+  "invalid": "Välj en region, kommuntyp och hushållssammansättning som stöds."
+}
