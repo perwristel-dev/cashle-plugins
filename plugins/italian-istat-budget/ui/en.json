@@ -1,0 +1,16 @@
+{
+  "label": "ISTAT absolute-poverty minimum basket",
+  "name": "Name",
+  "region": "Region",
+  "municipality": "Municipality type",
+  "choose": "Choose",
+  "metro": "Metropolitan centre",
+  "large": "Metropolitan suburb or municipality over 50,000",
+  "small": "Other municipality up to 50,000",
+  "household": "Household age composition",
+  "householdHelp": "Select the number of people in each age band. Use the ISTAT calculator if the combination is outside the published list.",
+  "help": "The 2025 minimum basket includes housing, food and other essentials. Use it as a total minimum household expense.",
+  "summary": "Housing-inclusive monthly minimum · ISTAT 2025",
+  "financing": "Financing",
+  "invalid": "Choose a supported region, municipality and household composition."
+}

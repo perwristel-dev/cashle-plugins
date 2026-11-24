@@ -1,0 +1,19 @@
+{
+  "id": "cashle.finance.budget.it.istat",
+  "requires": ["cashle.finance", "cashle.dsl.groovy"],
+  "sources": [{
+    "path": "italian-istat-budget.cashle",
+    "providers": ["cashle.finance.budget.it.istat"],
+    "resources": [
+      "italian/istat/thresholds-2025.tsv",
+      "italian/istat/Messages_en.properties",
+      "italian/istat/Messages_sv.properties"
+    ]
+  }],
+  "ui": "ui/entry.js",
+  "uiAssets": ["ui/choices.js"],
+  "uiTranslations": [
+    {"locale": "en", "path": "ui/en.json"},
+    {"locale": "sv", "path": "ui/sv.json"}
+  ]
+}
