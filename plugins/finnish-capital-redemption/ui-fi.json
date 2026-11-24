@@ -1,0 +1,14 @@
+{
+  "label": "Suomalainen kapitalisaatiosopimus",
+  "field.ordinaryContractConfirmed": "Tavanomainen suomalainen kapitalisaatiosopimus vahvistettu",
+  "field.holderControlRights": "Haltijalla on määräysvaltaa kohde-etuuksiin",
+  "help.scope": "Käytä henkilökohtaiselle suomalaisen vakuutusyhtiön sopimukselle, jonka jäljellä oleva sijoitettu pääoma ja TVL 35 §:n tavanomainen käsittely on vahvistettu. Takaisinostokulut ja erityissäännöt lasketaan erikseen.",
+  "help.control": "Omistajalle tyypillinen ääni-, luovutus-, käyttö- tai kaupankäyntioikeus voi johtaa TVL 35 b §:n soveltamiseen ja lykkääntymisedun menettämiseen. Vakuutusyhtiön normaalista valikoimasta valitseminen on yleensä sallittua.",
+  "help.historicalGain": "Ilmoita erikseen vuoden aikana jo maksettu veronalainen tuotto ja jäljellä oleva sijoitettu pääoma.",
+  "help.withholding": "Ilmoita vuonna jo toimitettu todellinen ennakonpidätys. Uudesta suorituksesta, jonka veronalainen tuotto ylittää 20 euroa, pidätetään 30 %.",
+  "invalid.ordinary": "Vahvista tavanomainen TVL 35 §:n sopimus ilman haltijan määräysvaltaa.",
+  "invalid.owner": "Valitse sopimuksen henkilöomistaja.",
+  "invalid.distributions": "Pidä kaikki sijoitustuotot sopimuksessa takaisinostoon asti.",
+  "invalid.loss": "Ilmoita sopimuksen tappio vasta sopimuksen päättyessä.",
+  "invalid.quote": "Käytä voimassa olevan kapitalisaatiosopimuksen kelvollista nostoa."
+}

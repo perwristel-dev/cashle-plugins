@@ -1,0 +1,37 @@
+{
+  "id": "cashle.finance.fi-capital-redemption",
+  "requires": [
+    "cashle.finance",
+    "cashle.account.support",
+    "cashle.account.tax.support"
+  ],
+  "sources": [
+    {
+      "path": "finnish-capital-redemption.cashle",
+      "providers": [
+        "cashle.finance.fi-capital-redemption",
+        "cashle.finance.fi-capital-redemption.policy"
+      ],
+      "resources": [
+        "finnish/redemption/policy_en.properties",
+        "finnish/redemption/policy_sv.properties",
+        "finnish/redemption/policy_fi.properties"
+      ]
+    }
+  ],
+  "ui": "ui.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui-en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui-sv.json"
+    },
+    {
+      "locale": "fi",
+      "path": "ui-fi.json"
+    }
+  ]
+}

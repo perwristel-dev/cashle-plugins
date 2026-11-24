@@ -1,0 +1,14 @@
+{
+  "label": "Finnish capital redemption contract",
+  "field.ordinaryContractConfirmed": "Ordinary Finnish capital redemption contract confirmed",
+  "field.holderControlRights": "Holder has control rights over underlying assets",
+  "help.scope": "Use one personal contract with a Finnish insurer, verified remaining contributed principal and ordinary §35 treatment. Redemption fees and special contract tax rules require a separate calculation.",
+  "help.control": "Ownership-type voting, transfer, use or trading rights can trigger §35b and remove tax deferral. Selecting from the insurer’s standard allocations is generally permitted.",
+  "help.historicalGain": "Enter taxable profit already paid during the year and the remaining contributed principal separately.",
+  "help.withholding": "Enter actual tax already withheld this year. New payouts with taxable profit over EUR 20 include 30% withholding.",
+  "invalid.ordinary": "Confirm a standard Finnish §35 contract without holder control rights.",
+  "invalid.owner": "Choose the individual who owns the contract.",
+  "invalid.distributions": "Keep all investment returns inside the contract until redemption.",
+  "invalid.loss": "Recognize a contract loss only when the contract closes.",
+  "invalid.quote": "Use a valid withdrawal from an open capital redemption contract."
+}

@@ -1,0 +1,14 @@
+{
+  "label": "Finländskt kapitaliseringsavtal",
+  "field.ordinaryContractConfirmed": "Vanligt finländskt kapitaliseringsavtal verifierat",
+  "field.holderControlRights": "Innehavaren har bestämmanderätt över de underliggande tillgångarna",
+  "help.scope": "Använd för ett personligt avtal med en finländsk försäkringsgivare, verifierat kvarvarande insatt kapital och vanlig beskattning enligt 35 §. Återköpsavgifter och specialregler beräknas separat.",
+  "help.control": "Röst-, överlåtelse-, nyttjande- eller handelsrätt som motsvarar äganderätt kan medföra att 35 b § tar bort skatteuppskovet. Val bland försäkringsgivarens vanliga placeringsalternativ är normalt tillåtna.",
+  "help.historicalGain": "Ange årets redan utbetalda skattepliktiga avkastning och kvarvarande insatt kapital separat.",
+  "help.withholding": "Ange faktisk skatt som redan innehållits i år. På ny skattepliktig avkastning över 20 EUR innehålls 30 %.",
+  "invalid.ordinary": "Bekräfta ett finländskt standardavtal enligt 35 § utan innehavarens bestämmanderätt.",
+  "invalid.owner": "Välj den enskilda avtalets ägare.",
+  "invalid.distributions": "Behåll all placeringsavkastning inom avtalet fram till återköp.",
+  "invalid.loss": "Redovisa kapitaliseringsavtalets förlust först när avtalet avslutas.",
+  "invalid.quote": "Ange ett giltigt uttag från ett aktivt kapitaliseringsavtal."
+}
