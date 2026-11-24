@@ -1,0 +1,16 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.cashflow'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.residential-transfer-duty.au' from '../australian-residential-transfer-duty.cashle'
+}
+
+finance {
+    plan { from '2026-07-01'; until '2027-01-01'; currency 'AUD'; inflation 0d }
+    income 'Household income', 250000d
+    australianResidentialTransferDuty('NSW home duty') {
+        settings jurisdiction:'NSW', standardPurchaseConfirmed:true, contractDate:'2026-08-03',
+            settlementDate:'2026-08-31', dutiableValueAud:4000000d
+    }
+}
+collect { cashflow {} }

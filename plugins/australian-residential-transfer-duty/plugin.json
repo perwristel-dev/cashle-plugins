@@ -1,0 +1,29 @@
+{
+  "id": "cashle.finance.residential-transfer-duty.au",
+  "requires": [
+    "cashle.finance"
+  ],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui/en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui/sv.json"
+    }
+  ],
+  "sources": [
+    {
+      "path": "australian-residential-transfer-duty.cashle",
+      "providers": [
+        "cashle.finance.residential-transfer-duty.au"
+      ],
+      "resources": [
+        "australian/transfer/messages_en.properties",
+        "australian/transfer/messages_sv.properties"
+      ]
+    }
+  ]
+}

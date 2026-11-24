@@ -1,0 +1,114 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.sdk.model.ScheduleSpec
+import java.math.RoundingMode
+import java.time.LocalDate
+
+final class AustralianResidentialDuty {
+    static final LocalDate NSW_2025 = LocalDate.of(2025, 7, 1)
+    static final LocalDate NSW_2026 = LocalDate.of(2026, 7, 1)
+    static final LocalDate VIC_GENERAL_PREMIUM = LocalDate.of(2021, 7, 1)
+
+    // Lower threshold, published base duty, and duty per AUD 100 (or part).
+    static final List<List<BigDecimal>> NSW_2025_BANDS = [
+        [0G, 0G, 1.25G], [17000G, 212G, 1.50G], [37000G, 512G, 1.75G], [99000G, 1597G, 3.50G],
+        [372000G, 11152G, 4.50G], [1240000G, 50212G, 5.50G], [3721000G, 186667G, 7G],
+    ].collect { it.asImmutable() }.asImmutable()
+    static final List<List<BigDecimal>> NSW_2026_BANDS = [
+        [0G, 0G, 1.25G], [18000G, 225G, 1.50G], [38000G, 525G, 1.75G], [103000G, 1662G, 3.50G],
+        [387000G, 11602G, 4.50G], [1290000G, 52237G, 5.50G], [3870000G, 194137G, 7G],
+    ].collect { it.asImmutable() }.asImmutable()
+
+    static BigDecimal nsw(BigDecimal value, LocalDate contract) {
+        def bands = contract.isBefore(NSW_2026) ? NSW_2025_BANDS : NSW_2026_BANDS
+        def band = bands[bands.findLastIndexOf { value > it[0] }]
+        BigDecimal taxableHundreds = (value - band[0]).divide(100G, 0, RoundingMode.CEILING)
+        (band[1] + taxableHundreds * band[2]).max(20G)
+    }
+
+    static BigDecimal victoria(BigDecimal value, boolean principalResidence) {
+        if (value <= 25000G) return value * 0.014G
+        if (value <= 130000G) return 350G + (value - 25000G) * 0.024G
+        if (principalResidence && value <= 550000G) {
+            return value <= 440000G ? 2870G + (value - 130000G) * 0.05G :
+                18370G + (value - 440000G) * 0.06G
+        }
+        if (value <= 960000G) return 2870G + (value - 130000G) * 0.06G
+        if (value <= 2000000G) return value * 0.055G
+        110000G + (value - 2000000G) * 0.065G
+    }
+
+    static LocalDate parse(Object text) {
+        if (!(text instanceof String) || text.isBlank()) return null
+        try {
+            LocalDate.parse(text)
+        } catch (java.time.DateTimeException ignored) {
+            null
+        }
+    }
+
+    static boolean money(Object value) {
+        value instanceof Number && Double.isFinite(value.doubleValue()) && value >= 0d
+    }
+}
+
+financeModule('cashlab.australian-residential-transfer-duty', 1) {
+    pluginId 'cashle.finance.residential-transfer-duty.au'
+    messages 'australian.transfer.messages'
+    dsl('australianResidentialTransferDuty') { id ->
+        [name: id, jurisdiction: 'NSW', standardPurchaseConfirmed: false, propertyId: '',
+         contractDate: '', settlementDate: '', linkedPurchasePrice: 0d, linkedPurchaseBasis: 'nominal',
+         dutiableValueAud: 0d, victorianPrincipalResidence: false]
+    }
+
+    calculation {
+        if (!enabled) return
+        boolean nsw = input.jurisdiction == 'NSW'
+        boolean linked = input.propertyId instanceof String && !input.propertyId.isBlank()
+        requireInput('invalid.name') { input.name instanceof String && !input.name.isBlank() && input.name.trim().length() <= 80 }
+        requireInput('invalid.jurisdiction') { input.jurisdiction in ['NSW', 'VIC'] }
+        requireInput('invalid.profile') { input.standardPurchaseConfirmed == true && input.victorianPrincipalResidence instanceof Boolean }
+        requireInput('invalid.property') { input.propertyId instanceof String }
+        LocalDate contract = AustralianResidentialDuty.parse(input.contractDate)
+        LocalDate settlement = AustralianResidentialDuty.parse(input.settlementDate)
+        LocalDate first = nsw ? AustralianResidentialDuty.NSW_2025 : AustralianResidentialDuty.VIC_GENERAL_PREMIUM
+        requireInput('invalid.contract') { contract != null && !contract.isBefore(first) }
+        requireInput('invalid.settlement') { settlement != null && !settlement.isBefore(contract) }
+        requireInput('invalid.amount') {
+            AustralianResidentialDuty.money(input.dutiableValueAud) &&
+                (linked ? AustralianResidentialDuty.money(input.linkedPurchasePrice) && input.linkedPurchasePrice > 0d &&
+                    input.linkedPurchaseBasis in ['real', 'nominal'] : input.dutiableValueAud > 0d)
+        }
+
+        LocalDate paid = nsw ? [settlement, contract.plusMonths(3)].min() : settlement
+        LocalDate planDate = planStart.anchor()
+        if (paid.isBefore(planDate)) return
+
+        String planCurrency = profile.currency ?: 'AUD'
+        double fx = exchangeRate('AUD', planCurrency)
+        double toAud = linked ? exchangeRate(planCurrency, 'AUD') : 1d
+        def expense = household.account {
+            name input.name
+            classify AccountKind.EXPENSE, new AccountTag('cashle.household.economic-nature', 1, 'expense.other', [AccountKind.EXPENSE] as Set)
+        }
+        requiredExpense('duty') {
+            on ScheduleSpec.on(paid)
+            destination expense
+            amount {
+                double price = linked ? input.linkedPurchasePrice.doubleValue() * toAud : 0d
+                if (linked && input.linkedPurchaseBasis == 'real') price *= inflationFactor(planDate, settlement)
+                BigDecimal value = BigDecimal.valueOf(Math.max(price, input.dutiableValueAud.doubleValue()))
+                    .setScale(2, RoundingMode.HALF_UP)
+                if (value.signum() == 0) return 0d
+                BigDecimal duty = nsw ? AustralianResidentialDuty.nsw(value, contract) :
+                    AustralianResidentialDuty.victoria(value, input.victorianPrincipalResidence)
+                duty.setScale(2, RoundingMode.HALF_UP).doubleValue() * fx
+            }
+            savings 'duty'
+        }
+    }
+
+    wiring {
+        if (input.propertyId) assetLifecycle(input.propertyId, 'invalid.property')
+    }
+}

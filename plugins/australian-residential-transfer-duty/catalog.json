@@ -1,0 +1,16 @@
+{
+  "name": "Australian residential transfer duty",
+  "names": {
+    "en": "Australian residential transfer duty",
+    "sv": "Australisk överlåtelseskatt för bostad"
+  },
+  "description": {
+    "en": "Transfer duty for established homes in New South Wales and Victoria.",
+    "sv": "Överlåtelseskatt för befintliga bostäder i New South Wales och Victoria."
+  },
+  "country": "AU",
+  "category": "expenses",
+  "releases": [
+    "a7407086abcf50f8036fb2bdeb8fd342320cd9618d20ab257a729d4a3453a24f"
+  ]
+}
