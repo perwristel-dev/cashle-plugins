@@ -1,0 +1,16 @@
+{
+  "name": "SIFO household reference budget",
+  "names": {
+    "en": "SIFO household reference budget",
+    "sv": "SIFO:s referensbudget"
+  },
+  "description": {
+    "en": "Reference costs for everyday consumption in Norway, based on SIFO 2026.",
+    "sv": "Norska referensbelopp för vardaglig konsumtion enligt SIFO 2026."
+  },
+  "country": "NO",
+  "category": "expense",
+  "releases": [
+    "b8eb9df3aafdc24dbaa3987f4ddf31026a71f455a3b575963669f1ad668e7086"
+  ]
+}

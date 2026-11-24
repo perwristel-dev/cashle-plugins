@@ -1,0 +1,101 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.temporal.ChronoUnit
+
+final class SifoReferenceCosts {
+    // NOK per month, 2026. For categories split by sex, use the midpoint of the published pair.
+    private static final List<List<Number>> FOOD = [[6,1065], [12,2500], [48,2180], [84,2585],
+        [132,3190], [180,3795], [216,4380], [300,4695], [612,4520], [852,4127.5], [Integer.MAX_VALUE,4102.5]].asImmutable()
+    private static final List<List<Number>> CLOTHING = [[12,730], [24,1140.16], [72,900], [120,1010],
+        [168,870], [216,1020], [Integer.MAX_VALUE,1104.9]].asImmutable()
+    private static final List<List<Number>> CARE = [[12,530], [36,630], [48,370], [72,240], [120,270],
+        [168,450], [216,570], [612,920], [Integer.MAX_VALUE,900]].asImmutable()
+    private static final List<List<Number>> LEISURE = [[12,160], [36,390], [72,810], [120,1260],
+        [168,1570], [216,1690], [Integer.MAX_VALUE,1080]].asImmutable()
+    private static final List<Number> SUPPLIES = [400,450,630,760,940,1050,1120].asImmutable()
+    private static final List<Number> EQUIPMENT = [590,640,725,920,995,1075,1145].asImmutable()
+    private static final List<Number> FURNITURE = [550,680,870,990,1210,1430,1630].asImmutable()
+    private static final List<Number> MEDIA = [2570,2620,2760,2850,2880,2910,2910].asImmutable()
+
+    static double memberCost(List<List<Number>> table, long age) {
+        table.find { age < it[0] }[1].doubleValue()
+    }
+
+    static YearMonth birth(Map row) {
+        def year = row.birthYear
+        def month = row.birthMonth == null ? 1 : row.birthMonth
+        if (!(year instanceof Number) || !(month instanceof Number) || year < 1800 || year > 2400 || month < 1 || month > 12) return null
+        YearMonth.of(year.intValue(), month.intValue())
+    }
+
+    static double total(List<Map> members, YearMonth today, boolean transport) {
+        double food = 0d
+        double individual = 0d
+        double count = 0d
+        double furnitureCount = 0d
+        int adults = 0
+        int children = 0
+        for (Map member : members) {
+            long age = ChronoUnit.MONTHS.between((YearMonth) member.birth, today)
+            if (age < 0 || (member.child && age >= 216)) continue
+            double share = member.share.doubleValue()
+            count += share
+            if (age >= 36) furnitureCount += share
+            if (member.child) children++
+            else adults++
+            food += share * memberCost(FOOD, age)
+            individual += share * (memberCost(CLOTHING, age) + memberCost(CARE, age) + memberCost(LEISURE, age))
+            if (member.child && age < 12) individual += 535d * share
+            if (transport && age >= 72) individual += share * (age < 240 ? 338d : age < 804 ? 1019d : 510d)
+        }
+        if (count == 0d) return 0d
+        int household = Math.min(7, (int) Math.ceil(count)) - 1
+        int equipment = Math.max(0, Math.min(7, (int) Math.ceil(furnitureCount)) - 1)
+        double shared = SUPPLIES[household] + MEDIA[household] + EQUIPMENT[equipment] + FURNITURE[equipment]
+        individual + shared + food * (adults == 2 && children > 2 ? 0.88d : 1d)
+    }
+}
+
+financeModule('cashlab.norwegian-sifo-budget', 1) {
+    pluginId 'cashle.finance.budget.no.sifo'
+    messages 'sifo.messages'
+    dsl('norwegianSifoBudget') { id -> [name:id, extraPercent:0d, osloTransit:false] }
+
+    calculation {
+        if (!enabled) return
+        def householdProfile = profile.household instanceof Map ? profile.household : [:]
+        boolean couple = profile.mode == 'couple' || (profile.mode == 'household' && householdProfile.hasPartner == true)
+        List<Map> members = profile.people.findAll { it.id == 'self' || (couple && it.id == 'partner') }.collect { person ->
+            [id:person.id, birth:SifoReferenceCosts.birth(person), share:1d, child:false, death:plannedDeathOf(person.id)]
+        }
+        if (profile.mode == 'household') {
+            for (def child : (householdProfile.children ?: [])) {
+                members.add([birth:SifoReferenceCosts.birth(child), share:child.residence == 'half' ? 0.5d : 1d, child:true])
+            }
+        }
+        requireInput('birth') { members.any { it.id == 'self' } && members.every { it.birth != null } &&
+            (!couple || members.any { it.id == 'partner' }) }
+        requireInput('percent') { input.extraPercent instanceof Number && Double.isFinite(input.extraPercent.doubleValue()) && input.extraPercent >= -100d }
+        double factor = (1d + input.extraPercent.doubleValue() / 100d) * exchangeRate('NOK', profile.currency ?: 'NOK')
+        boolean transport = input.osloTransit == true
+        LocalDate referenceDate = LocalDate.of(2026, 2, 1)
+        def expense = household.account {
+            name input.name
+            classify AccountKind.EXPENSE, new AccountTag('cashle.household.economic-nature', 1, 'expense.consumption.consumer-budget', [AccountKind.EXPENSE] as Set)
+        }
+        requiredExpense('budget') {
+            on monthlyFromPlanStart
+            destination expense
+            amount {
+                def present = members.findAll { member ->
+                    if (member.child) return true
+                    def death = member.death.get()
+                    death == null || today.isBefore(death)
+                }
+                SifoReferenceCosts.total(present, YearMonth.from(today), transport) * factor * inflationFactor(referenceDate, today)
+            }
+        }
+    }
+}

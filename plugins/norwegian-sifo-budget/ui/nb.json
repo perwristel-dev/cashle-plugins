@@ -1,0 +1,8 @@
+{
+  "label": "SIFOs referansebudsjett",
+  "description": "Norske referansebeløp for forbruksutgifter fra SIFO 2026.",
+  "name": "Navn",
+  "adjustment": "Avvik fra referansebeløpet",
+  "summary": "Månedlige utgifter etter SIFO 2026",
+  "transport": "Ta med kollektivtransport i Oslo"
+}

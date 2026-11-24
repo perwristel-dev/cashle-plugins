@@ -1,0 +1,34 @@
+{
+  "id": "cashle.finance.budget.no.sifo",
+  "requires": [
+    "cashle.finance"
+  ],
+  "sources": [
+    {
+      "path": "norwegian-sifo-budget.cashle",
+      "providers": [
+        "cashle.finance.budget.no.sifo"
+      ],
+      "resources": [
+        "sifo/messages_en.properties",
+        "sifo/messages_sv.properties",
+        "sifo/messages_nb.properties"
+      ]
+    }
+  ],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui/en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui/sv.json"
+    },
+    {
+      "locale": "nb",
+      "path": "ui/nb.json"
+    }
+  ]
+}
