@@ -23,10 +23,10 @@ export default function (context) {
     translations,
     requiresTaxPlan: true,
     sourceTax: { language: 'groovy-cashle-plugin', provider: 'cashle.tax.it', source: 'italian-tax.cashle' },
-    id: 'IT', label: 'Italien', currency: 'EUR', ruleYear: 2025, supportedBases: ['salary', 'capitalIncome'], propertyTax: propertyForm(),
-    description: 'IRPEF 2025, heltidsårsboende vanlig anställd. Lön är brutto före faktiska arbetstagaravgifter. Ange faktisk INPS, region och kommun samt verifierade platta lokala skattesatser eller faktiska publicerade progressiva skalor för 2025. Skalorna ska beskriva marginalskatt med eventuellt fullständigt kommunalt inkomstundantag; särskilda lokala avdrag och andra undantag ingår inte. Pension, särskilda inflyttarregler och hushållsavdrag ingår inte. 2026 års 33 %-skikt ingår inte i denna uttryckliga 2025-utgåva.',
+    id: 'IT', label: 'Italien', currency: 'EUR', ruleYear: 2025, supportedBases: ['salary', 'pension', 'capitalIncome'], propertyTax: propertyForm(),
+    description: 'IRPEF 2025 för helårsboende med vanlig lön eller pension. Lön är brutto före faktiska arbetstagaravgifter. Ange faktisk INPS, region och kommun samt verifierade platta lokala skattesatser eller faktiska publicerade progressiva skalor för 2025. Skalorna ska beskriva marginalskatt med eventuellt fullständigt kommunalt inkomstundantag; särskilda lokala avdrag och andra undantag ingår inte. Lön och pension beskattas tillsammans med skilda skattereduktioner. Särskilda inflyttarregler och hushållsavdrag ingår inte. 2026 års 33 %-skikt ingår inte i denna uttryckliga 2025-utgåva.',
     source: 'https://www.normattiva.it/uri-res/N2Ls?urn:nir:stato:legge:2024-12-30;207',
-    defaultOptions: { ruleYear: 2025, residency: '', initialState: {}, region: '', municipality: '', localTaxMethod: 'flat', regionalRate: null, municipalRate: null, municipalExemption: 0, flatLocalRatesConfirmed: false, regionalSchedule: [], municipalSchedule: [], localSchedulesConfirmed: false, employmentProfile: 'resolved-inps', employmentContract: '', employeeSocialContributions: null, employmentDays: 365, payrollSupplementResolved: false, settlementDate: '' },
+    defaultOptions: { ruleYear: 2025, residency: '', initialState: {}, region: '', municipality: '', localTaxMethod: 'flat', regionalRate: null, municipalRate: null, municipalExemption: 0, flatLocalRatesConfirmed: false, regionalSchedule: [], municipalSchedule: [], localSchedulesConfirmed: false, employmentProfile: 'resolved-inps', employmentContract: '', employeeSocialContributions: null, employmentDays: 365, transitionEmploymentDays: null, pensionDays: null, payrollSupplementResolved: false, settlementDate: '' },
     fields: [
       ...commonFields, text('region', 'Faktisk region'), text('municipality', 'Faktisk kommun'),
       c('localTaxMethod', 'Lokala skatteregler', [['flat', 'Verifierade platta skattesatser'], ['progressive-schedules', 'Faktiska publicerade progressiva skalor']]),
@@ -37,11 +37,18 @@ export default function (context) {
       { key: 'municipalSchedule', label: 'Kommunens faktiska publicerade progressiva skala (2025 års EUR)', kind: 'json', moneyKeys: ['upTo'], when: o => o.localTaxMethod === 'progressive-schedules', help: 'Samma marginalskatteformat som regionen; sista raden ska endast ha rate. En faktiskt platt kommunalskatt kan anges som en enda rad med rate. Inga förvalda eller uppskattade skalor.' },
       { ...check('localSchedulesConfirmed', 'Jag har verifierat båda publicerade 2025-skalorna och kommunens fullständiga inkomstundantag för min region/kommun; inga andra lokala undantag eller avdrag gäller'), when: o => o.localTaxMethod === 'progressive-schedules' },
       n('municipalExemption', 'Kommunalt fullständigt inkomstundantag (2025 års EUR)', { money: true, help: 'Lagstadgad lokal gräns i regelårets penningvärde. Över gränsen beskattas hela inkomsten enligt vald kommunalskatt. Ange inte ett inflationsuppräknat framtida belopp.' }),
-      c('employmentProfile', 'INPS-profil', [['resolved-inps', 'Faktiska årsavgifter från lönespecifikation']]), c('employmentContract', 'Faktisk anställningsform', [['', 'Välj'], ['indefinite', 'Tillsvidare'], ['fixed-term', 'Tidsbegränsad']]), n('employeeSocialContributions', 'Faktiska avdragsgilla arbetstagaravgifter per år (EUR)', { money: true }), n('employmentDays', 'Anställningsdagar (1–365)', { max: 365, integer: true }), check('payrollSupplementResolved', 'Vid nettoinkomst 15 000–28 000 EUR: verifierat att ingen ytterligare avdragsberoende trattamento integrativo gäller'),
+      c('employmentProfile', 'INPS-profil', [['resolved-inps', 'Faktiska årsavgifter från lönespecifikation']]), c('employmentContract', 'Faktisk anställningsform', [['', 'Välj'], ['indefinite', 'Tillsvidare'], ['fixed-term', 'Tidsbegränsad'], ['none', 'Ingen lön i prognosen']]), n('employeeSocialContributions', 'Faktiska avdragsgilla arbetstagaravgifter per år (EUR)', { money: true }), n('employmentDays', 'Anställningsdagar (1–365)', { max: 365, integer: true }),
+      n('transitionEmploymentDays', 'Anställningsdagar under året med både lön och pension', { min: 1, max: 364, integer: true,
+        help: 'Ange dagar med rätt till skattereduktion för arbete under övergångsåret. Övriga dagar räknas som pensionsdagar om inget annat anges.' }),
+      n('pensionDays', 'Pensionsdagar med rätt till skattereduktion (valfritt)', { min: 1, max: 365, integer: true }), check('payrollSupplementResolved', 'Vid nettoinkomst 15 000–28 000 EUR: verifierat att ingen ytterligare avdragsberoende trattamento integrativo gäller'),
     ],
     validate(o) {
       const e = base(o);
-      if (!['indefinite', 'fixed-term'].includes(o.employmentContract)) e.push(taxText('Ange faktisk anställningsform.'));
+      if (!['none', 'indefinite', 'fixed-term'].includes(o.employmentContract)) e.push(taxText('Ange faktisk anställningsform.'));
+      if ([['transitionEmploymentDays', 364], ['pensionDays', 365]].some(([key, max]) =>
+        o[key] != null && (!Number.isInteger(o[key]) || o[key] < 1 || o[key] > max))) {
+        e.push(taxText('Ange giltiga dagar för skattereduktion vid övergång från arbete till pension.'));
+      }
       if (typeof o.region !== 'string' || !o.region.trim() || typeof o.municipality !== 'string' || !o.municipality.trim()) e.push(taxText('Ange faktisk region och kommun.'));
       const method = o.localTaxMethod ?? 'flat';
       if (method === 'flat') {

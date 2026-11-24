@@ -1,0 +1,17 @@
+{
+  "name": "Pensione di vecchiaia INPS",
+  "names": {
+    "en": "INPS old-age pension",
+    "sv": "Italiensk allmän ålderspension"
+  },
+  "description": {
+    "it": "Proietta la pensione di vecchiaia con l’importo INPS, i requisiti ordinari e la tredicesima.",
+    "en": "Project the ordinary old-age pension from an INPS quote, including lawful timing and the 13th instalment.",
+    "sv": "Prognostisera ordinarie ålderspension med INPS-belopp, tillåten uttagsstart och trettonde månadsbelopp."
+  },
+  "category": "accounts",
+  "country": "IT",
+  "releases": [
+    "4606fde0964a595dbdb720df639e9020ce67397881029ba592b238a196511e78"
+  ]
+}

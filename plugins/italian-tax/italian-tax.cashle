@@ -16,7 +16,7 @@ import static dev.cashle.tax.support.PropertyInputs.noReplacementRollover
 import static dev.cashle.tax.support.PropertyInputs.requiredBool
 
 int referenceYear = 2025
-def income = ['salary', 'capitalIncome', 'investmentGains', 'investmentLosses', 'investmentCapitalLoss',
+def income = ['salary', 'pension', 'capitalIncome', 'investmentGains', 'investmentLosses', 'investmentCapitalLoss',
     'investmentDividends', 'propertyTaxDue'].asImmutable()
 def monetary = (income + ['savingsIncomeLosses', 'savingsIncomeLossBroughtForward', 'referenceIncome',
     'propertyReferenceIncome', 'employeeSocialContributions', 'employmentSocialContributions',
@@ -26,7 +26,7 @@ def allowed = (income + ['ruleYear', 'residency', 'birthYear', 'investmentCapita
     'settlementDate', 'noticeDatesByYear', 'noticeAmountsByYear', 'settlementCalendar', 'region', 'municipality',
     'localTaxMethod', 'regionalRate', 'municipalRate', 'flatLocalRatesConfirmed', 'regionalSchedule',
     'municipalSchedule', 'localSchedulesConfirmed', 'municipalExemption', 'employeeSocialContributions',
-    'employmentProfile', 'employmentDays', 'employmentContract', 'payrollSupplementResolved']).toSet().asImmutable()
+    'employmentProfile', 'employmentDays', 'transitionEmploymentDays', 'pensionDays', 'employmentContract', 'payrollSupplementResolved']).toSet().asImmutable()
 def amount = { input, String key ->
     double value = number(input, key, 0d)
     require(value >= 0d, key + ' must be nonnegative.')
@@ -63,6 +63,9 @@ def progressiveSchedule = { double taxable, raw ->
 def finite = { value -> value instanceof Number && Double.isFinite(value.doubleValue()) }
 def nonnegative = { value -> finite(value) && value.doubleValue() >= 0d }
 def nonblank = { value -> value instanceof String && !value.trim().isEmpty() }
+def validDays = { Object value, int max ->
+    value instanceof Number && value.doubleValue() == Math.rint(value.doubleValue()) && value >= 1 && value <= max
+}
 def validSchedule = { rows ->
     if (!(rows instanceof List) || rows.isEmpty()) return false
     double lower = 0d
@@ -138,7 +141,7 @@ countryTaxPolicy('IT') {
     currency 'EUR'
     ruleYear referenceYear
     incomeBases income
-    sourceBases(['salary', 'capitalIncome'])
+    sourceBases(['salary', 'pension', 'capitalIncome'])
     requiresTaxPlan true
     messages 'dev.cashle.tax.italy.ItalianTaxSource'
     nativeMonetaryOptions nativeOptions
@@ -174,7 +177,11 @@ countryTaxPolicy('IT') {
             !''.equals(confirmed)
         if (!(options.settlementDate instanceof String && options.settlementDate.matches('\\d{4}-\\d{2}-\\d{2}')) &&
                 !hasNotice && !calendarConfirmed) errors.add(messages.text('profile.settlementDate'))
-        if (!['indefinite', 'fixed-term'].contains(options.employmentContract)) errors.add(messages.text('profile.employmentContract'))
+        if (!['none', 'indefinite', 'fixed-term'].contains(options.employmentContract)) errors.add(messages.text('profile.employmentContract'))
+        if ((options.get('transitionEmploymentDays') != null && !validDays(options.transitionEmploymentDays, 364)) ||
+                (options.get('pensionDays') != null && !validDays(options.pensionDays, 365))) {
+            errors.add(messages.text('profile.incomeDays'))
+        }
         if (!nonblank(options.region) || !nonblank(options.municipality)) errors.add(messages.text('profile.location'))
         def method = options.localTaxMethod != null ? options.localTaxMethod : 'flat'
         if ('flat'.equals(method)) {
@@ -248,20 +255,32 @@ countryTaxPolicy('IT') {
     assess { input ->
         keys(input, allowed)
         require(number(input, 'ruleYear', 0d) == referenceYear,
-            'Select ruleYear:2025 (income-year edition; France assessed in 2026).')
+            'Select ruleYear:2025 (income-year edition; Italy assessed in 2026).')
         require('full-year'.equals(input.residency), 'Only full-year domestic residence is supported.')
         require(input.region instanceof String && !input.region.isBlank(), 'Provide actual Italian region.')
         require(input.municipality instanceof String && !input.municipality.isBlank(), 'Provide actual Italian municipality.')
         require('resolved-inps'.equals(input.employmentProfile),
             'Provide actual employee INPS contributions using employmentProfile resolved-inps; sector rates are not assumed.')
         double salary = amount(input, 'salary')
-        double social = requiredAmount(input, 'employeeSocialContributions')
+        double pension = amount(input, 'pension')
+        double enteredSocial = requiredAmount(input, 'employeeSocialContributions')
+        double social = pension > 0d && salary == 0d ? 0d : enteredSocial
         require(social <= salary, 'Employee contributions cannot exceed gross salary.')
-        require(Set.of('indefinite', 'fixed-term').contains(input.employmentContract),
+        require(Set.of('indefinite', 'fixed-term').contains(input.employmentContract) ||
+            (salary == 0d && 'none'.equals(input.employmentContract)),
             'Select actual employmentContract: indefinite or fixed-term for minimum employee credit.')
         double days = number(input, 'employmentDays', 365d)
-        require(days >= 1d && days <= 365d && days == Math.rint(days), 'employmentDays must be 1–365.')
+        require(validDays(days, 365), 'employmentDays must be 1–365.')
+        boolean mixed = salary > 0d && pension > 0d
+        if (mixed) {
+            days = number(input, 'transitionEmploymentDays', days)
+            require(validDays(days, 364), 'Enter 1–364 eligible employment days in the wage-and-pension transition year.')
+        }
+        double pensionDays = pension > 0d ? number(input, 'pensionDays', mixed ? 365d - days : 365d) : 0d
+        require(pension == 0d || validDays(pensionDays, 365), 'pensionDays must be 1–365.')
+        require(!mixed || days + pensionDays <= 365d, 'Employment and pension credit days cannot overlap or total more than 365.')
         double earned = salary - social
+        double ordinary = earned + pension
         def localMethod = input.getOrDefault('localTaxMethod', 'flat')
         require('flat'.equals(localMethod) || 'progressive-schedules'.equals(localMethod),
             'Select localTaxMethod flat or progressive-schedules.')
@@ -270,39 +289,46 @@ countryTaxPolicy('IT') {
         if ('progressive-schedules'.equals(localMethod)) {
             require(bool(input, 'localSchedulesConfirmed', false),
                 'Confirm actual published 2025 regional and municipal progressive schedules for the named locations.')
-            regional = progressiveSchedule(earned, input.regionalSchedule)
-            municipal = progressiveSchedule(earned, input.municipalSchedule)
+            regional = progressiveSchedule(ordinary, input.regionalSchedule)
+            municipal = progressiveSchedule(ordinary, input.municipalSchedule)
         } else {
             require(bool(input, 'flatLocalRatesConfirmed', false),
                 'Confirm verified flat regional and municipal rates for the named locations.')
-            regional = earned * rate(input, 'regionalRate')
-            municipal = earned * rate(input, 'municipalRate')
+            regional = ordinary * rate(input, 'regionalRate')
+            municipal = ordinary * rate(input, 'municipalRate')
         }
-        double localBeforeIrpefExemption = regional + (earned > amount(input, 'municipalExemption') ? municipal : 0d)
+        double localBeforeIrpefExemption = regional + (ordinary > amount(input, 'municipalExemption') ? municipal : 0d)
         double credit = 0d
         if (earned > 0d) {
-            if (earned <= 15_000d) credit = 1_955d
-            else if (earned <= 28_000d) credit = 1_910d + 1_190d * (28_000d - earned) / 13_000d
-            else if (earned <= 50_000d) credit = 1_910d * (50_000d - earned) / 22_000d
-            double minimum = earned <= 15_000d ? ('fixed-term'.equals(input.employmentContract) ? 1_380d : 690d) : 0d
+            if (ordinary <= 15_000d) credit = 1_955d
+            else if (ordinary <= 28_000d) credit = 1_910d + 1_190d * (28_000d - ordinary) / 13_000d
+            else if (ordinary <= 50_000d) credit = 1_910d * (50_000d - ordinary) / 22_000d
+            double minimum = ordinary <= 15_000d ? ('fixed-term'.equals(input.employmentContract) ? 1_380d : 690d) : 0d
             credit = Math.max(credit * days / 365d, minimum)
-            if (earned > 25_000d && earned <= 35_000d) credit += 65d
+            if (ordinary > 25_000d && ordinary <= 35_000d) credit += 65d
+        }
+        double pensionCredit = 0d
+        if (pension > 0d) {
+            if (ordinary <= 8_500d) pensionCredit = Math.max(713d, 1_955d * pensionDays / 365d)
+            else if (ordinary <= 28_000d) pensionCredit = (700d + 1_255d * (28_000d - ordinary) / 19_500d) * pensionDays / 365d
+            else if (ordinary <= 50_000d) pensionCredit = 700d * (50_000d - ordinary) / 22_000d * pensionDays / 365d
+            if (ordinary > 25_000d && ordinary <= 29_000d) pensionCredit += 50d
         }
         double furtherCredit = 0d
-        if (earned > 20_000d && earned <= 32_000d) furtherCredit = 1_000d * days / 365d
-        if (earned > 32_000d && earned < 40_000d) furtherCredit = 1_000d * (40_000d - earned) / 8_000d * days / 365d
+        if (earned > 0d && ordinary > 20_000d && ordinary <= 32_000d) furtherCredit = 1_000d * days / 365d
+        if (earned > 0d && ordinary > 32_000d && ordinary < 40_000d) furtherCredit = 1_000d * (40_000d - ordinary) / 8_000d * days / 365d
         double annualEquivalent = earned * 365d / days
-        double payrollBonus = earned <= 20_000d ? earned * (annualEquivalent <= 8_500d ? 0.071d :
+        double payrollBonus = ordinary <= 20_000d ? earned * (annualEquivalent <= 8_500d ? 0.071d :
             annualEquivalent <= 15_000d ? 0.053d : 0.048d) : 0d
-        double integrative = earned <= 15_000d && earned * 0.23d > Math.max(0d, credit - 75d * days / 365d) ?
+        double integrative = ordinary <= 15_000d && earned * 0.23d > Math.max(0d, credit - 75d * days / 365d) ?
             1_200d * days / 365d : 0d
-        require(earned <= 15_000d || earned >= 28_000d || bool(input, 'payrollSupplementResolved', false),
+        require(earned == 0d || ordinary <= 15_000d || ordinary >= 28_000d || bool(input, 'payrollSupplementResolved', false),
             'Income EUR15,000–28,000 requires payrollSupplementResolved confirmation that no extra deduction-dependent integrative treatment is due.')
-        double irpef = Math.max(0d, Math.min(earned, 28_000d)) * 0.23d +
-            Math.max(0d, Math.min(earned, 50_000d) - 28_000d) * 0.35d +
-            Math.max(0d, earned - 50_000d) * 0.43d
-        double employmentTax = Math.max(0d, irpef - credit - furtherCredit)
-        double local = employmentTax > 0d ? localBeforeIrpefExemption : 0d
+        double irpef = Math.min(ordinary, 28_000d) * 0.23d +
+            Math.max(0d, Math.min(ordinary, 50_000d) - 28_000d) * 0.35d +
+            Math.max(0d, ordinary - 50_000d) * 0.43d
+        double ordinaryTax = Math.max(0d, irpef - credit - furtherCredit - pensionCredit)
+        double local = ordinaryTax > 0d ? localBeforeIrpefExemption : 0d
         double gains = amount(input, 'investmentGains')
         double loss = amount(input, 'investmentLosses') + amount(input, 'investmentCapitalLoss') +
             amount(input, 'investmentCapitalLossBroughtForward')
@@ -310,10 +336,11 @@ countryTaxPolicy('IT') {
         double capital = amount(input, 'capitalIncome') + amount(input, 'investmentDividends') + gains - used
         double investment = capital * 0.26d
         double propertyTax = amount(input, 'propertyTaxDue')
-        new TaxAssessment(employmentTax + local + investment + propertyTax, social,
-            components('tax.taxableEmployment', earned, 'tax.irpefBeforeCredit', irpef,
+        new TaxAssessment(ordinaryTax + local + investment + propertyTax, social,
+            components('tax.taxableEmployment', earned, 'tax.taxablePension', pension, 'tax.irpefBeforeCredit', irpef,
                 'tax.employmentCredit', Math.min(irpef, credit),
                 'tax.furtherEmploymentCredit', Math.min(Math.max(0d, irpef - credit), furtherCredit),
+                'tax.pensionCredit', Math.min(Math.max(0d, irpef - credit - furtherCredit), pensionCredit),
                 'tax.payrollBonus', payrollBonus, 'tax.integrativeTreatment', integrative,
                 'tax.local', local, 'tax.investment', investment, 'tax.property', propertyTax,
                 'investmentCapitalLossRemaining', loss - used), payrollBonus + integrative)

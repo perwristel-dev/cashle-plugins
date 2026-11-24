@@ -1,0 +1,22 @@
+{
+  "Pensione di vecchiaia INPS": "INPS old-age pension",
+  "Pagamento della pensione INPS": "INPS pension payment",
+  "Importo mensile lordo ordinario INPS": "Regular gross monthly INPS amount",
+  "Requisiti di accesso": "Eligibility route",
+  "Contributi anteriori al 1996, pensione ordinaria": "Contributions before 1996, ordinary old-age pension",
+  "Primo contributo dal 1996, soglia INPS soddisfatta": "First contributions from 1996, INPS amount threshold met",
+  "Primo contributo dal 1996, accesso con cinque anni effettivi": "First contributions from 1996, five-year actual contribution route",
+  "Decorrenza confermata dall’INPS": "Start confirmed by INPS",
+  "Anni di contribuzione al momento del raggiungimento dell’età": "Qualifying contribution years when the required age is reached",
+  "Data di decorrenza confermata": "Confirmed effective date",
+  "Pagamento vitalizio con tredicesima": "Lifetime payment with a 13th instalment",
+  "La decorrenza confermata deve cadere il primo giorno del mese.": "The confirmed effective date must be the first day of a month.",
+  "Servono almeno cinque anni di contribuzione effettiva.": "Enter at least five years of actual contributions.",
+  "Servono almeno 20 anni di contribuzione utile.": "Enter at least 20 years of qualifying contributions.",
+  "Importo lordo mensile": "Gross monthly amount",
+  "Nome": "Name",
+  "Titolare": "Owner",
+  "Decorrenza desiderata": "Requested pension start",
+  "Prima decorrenza utile": "Earliest permitted start",
+  "Età": "Age"
+}

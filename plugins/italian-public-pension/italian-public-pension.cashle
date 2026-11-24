@@ -1,0 +1,112 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
+import dev.cashle.sdk.model.ScheduleSpec
+
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.temporal.ChronoUnit
+import java.util.function.Supplier
+
+final class InpsOldAgeDates {
+    static LocalDate monthStart(LocalDate date) {
+        date.dayOfMonth == 1 ? date : date.withDayOfMonth(1).plusMonths(1)
+    }
+
+    static LocalDate later(LocalDate first, LocalDate second) {
+        first.isAfter(second) ? first : second
+    }
+
+    static LocalDate firstOrdinaryMonth(YearMonth birth, boolean lateContributory) {
+        YearMonth birthday = birth.plusYears(lateContributory ? 71 : 67)
+        YearMonth qualifyingMonth = birthday
+        if (qualifyingMonth.year >= 2027) qualifyingMonth = birthday.plusMonths(1)
+        if (qualifyingMonth.year >= 2028) qualifyingMonth = birthday.plusMonths(3)
+        qualifyingMonth.plusMonths(1).atDay(1)
+    }
+
+    static LocalDate enteredStart(Object value) {
+        if (!(value instanceof String) || !value.matches('[0-9]{4}-[0-9]{2}-01')) return null
+        try {
+            return LocalDate.parse(value)
+        } catch (java.time.format.DateTimeParseException ignored) {
+            return null
+        }
+    }
+}
+
+financeModule('cashlab.italian-public-pension', 1) {
+    pluginId 'cashle.finance.pension.public.it'
+    messages 'inps.Messages'
+    dsl('italianInpsPension') { id ->
+        [name:id, owner:'self', monthlyQuote:0d, claimRoute:'ordinary', qualifyingYears:0d, confirmedStart:'',
+            payoutStart:[reference:'minimum', offset:0]]
+    }
+
+    calculation {
+        if (!enabled) return
+        String ownerId = input.owner ?: 'self'
+        def person = profile.people.find { row -> row.id == ownerId }
+        requireInput('owner') {
+            person?.birthYear instanceof Number && person.birthMonth instanceof Number &&
+                person.birthYear >= 1900 && person.birthMonth in 1..12
+        }
+        requireInput('quote') {
+            input.monthlyQuote instanceof Number && Double.isFinite(input.monthlyQuote.doubleValue()) && input.monthlyQuote >= 0d
+        }
+        requireInput('route') { input.claimRoute in ['ordinary', 'contributory', 'late-contributory', 'confirmed'] }
+
+        YearMonth birth = YearMonth.of(person.birthYear.intValue(), person.birthMonth.intValue())
+        boolean late = input.claimRoute == 'late-contributory'
+        LocalDate earliest
+        if (input.claimRoute == 'confirmed') {
+            earliest = InpsOldAgeDates.enteredStart(input.confirmedStart)
+            requireInput('confirmedStart') { earliest != null && !earliest.isBefore(birth.atDay(1)) }
+        } else {
+            requireInput(late ? 'effectiveYears' : 'qualifyingYears') {
+                input.qualifyingYears instanceof Number && Double.isFinite(input.qualifyingYears.doubleValue()) &&
+                    input.qualifyingYears >= (late ? 5d : 20d)
+            }
+            earliest = InpsOldAgeDates.firstOrdinaryMonth(birth, late)
+            requireInput('historical') { earliest.year >= 2019 }
+        }
+        LocalDate planDate = planStart.anchor()
+        Map time = (Map) input.payoutStart
+        int offset = ((Number) time.getOrDefault('offset', 0)).intValue()
+        Supplier<LocalDate> requested
+        if (time.reference == 'minimum') requested = { earliest.plusMonths(offset) }
+        else if (time.reference == 'age') requested = { birth.plusYears(time.age.longValue()).plusMonths(offset + 1).atDay(1) }
+        else if (time.reference == 'date') requested = { LocalDate.of(time.year.intValue(), time.month.intValue(),
+            ((Number) time.getOrDefault('day', 1)).intValue()).plusMonths(offset) }
+        else if (time.reference == 'retirement') requested = milestone('retirement:' + (time.personId ?: ownerId), offset)
+        else if (time.reference == 'milestone') requested = milestone(time.milestoneId, offset)
+        else requested = { planDate.plusMonths(offset) }
+
+        double monthly = input.monthlyQuote.doubleValue() * exchangeRate('EUR', profile.currency ?: 'EUR')
+        def pension = owner(ownerId).account {
+            name input.name
+            classify AccountKind.INCOME, new AccountTag('cashle.household.economic-nature', 1,
+                'income.pension.public', [AccountKind.INCOME] as Set)
+            reportingRole ReportingRole.INCOME
+        }
+        taxableReceipt(ownerId, 'pension', 'monthly') {
+            on ScheduleSpec.every(Frequency.MONTH, InpsOldAgeDates.monthStart(InpsOldAgeDates.later(planDate, earliest)))
+            until deathOf(ownerId)
+            debit cash
+            credit pension
+            amount {
+                LocalDate claim = requested.get()
+                if (claim == null) return 0d
+                LocalDate start = InpsOldAgeDates.later(earliest, InpsOldAgeDates.monthStart(claim))
+                if (today.isBefore(start)) return 0d
+                double instalments = 1d
+                if (today.monthValue == 12) {
+                    LocalDate firstInYear = InpsOldAgeDates.later(start, LocalDate.of(today.year, 1, 1))
+                    instalments += (1d + ChronoUnit.MONTHS.between(firstInYear, today)) / 12d
+                }
+                monthly * instalments * inflationFactor(planDate, today)
+            }
+        }
+    }
+}
