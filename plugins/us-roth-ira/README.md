@@ -13,7 +13,8 @@ tax year, even for a contribution made the next spring for that tax year.
 Cashle uses the owner’s birth month and releases earnings in the first full
 month after the month of reaching 59½. The model accepts no owner RMDs.
 
-Use explicit withdrawals or enable automatic funding from the desired date. An attempted
+In the liquidity settings, allow withdrawals when the plan should first draw
+from the Roth IRA. The account starts with withdrawals disabled. An attempted
 earnings withdrawal before qualification is rejected. Conversion and rollover
 basis, their separate clocks, inherited IRAs, disability and first-home
 exceptions, nonqualified earnings taxes, and excess contribution corrections

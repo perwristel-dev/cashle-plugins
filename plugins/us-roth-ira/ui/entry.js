@@ -13,7 +13,7 @@ export default function (context) {
     label: 'US Roth IRA', help: 'help',
     defaults: {
       policyOptions: { firstRothTaxYear: 0, openingRoom: 0, recurringRoom: 0 }, openingState: {},
-      liquidity: { withdrawals: 'always', fromYear: 2026, from: { reference: 'now', offset: 0, personId: 'self' }, liquid: 'never' },
+      liquidity: { withdrawals: 'never', fromYear: 2026, from: { reference: 'now', offset: 0, personId: 'self' }, liquid: 'never' },
     },
     policyFields: fields,
     features: { basis: true, plannedSales: false, dividendsReinvest: true, dividendsMustReinvest: true,
