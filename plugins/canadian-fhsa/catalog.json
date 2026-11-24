@@ -1,0 +1,16 @@
+{
+  "name": "Canadian FHSA",
+  "names": {
+    "en": "Canadian FHSA",
+    "sv": "Kanadensiskt FHSA"
+  },
+  "description": {
+    "en": "Registered first-home savings with qualifying and taxable withdrawals.",
+    "sv": "Registrerat förstaboendesparande med kvalificerade och skattepliktiga uttag."
+  },
+  "country": "CA",
+  "category": "accounts",
+  "releases": [
+    "ba78d109d203419cfaaa36a398e4368eb9db26697880b7ca6cc8fd389effa41c"
+  ]
+}

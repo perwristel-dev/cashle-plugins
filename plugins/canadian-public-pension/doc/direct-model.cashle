@@ -1,0 +1,15 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.cashflow'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.ca' from '../canadian-public-pension.cashle'
+}
+
+finance {
+    plan { from '2027-01-01'; until '2027-07-01'; currency 'CAD'; inflation 0d }
+    person('self') { name 'Example resident'; birthYear 1962; birthMonth 1 }
+    canadianPublicPension('Canadian public pension') {
+        settings earningsMonthly:1000d, oasYears:20
+    }
+}
+collect { cashflow {} }

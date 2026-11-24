@@ -1,0 +1,16 @@
+{
+  "name": "Canadian public pension",
+  "names": {
+    "en": "Canadian public pension",
+    "sv": "Kanadensisk allmän pension"
+  },
+  "description": {
+    "en": "CPP or QPP, Old Age Security and a quoted Guaranteed Income Supplement.",
+    "sv": "CPP eller QPP, Old Age Security och Guaranteed Income Supplement enligt besked."
+  },
+  "country": "CA",
+  "category": "income",
+  "releases": [
+    "e6ef522a46169d1e59a29e7cb581d8642e8fa656784c11a2c9852b999c7df118"
+  ]
+}

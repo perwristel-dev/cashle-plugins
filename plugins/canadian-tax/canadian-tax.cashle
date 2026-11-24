@@ -22,8 +22,9 @@ import static dev.cashle.tax.support.PropertyInputs.weekday
 
 int referenceYear = 2026
 def provinces = ['AB', 'ON'].asImmutable()
-def externalBases = ['salary', 'capitalIncome', 'eligibleDividends', 'nonEligibleDividends', 'capitalGains', 'capitalLosses'].asImmutable()
-def bases = (externalBases + ['investmentCapitalLoss', 'businessIncome']).asImmutable()
+def externalBases = ['salary', 'pension', 'registeredPension', 'oasPension', 'federalPensionSupplement',
+    'capitalIncome', 'eligibleDividends', 'nonEligibleDividends', 'capitalGains', 'capitalLosses'].asImmutable()
+def bases = (externalBases + ['investmentCapitalLoss', 'businessIncome', 'fhsaIncome', 'fhsaDeduction']).asImmutable()
 def nativeMoneyFields = ['adjustedFamilyNetIncome', 'cppPensionableEmploymentIncome', 'cppPensionableBusinessIncome'].asImmutable()
 
 def amount = { Map input, String key ->
@@ -88,6 +89,13 @@ def assessIncome = { Map input ->
         'Unsupported Canadian province: choose Alberta (AB) or Ontario (ON); other provincial tax is not silently omitted.')
     boolean ontario = 'ON'.equals(input.get('province'))
     double salary = amount(input, 'salary')
+    double pension = amount(input, 'pension')
+    double registeredPension = amount(input, 'registeredPension')
+    double oas = amount(input, 'oasPension')
+    double supplement = amount(input, 'federalPensionSupplement')
+    double pensionIncome = pension + registeredPension + oas + supplement
+    double fhsaIncome = amount(input, 'fhsaIncome')
+    double fhsaDeduction = amount(input, 'fhsaDeduction')
     double interest = amount(input, 'capitalIncome')
     double business = amount(input, 'businessIncome')
     require(business == 0d || bool(input, 'propertyFlippingIncomeConfirmed', false),
@@ -100,9 +108,9 @@ def assessIncome = { Map input ->
     double gains = amount(input, 'capitalGains')
     double currentNetGains = Math.max(0d, gains - currentLosses)
     double netGains = Math.max(0d, gains - losses)
-    require(salary + interest + business + eligible + other + currentNetGains <= 181440d ||
-        currentNetGains + eligible + other == 0d,
-        'This investment-income profile may require Canadian alternative minimum tax (T691), which is unsupported.')
+    require(salary + pensionIncome + fhsaIncome + interest + business + eligible + other + currentNetGains <= 181440d ||
+        currentNetGains + eligible + other + fhsaDeduction == 0d,
+        'This investment-income or FHSA deduction profile may require Canadian alternative minimum tax (T691), which is unsupported.')
 
     int age = referenceYear - (int) number(input, 'birthYear', 0d)
     double months = 12d
@@ -170,19 +178,26 @@ def assessIncome = { Map input ->
     double selfCpp = 2d * (selfBase + selfEnhanced + Math.max(0d, selfCpp2))
     double ei = Math.min(salary, 68900d) * 0.0163d
     double enhancedDeduction = cppEnhanced + cpp2 + 2d * (selfEnhanced + Math.max(0d, selfCpp2))
-    double netIncome = Math.max(0d, salary + interest + business + grossDiv + currentNetGains * 0.5d - enhancedDeduction - selfBase)
-    double taxable = Math.max(0d, netIncome - (currentNetGains - netGains) * 0.5d)
+    double beforeRecovery = Math.max(0d, salary + pensionIncome + fhsaIncome + interest + business + grossDiv +
+        currentNetGains * 0.5d - enhancedDeduction - selfBase - fhsaDeduction)
+    double oasRecovery = Math.min(oas + supplement, Math.max(0d, beforeRecovery - 95323d) * 0.15d)
+    double netIncome = beforeRecovery - oasRecovery
+    double supplementDeduction = Math.max(0d, supplement - Math.max(0d, oasRecovery - oas))
+    double taxable = Math.max(0d, netIncome - supplementDeduction - (currentNetGains - netGains) * 0.5d)
 
     double bpa = 16452d - Math.min(1623d, Math.max(0d, netIncome - 181440d) / (258482d - 181440d) * 1623d)
     double federalBefore = progressive(taxable, [58523, 117045, 181440, 258482], [0.14d, 0.205d, 0.26d, 0.29d, 0.33d])
     double federalAge = age >= 65 ? Math.max(0d, 9208d - Math.max(0d, netIncome - 46432d) * 0.15d) : 0d
     double provincialAge = age >= 65 ? Math.max(0d, (ontario ? 6342d : 6345d) - Math.max(0d, netIncome - (ontario ? 47210d : 47234d)) * 0.15d) : 0d
-    double federalCredits = (bpa + federalAge + cppBase + selfBase + ei + Math.min(1501d, salary)) * 0.14d
+    double federalPensionAmount = Math.min(2000d, registeredPension)
+    double provincialPensionAmount = Math.min(ontario ? 1796d : 1753d, registeredPension)
+    double federalCredits = (bpa + federalAge + federalPensionAmount + cppBase + selfBase + ei + Math.min(1501d, salary)) * 0.14d
     double federalDiv = eligible * 0.38d * 6d / 11d + other * 0.15d * 9d / 13d
     double federal = Math.max(0d, federalBefore - federalCredits - federalDiv)
 
     double provincialBpa = ontario ? 12989d : 22769d
-    double provincialCredits = (provincialBpa + provincialAge + cppBase + selfBase + ei) * (ontario ? 0.0505d : 0.08d)
+    double provincialCredits = (provincialBpa + provincialAge + provincialPensionAmount + cppBase + selfBase + ei) *
+        (ontario ? 0.0505d : 0.08d)
     double provincialBefore = ontario ?
         progressive(taxable, [53891, 107785, 150000, 220000], [0.0505d, 0.0915d, 0.1116d, 0.1216d, 0.1316d]) :
         progressive(taxable, [61200, 154259, 185111, 246813, 370220], [0.08d, 0.10d, 0.12d, 0.13d, 0.14d, 0.15d])
@@ -211,9 +226,12 @@ def assessIncome = { Map input ->
         health = healthPremium(taxable)
         provincial += health
     }
-    new TaxAssessment(federal + provincial, cpp + cpp2 + ei + selfCpp,
+    new TaxAssessment(federal + provincial + oasRecovery, cpp + cpp2 + ei + selfCpp,
         components('federalIncomeTax', federal, 'provincialIncomeTax', provincial,
             'federalBasicPersonalAmount', bpa, 'federalAgeAmount', federalAge, 'provincialAgeAmount', provincialAge,
+            'federalPensionAmount', federalPensionAmount, 'provincialPensionAmount', provincialPensionAmount,
+            'oasRecovery', oasRecovery, 'federalPensionSupplementDeduction', supplementDeduction,
+            'fhsaIncome', fhsaIncome, 'fhsaDeduction', fhsaDeduction,
             'cppContributionMonths', months, 'provincialBasicPersonalAmount', provincialBpa, 'netIncome', netIncome,
             'taxableIncome', taxable, 'taxableCapitalGains', netGains * 0.5d, 'grossedUpDividends', grossDiv,
             'federalDividendCredit', federalDiv, 'provincialDividendCredit', provincialDiv,
@@ -259,6 +277,8 @@ countryTaxPolicy('CA') {
     settlementDate { int year, options -> weekday(LocalDate.of(year + 1, 4, 30)) }
     stateFields([capitalLossCarry: new TaxStateField('Canadian gross capital loss carry', true)])
     messages 'dev.cashle.tax.canada.CanadianTaxSource'
+
+    preliminaryEligible { String basis, Map options -> basis != 'federalPensionSupplement' }
 
     validateProfile { Map options, TaxProfileContext context, catalog ->
         def errors = []
