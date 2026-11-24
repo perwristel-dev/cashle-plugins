@@ -6,6 +6,10 @@ income tax offset, Medicare, franking credits and capital gains with loss
 carry. The property policy uses verified main-residence facts, absence
 elections and the first-income cost basis rule.
 
+The [Australian investment bond plugin](../australian-investment-bond/README.md)
+adds assessable life-insurance bonuses and the 30% non-refundable offset to the
+annual tax assessment for eligible domestic policies.
+
 Build the installation ZIP from the repository root with Node.js and `zip`.
 
 ```sh

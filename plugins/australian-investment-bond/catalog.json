@@ -1,0 +1,16 @@
+{
+  "name": "Australian investment bond",
+  "names": {
+    "en": "Australian investment bond",
+    "sv": "Australisk investeringsförsäkring"
+  },
+  "description": {
+    "en": "Australian life-insurance investment bond accounting for the ten-year bonus rule and premium increases.",
+    "sv": "Australisk investeringsförsäkring med tioårsregeln för avkastning och premieökningar."
+  },
+  "country": "AU",
+  "category": "accounts",
+  "releases": [
+    "3a5c083c3839bf60e2d370974461a8b1d510fc7ec061b0f0eb52a76fd34be384"
+  ]
+}
