@@ -1,0 +1,13 @@
+{
+  "id": "cashle.finance.no-fondskonto",
+  "requires": ["cashle.finance", "cashle.account.support", "cashle.account.tax.support"],
+  "ui": "ui.js",
+  "uiTranslations": [
+    { "locale": "en", "path": "ui-en.json" },
+    { "locale": "sv", "path": "ui-sv.json" }
+  ],
+  "sources": [
+    { "path": "norwegian-fondskonto.cashle", "resources": ["norwegian/fondskonto/account_en.properties", "norwegian/fondskonto/account_sv.properties"] },
+    { "path": "norwegian-fondskonto-tax.cashle", "resources": ["norwegian/fondskonto/policy_en.properties", "norwegian/fondskonto/policy_sv.properties"] }
+  ]
+}

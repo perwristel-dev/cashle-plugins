@@ -1,0 +1,28 @@
+investmentAccount('cashlab.no-fondskonto', 1) {
+    pluginId 'cashle.finance.no-fondskonto'
+    dsl 'noFondskonto'
+    country 'NO'
+    kind 'NOfondskonto'
+    taxPolicy 'fondskonto'
+    messages 'norwegian.fondskonto.account'
+    prepaidTax false
+    transfers true
+    defaults([reinvestDividends: true, policyOptions: [verifiedShielding: 0d]])
+
+    taxInput { entered, active, messages ->
+        if (!active) return entered
+        if (entered.reinvestDividends == false) {
+            throw new IllegalArgumentException(messages.text('invalid.distributed'))
+        }
+        def options = entered.policyOptions ?: [:]
+        def share = options.equityShare
+        if (!(share instanceof Number) || !Double.isFinite(share.doubleValue()) || share < 0d || share > 100d) {
+            throw new IllegalArgumentException(messages.text('invalid.equity'))
+        }
+        def shielding = options.getOrDefault('verifiedShielding', 0d)
+        if (!(shielding instanceof Number) || !Double.isFinite(shielding.doubleValue()) || shielding < 0d) {
+            throw new IllegalArgumentException(messages.text('invalid.shielding'))
+        }
+        entered
+    }
+}
