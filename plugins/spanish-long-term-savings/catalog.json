@@ -1,0 +1,16 @@
+{
+  "name": "Spanish long-term savings (SIALP/CIALP)",
+  "names": {
+    "en": "Spanish long-term savings (SIALP/CIALP)",
+    "sv": "Spanskt långsiktigt sparande (SIALP/CIALP)"
+  },
+  "description": {
+    "en": "Qualifying Spanish long-term savings plans with a five-year exemption.",
+    "sv": "Spanskt långsiktigt sparande med fem års kvalifikationstid."
+  },
+  "country": "ES",
+  "category": "accounts",
+  "releases": [
+    "24e2ec3347709b6714543347f4441af3bd9931cc789c67986665a964dc7c9624"
+  ]
+}

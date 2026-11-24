@@ -1,0 +1,66 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.InvestmentCarry
+import dev.cashle.tax.TaxStateField
+
+investmentAccount('cashlab.es-long-term-savings', 1) {
+    pluginId 'cashle.finance.es-long-term-savings'
+    dsl 'spanishLongTermSavings'
+    country 'ES'
+    kind 'ESlongTermSavings'
+    taxPolicy 'es-long-term-savings'
+    messages 'savingsplan.messages'
+    transfers false
+    defaults([liquidity: [withdrawals: 'never', liquid: 'never'], reinvestDividends: true])
+}
+
+accountTaxPolicy('es-long-term-savings') {
+    pluginId 'cashle.finance.es-long-term-savings.policy'
+    country 'ES'
+    ruleYear 2025
+    messages 'savingsplan.messages'
+    maxAccountsPerPerson 1
+    annualOnly 'cashlab.es-long-term-savings'
+    openingStateInNativeCurrency true
+    resetAcquiredDateWhenEmptyDeposit false
+    annualBases 'capitalIncome', 'savingsIncomeLosses'
+
+    stateFields([
+        depositYear: new TaxStateField('year', false),
+        annualDeposits: new TaxStateField('deposits', true)
+    ])
+
+    def used = { deposit ->
+        double year = deposit.money().assessmentYear()
+        deposit.state().getOrDefault('depositYear', year) == year ? deposit.state().getOrDefault('annualDeposits', 0d) : 0d
+    }
+    maximumDeposit { deposit -> Math.max(0d, 5000d - (double) used(deposit)) }
+    stateAfterDeposit { deposit ->
+        double amount = (double) used(deposit) + deposit.amount()
+        requireInput('limit') { amount <= 5000d + 1e-7d }
+        [annualDeposits:amount, depositYear:(double) deposit.money().assessmentYear()]
+    }
+
+    preliminaryTaxRate { double configuredRate -> 0d }
+    withdraw { request ->
+        requireInput('closure') { request.closeAccount() }
+        requireInput('dates') {
+            request.acquiredDate() != null && request.date() != null && !request.date().isBefore(request.acquiredDate())
+        }
+        boolean qualified = !request.date().isBefore(request.acquiredDate().plusYears(5L))
+        withdrawal(request, false, true, qualified && request.position().marketValue() >= request.position().costBasis())
+    }
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        double gains = 0d
+        double losses = 0d
+        def carries = [:]
+        for (def account : accounts) {
+            requireInput('distribution') { account.distributedDividends() == 0d }
+            requireInput('closure') { account.closed() || (account.realizedGain() == 0d && account.realizedLoss() == 0d) }
+            gains += account.realizedGain()
+            losses += account.realizedLoss()
+            carries[account.id()] = new InvestmentCarry(0d, 0d, [annualDeposits:0d, depositYear:(double) money.assessmentYear()])
+        }
+        new InvestmentAnnualAssessment([capitalIncome:gains, savingsIncomeLosses:losses], 0d, carries)
+    }
+}
