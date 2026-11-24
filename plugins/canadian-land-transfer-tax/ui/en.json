@@ -1,0 +1,23 @@
+{
+  "label": "Canadian residential transfer charges",
+  "field.name": "Name",
+  "field.jurisdiction": "Property location",
+  "region.ontario": "Ontario, outside the City of Toronto",
+  "region.toronto": "City of Toronto, Ontario",
+  "region.alberta": "Alberta",
+  "field.closingDate": "Closing or registration date",
+  "field.consideration": "Taxable consideration or certified land value",
+  "field.oneOrTwoHomes": "One or two single-family residences for the higher bands",
+  "field.provinceRefundShare": "Ontario first-time refund eligible share",
+  "field.torontoRefundShare": "Toronto first-time rebate eligible share",
+  "field.mortgagePrincipal": "Alberta mortgage registration amount",
+  "help.scope": "Use for an ordinary residential closing. Enter the confirmed date and value and keep them in sync with your home purchase. Special buyer surtaxes and legal and processing fees are separate.",
+  "help.consideration": "Enter the nominal CAD value used to calculate the charge on the closing date.",
+  "help.refund": "Enter the verified eligible ownership share if the rebate is received at closing. Enter 0 for no rebate at closing.",
+  "help.mortgage": "Enter 0 when there is no mortgage registration charge to include.",
+  "invalid.name": "Enter a name of 1 to 80 characters.",
+  "invalid.jurisdiction": "Choose Ontario, the City of Toronto, or Alberta.",
+  "invalid.date": "Enter a closing date covered by the selected schedule.",
+  "invalid.amount": "Enter a positive taxable amount in CAD.",
+  "invalid.facts": "Enter valid housing, rebate or mortgage registration facts."
+}

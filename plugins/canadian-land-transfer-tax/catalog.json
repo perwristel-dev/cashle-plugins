@@ -1,0 +1,16 @@
+{
+  "name": "Canadian residential transfer charges",
+  "names": {
+    "en": "Canadian residential transfer charges",
+    "sv": "Kanadensiska avgifter vid bostadsförvärv"
+  },
+  "description": {
+    "en": "Ontario and Toronto land transfer taxes and Alberta land registration charges.",
+    "sv": "Överlåtelseskatt i Ontario och Toronto samt registreringsavgifter i Alberta."
+  },
+  "country": "CA",
+  "category": "expenses",
+  "releases": [
+    "a3dca6653ca59ad4825124c9b8463155d297ef39c7080158ea3feb442b39ebe1"
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "label": "Frais de transfert résidentiel au Canada",
+  "field.name": "Nom",
+  "field.jurisdiction": "Emplacement du bien",
+  "region.ontario": "Ontario, hors de la ville de Toronto",
+  "region.toronto": "Ville de Toronto, Ontario",
+  "region.alberta": "Alberta",
+  "field.closingDate": "Date de clôture ou d’enregistrement",
+  "field.consideration": "Contrepartie imposable ou valeur foncière certifiée",
+  "field.oneOrTwoHomes": "Une ou deux habitations unifamiliales selon les tranches supérieures",
+  "field.provinceRefundShare": "Part admissible au remboursement ontarien des premiers acheteurs",
+  "field.torontoRefundShare": "Part admissible au remboursement torontois des premiers acheteurs",
+  "field.mortgagePrincipal": "Montant de l’hypothèque enregistrée en Alberta",
+  "help.scope": "Utilisez pour une clôture résidentielle ordinaire. Saisissez la date et la valeur confirmées et mettez-les à jour si l’achat change. Les surtaxes spéciales et les frais juridiques et de traitement sont distincts.",
+  "help.consideration": "Saisissez la valeur nominale en CAD utilisée pour calculer les frais à la clôture.",
+  "help.refund": "Entrez la part de propriété admissible vérifiée si le remboursement est reçu à la clôture. Sinon, entrez 0.",
+  "help.mortgage": "Entrez 0 en l’absence de frais d’enregistrement hypothécaire à inclure.",
+  "invalid.name": "Entrez un nom de 1 à 80 caractères.",
+  "invalid.jurisdiction": "Choisissez l’Ontario, la ville de Toronto ou l’Alberta.",
+  "invalid.date": "Entrez une date de clôture couverte par le barème choisi.",
+  "invalid.amount": "Entrez un montant imposable positif en CAD.",
+  "invalid.facts": "Entrez des renseignements valides sur le bien, le remboursement ou l’enregistrement hypothécaire."
+}
