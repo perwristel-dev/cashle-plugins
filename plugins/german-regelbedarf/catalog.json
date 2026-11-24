@@ -1,0 +1,16 @@
+{
+  "name": "German statutory living-cost minimum (Regelbedarf)",
+  "names": {
+    "en": "German statutory living-cost minimum (Regelbedarf)",
+    "sv": "Tyskt lagstadgat existensminimum (Regelbedarf)"
+  },
+  "description": {
+    "en": "BMAS 2026 household living-cost minimum for adults and children, excluding housing and heating.",
+    "sv": "BMAS lagstadgade minimibudget 2026 för vuxna och barn, exklusive bostad och uppvärmning."
+  },
+  "country": "DE",
+  "category": "expenses",
+  "releases": [
+    "7064560fbc21d18e62dc68337ff3e44d0868130e25367e7795163a4fe54d6aee"
+  ]
+}

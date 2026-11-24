@@ -1,0 +1,71 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.temporal.ChronoUnit
+
+financeModule('cashlab.german-regelbedarf', 1) {
+    pluginId 'cashle.finance.budget.de'
+    messages 'german.regelbedarf.messages'
+    dsl('germanLivingMinimum') { id -> [name: id] }
+
+    calculation {
+        if (!enabled) return
+        def mode = profile.mode ?: 'individual'
+        def householdData = profile.household instanceof Map ? profile.household : [:]
+        boolean hasPartner = mode == 'couple' || mode == 'household' && householdData.hasPartner == true
+        def people = profile.people ?: []
+        requireInput('invalid.household') {
+            mode in ['individual', 'couple', 'household'] && people.any { it.id == 'self' } &&
+                (!hasPartner || people.any { it.id == 'partner' })
+        }
+        def enteredChildren = mode == 'household' ? householdData.children : []
+        requireInput('invalid.children') {
+            enteredChildren instanceof List && enteredChildren.every { child ->
+                child instanceof Map && child.birthYear instanceof Number && child.birthYear == child.birthYear.intValue() &&
+                    child.birthYear >= 1900 && child.birthYear <= 9998 &&
+                    (child.birthMonth == null || child.birthMonth instanceof Number &&
+                        child.birthMonth == child.birthMonth.intValue() && child.birthMonth >= 1 && child.birthMonth <= 12) &&
+                    child.residence in ['full', 'half']
+            }
+        }
+        def children = enteredChildren.collect { child ->
+            [birth: YearMonth.of(child.birthYear.intValue(), (child.birthMonth ?: 1).intValue()),
+                share: child.residence == 'half' ? 0.5d : 1d, partnerChild: child.parentage == 'partner']
+        }
+        def selfDeath = plannedDeathOf('self')
+        def partnerDeath = hasPartner ? plannedDeathOf('partner') : null
+        double fx = exchangeRate('EUR', profile.currency)
+        def benchmark = LocalDate.of(2026, 1, 1)
+        def expense = household.account {
+            name input.name instanceof String && !input.name.isBlank() ? input.name : text('name')
+            classify AccountKind.EXPENSE, new AccountTag('cashle.household.economic-nature', 1,
+                'expense.consumption.consumer-budget', [AccountKind.EXPENSE] as Set)
+        }
+        requiredExpense('minimum') {
+            on monthlyFromPlanStart
+            destination expense
+            amount {
+                def day = today
+                def selfEnd = selfDeath.get()
+                def partnerEnd = partnerDeath?.get()
+                boolean selfPresent = selfEnd == null || day.isBefore(selfEnd)
+                boolean partnerPresent = hasPartner && (partnerEnd == null || day.isBefore(partnerEnd))
+                double eur = selfPresent && partnerPresent ? 1012d : selfPresent || partnerPresent ? 563d : 0d
+                if (eur == 0d) return 0d
+                def month = YearMonth.from(day)
+                for (def child : children) {
+                    if (child.partnerChild && !partnerPresent) continue
+                    long months = ChronoUnit.MONTHS.between(child.birth, month)
+                    if (months < 0 || months >= 18 * 12) continue
+                    // SGB II/SGB XII national levels for ages 0–5, 6–13 and 14–17.
+                    double level = months < 6 * 12 ? 357d : months < 14 * 12 ? 390d : 471d
+                    eur += level * child.share
+                }
+                double scale = day.year <= 2026 ? 1d : inflationFactor(benchmark, LocalDate.of(day.year, 1, 1))
+                eur * fx * scale
+            }
+            savings 'minimum'
+        }
+    }
+}

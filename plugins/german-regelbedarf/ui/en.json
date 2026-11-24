@@ -1,0 +1,9 @@
+{
+  "label": "German statutory living-cost minimum (Regelbedarf)",
+  "field.name": "Name",
+  "funding": "Expense funding",
+  "summary.detail": "2026 monthly benchmark · excludes housing and heating",
+  "invalid.household": "Complete the individual, couple or household profile.",
+  "invalid.children": "Enter valid birth dates and residential shares for children in the household.",
+  "invalid.duplicate": "Use one statutory living-cost benchmark per household."
+}
