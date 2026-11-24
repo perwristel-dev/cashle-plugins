@@ -1,0 +1,18 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.cashflow'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.property-tax.dk' from '../danish-owner-housing-tax.cashle'
+}
+finance {
+    language 'en'
+    plan { from '2026-01-01'; until '2026-06-01'; currency 'DKK'; inflation 0d }
+    person('self') { name 'Example homeowner'; birthYear 1980; birthMonth 1 }
+    income 'household income', 5000d
+    danishHousingTax('Home tax') {
+        settings annualPropertyValueTaxDkk: 10800d, annualLandTaxDkk: 3600d,
+            firstMonth: '2026-02', lastMonth: '2026-04'
+    }
+}
+collect { cashflow {} }

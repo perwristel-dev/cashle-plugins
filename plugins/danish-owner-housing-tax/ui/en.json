@@ -1,0 +1,17 @@
+{
+  "label": "Danish owner-occupied housing tax",
+  "field.name": "Name",
+  "field.propertyValue": "Annual property value tax (ejendomsværdiskat)",
+  "field.land": "Annual land tax (grundskyld)",
+  "field.firstMonth": "First payment month (YYYY-MM, optional)",
+  "field.lastMonth": "Last payment month (YYYY-MM, optional)",
+  "charge.propertyValue": "Property value tax",
+  "charge.land": "Land tax",
+  "unit.dkk": "DKK",
+  "help.notice": "Use the annualized cash charge from the preliminary assessment, after any rebate.",
+  "funding": "Expense funding",
+  "summary.amount": "{amount} DKK/month",
+  "summary.detail": "Preliminary housing tax",
+  "invalid.amount": "Enter nonnegative amounts for both housing charges.",
+  "invalid.period": "Enter payment months in YYYY-MM order from 2024 onwards."
+}
