@@ -1,0 +1,119 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.sdk.model.ScheduleSpec
+import java.time.DateTimeException
+import java.time.LocalDate
+import java.time.YearMonth
+import java.util.function.Supplier
+
+final class VblklassikDates {
+    static boolean integer(Object value, int min, int max) {
+        value instanceof Number && Double.isFinite(value.doubleValue()) &&
+            value.doubleValue() == value.intValue() && value >= min && value <= max
+    }
+
+    static LocalDate date(Map entered) {
+        def day = entered.getOrDefault('day', 1)
+        if (!integer(entered.year, 1900, 9999) || !integer(entered.month, 1, 12) ||
+            !integer(day, 1, 31)) return null
+        try {
+            LocalDate.of(entered.year.intValue(), entered.month.intValue(), day.intValue())
+        } catch (DateTimeException ignored) {
+            null
+        }
+    }
+
+    static LocalDate fullPensionStart(Object month) {
+        if (!(month instanceof String) || !month.matches('(?:19|2[0-9])[0-9]{2}-(?:0[1-9]|1[0-2])')) return null
+        YearMonth.parse(month).atDay(1)
+    }
+
+    static LocalDate monthOnOrAfter(LocalDate date) {
+        date.dayOfMonth == 1 ? date : date.withDayOfMonth(1).plusMonths(1)
+    }
+
+    static double indexation(LocalDate base, LocalDate payment) {
+        int firstIncrease = base.isBefore(LocalDate.of(base.year, 7, 1)) ? base.year : base.year + 1
+        int lastIncrease = payment.monthValue >= 7 ? payment.year : payment.year - 1
+        Math.pow(1.01d, Math.max(0, lastIncrease - firstIncrease + 1))
+    }
+}
+
+financeModule('cashlab.german-vblklassik-pension', 1) {
+    pluginId 'cashle.finance.pension.vblklassik.de'
+    messages 'german.vblklassik.messages'
+    dsl('germanVblklassikPension') { id ->
+        [name: id, owner: 'self', grossMonthlyEur: 0d, firstFullPensionMonth: '',
+         payoutStart: [reference: 'minimum', offset: 0]]
+    }
+
+    calculation {
+        if (!enabled) return
+        def person = profile.people.find { it.id == input.owner && it.id != 'joint' }
+        requireInput('invalid.owner') { person != null }
+        requireInput('invalid.amount') {
+            input.grossMonthlyEur instanceof Number && Double.isFinite(input.grossMonthlyEur.doubleValue()) &&
+                input.grossMonthlyEur >= 0d
+        }
+        def earliest = VblklassikDates.fullPensionStart(input.firstFullPensionMonth)
+        requireInput('invalid.fullPensionMonth') { earliest != null }
+
+        def entered = input.payoutStart
+        requireInput('invalid.start') { entered instanceof Map && entered.getOrDefault('offset', 0) == 0 }
+        Supplier<LocalDate> requested
+        boolean dynamic = entered.reference == 'milestone' && entered.milestoneId instanceof String &&
+            !entered.milestoneId.isBlank()
+        if (entered.reference == 'minimum') {
+            requested = { earliest } as Supplier<LocalDate>
+        } else if (entered.reference == 'age') {
+            requireInput('invalid.age') {
+                VblklassikDates.integer(person.birthYear, 1900, 2300) &&
+                    VblklassikDates.integer(person.birthMonth, 1, 12) && VblklassikDates.integer(entered.age, 0, 130)
+            }
+            def date = YearMonth.of(person.birthYear.intValue(), person.birthMonth.intValue())
+                .plusYears(entered.age.longValue()).plusMonths(1).atDay(1)
+            requested = { date } as Supplier<LocalDate>
+        } else if (dynamic) {
+            requested = milestone(entered.milestoneId)
+        } else {
+            def date = VblklassikDates.date(entered)
+            requireInput('invalid.start') { entered.reference == 'date' && date != null }
+            requested = { date } as Supplier<LocalDate>
+        }
+
+        Supplier<LocalDate> claimStart = {
+            def date = requested.get()
+            if (date == null) return null
+            def month = VblklassikDates.monthOnOrAfter(date)
+            month.isBefore(earliest) ? earliest : month
+        } as Supplier<LocalDate>
+        double amountEur = input.grossMonthlyEur.doubleValue()
+        if (amountEur == 0d) return
+        def income = owner(input.owner).account {
+            name input.name instanceof String && !input.name.isBlank() ? input.name : text('name')
+            classify AccountKind.INCOME, new AccountTag('cashle.household.economic-nature', 1,
+                'income.pension.occupational', [AccountKind.INCOME] as Set)
+        }
+        def death = deathOf(input.owner)
+        Supplier<LocalDate> end = {
+            def date = death.get()
+            date == null ? null : date.withDayOfMonth(1).plusMonths(1)
+        } as Supplier<LocalDate>
+        def fx = exchangeRate('EUR', profile.currency)
+        def period = monthlyFromPlanStart
+        def firstMonth = dynamic ? earliest : claimStart.get()
+        taxableReceipt(input.owner, 'germanVblPension', 'monthly') {
+            on ScheduleSpec.every(Frequency.MONTH, firstMonth).within(period.fromInclusive(), period.untilExclusive())
+            until end
+            debit cash
+            credit income
+            amount {
+                def effective = claimStart.get()
+                if (effective == null || today.isBefore(effective)) return 0d
+                def quoteDate = effective.isAfter(period.anchor()) ? effective : period.anchor()
+                amountEur * fx * inflationFactor(period.anchor(), quoteDate) * VblklassikDates.indexation(quoteDate, today)
+            }
+        }
+    }
+}
