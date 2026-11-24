@@ -76,6 +76,7 @@ final class StandardWorkplacePension implements FinanceModule {
         require(data.payoutMode in ['none', 'monthly', 'once'], 'invalid.mode')
         hasPayout = data.payoutMode != 'none'
         monthly = data.payoutMode == 'monthly'
+        taxable = !context.taxSettings().isEmpty()
         if (hasPayout) {
             income = owner.account().classify(AccountKind.INCOME,
                 new AccountTag(NATURE, 1, 'income.pension.occupational', Set.of(AccountKind.INCOME)))
@@ -92,7 +93,6 @@ final class StandardWorkplacePension implements FinanceModule {
         LocalDate from = context.from()
         LocalDate until = context.until()
         death = context.lifeEnd(ownerId)
-        taxable = !context.taxSettings().isEmpty()
         fx = context.exchangeRate('GBP', context.profile().currency ?: 'GBP')
         balance = model.variable(number(data.openingCapital, 0d, Double.MAX_VALUE, 'invalid.amount'))
         monthlyPay = number(data.grossMonthlyPay, 0d, Double.MAX_VALUE, 'invalid.amount')
@@ -193,7 +193,7 @@ final class StandardWorkplacePension implements FinanceModule {
     }
 
     @Override void tax(TaxPort port) {
-        if (taxablePayment != null && taxable) {
+        if (income != null && taxable) {
             port.income(ownerId, income, 'pension', monthly ? 'monthly' : 'yearly', 'GB',
                 { firstScheduledPayment }, { true }, Map.of())
         }
