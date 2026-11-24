@@ -1,0 +1,17 @@
+{
+  "name": "Budget de référence du CNLE hors logement",
+  "names": {
+    "en": "French CNLE budget excluding housing",
+    "sv": "Fransk CNLE-referensbudget utan boende"
+  },
+  "description": {
+    "fr": "Projetez les dépenses mensuelles hors logement à partir des paniers CNLE de 2018 revalorisés.",
+    "en": "Project monthly non-housing costs from the 2018 CNLE baskets rebased to 2025 prices.",
+    "sv": "Prognostisera månadskostnader utan boende från CNLE:s korgar för 2018 i 2025 års priser."
+  },
+  "country": "FR",
+  "category": "expenses",
+  "releases": [
+    "8757e1fbe6dbff9c0f40f657980984e51b639c3e53fcc398ff2f14eacafed0ef"
+  ]
+}

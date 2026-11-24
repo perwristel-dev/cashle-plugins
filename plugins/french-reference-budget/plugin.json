@@ -1,0 +1,35 @@
+{
+  "id": "cashle.finance.fr-reference-budget",
+  "requires": [
+    "cashle.finance",
+    "cashle.dsl.groovy"
+  ],
+  "sources": [
+    {
+      "path": "french-reference-budget.cashle",
+      "providers": [
+        "cashle.finance.fr-reference-budget"
+      ],
+      "resources": [
+        "cnle/Messages_fr.properties",
+        "cnle/Messages_en.properties",
+        "cnle/Messages_sv.properties"
+      ]
+    }
+  ],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {
+      "locale": "fr",
+      "path": "ui/fr.json"
+    },
+    {
+      "locale": "en",
+      "path": "ui/en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui/sv.json"
+    }
+  ]
+}

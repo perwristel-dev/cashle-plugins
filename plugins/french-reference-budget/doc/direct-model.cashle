@@ -1,0 +1,14 @@
+plugins {
+    id 'cashle.finance'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.fr-reference-budget' from '../french-reference-budget.cashle'
+}
+finance {
+    plan { from '2026-01-01'; until '2026-03-01'; currency 'EUR'; inflation 0d }
+    person('self') { birthYear 1980; birthMonth 1 }
+    income 'salary', 4000d
+    frenchReferenceBudget('CNLE monthly costs') {
+        settings([archetype:'retired-couple', territory:'paris'])
+    }
+}
+collect {}

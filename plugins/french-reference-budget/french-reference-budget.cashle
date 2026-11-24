@@ -1,0 +1,43 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+
+import java.time.LocalDate
+
+final class CnleReference {
+    // CNLE report tables 1–3. Values exclude housing and use 2018 prices.
+    static final Map MONTHLY_2018 = [
+        'working-single': ['rural':1030d, 'town':980d, 'paris':1240d],
+        'working-couple': ['rural':1788d, 'town':1545d, 'paris':2080d],
+        'working-couple-children': ['rural':2925d, 'town':2675d, 'paris':2685d],
+        'retired-single': ['rural':1096d, 'town':1023d, 'paris':1281d],
+        'retired-couple': ['rural':1888d, 'town':1715d, 'paris':2173d]
+    ].asImmutable()
+    static final LocalDate PRICE_YEAR = LocalDate.of(2025, 7, 1)
+    static final double INSEE_REBASE = 120.95d / 103.09d
+}
+
+financeModule('cashlab.french-reference-budget', 1) {
+    pluginId 'cashle.finance.fr-reference-budget'
+    messages 'cnle.Messages'
+    dsl('frenchReferenceBudget') { id -> [name:id, archetype:'working-single', territory:'town'] }
+
+    calculation {
+        if (!enabled) return
+        requireInput('archetype') { CnleReference.MONTHLY_2018.containsKey(input.archetype) }
+        def territoryAmounts = CnleReference.MONTHLY_2018[input.archetype]
+        requireInput('territory') { territoryAmounts.containsKey(input.territory) }
+        requireInput('period') { !planStart.anchor().isBefore(LocalDate.of(2025, 1, 1)) }
+        double monthly = territoryAmounts[input.territory] * CnleReference.INSEE_REBASE *
+            exchangeRate('EUR', profile.currency ?: 'EUR')
+        def expense = household.account {
+            name input.name
+            classify AccountKind.EXPENSE, new AccountTag('cashle.household.economic-nature', 1,
+                'expense.consumption.consumer-budget', [AccountKind.EXPENSE] as Set)
+        }
+        requiredExpense('cnle-monthly') {
+            on monthlyFromPlanStart
+            destination expense
+            amount { monthly * inflationFactor(CnleReference.PRICE_YEAR, today) }
+        }
+    }
+}
