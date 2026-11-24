@@ -1,0 +1,16 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.cashflow'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.budget.de' from '../german-regelbedarf.cashle'
+
+}
+finance {
+    language 'en'
+    plan { from '2026-01-01'; until '2026-03-01'; currency 'EUR'; inflation 0d }
+    person('self') { name 'Adult'; birthYear 1980; birthMonth 1 }
+    income 'income', 2000d
+    germanLivingMinimum('Statutory living-cost benchmark') {}
+}
+collect { cashflow {} }

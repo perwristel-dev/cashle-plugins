@@ -1,0 +1,9 @@
+{
+  "label": "Gesetzlicher Lebensunterhalt (Regelbedarf)",
+  "field.name": "Name",
+  "funding": "Finanzierung",
+  "summary.detail": "Monatlicher Richtwert 2026 · ohne Unterkunft und Heizung",
+  "invalid.household": "Vervollständigen Sie das Profil für die Einzelperson, das Paar oder den Haushalt.",
+  "invalid.children": "Geben Sie gültige Geburtsdaten und Wohnanteile der Kinder im Haushalt ein.",
+  "invalid.duplicate": "Verwenden Sie einen gesetzlichen Richtwert je Haushalt."
+}

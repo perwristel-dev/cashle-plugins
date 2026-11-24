@@ -1,0 +1,9 @@
+{
+  "label": "Tyskt lagstadgat existensminimum (Regelbedarf)",
+  "field.name": "Namn",
+  "funding": "Finansiering",
+  "summary.detail": "Månadsriktvärde 2026 · exklusive bostad och uppvärmning",
+  "invalid.household": "Fyll i profilen för individ, par eller hushåll.",
+  "invalid.children": "Ange giltiga födelsedatum och boendeandelar för barnen i hushållet.",
+  "invalid.duplicate": "Använd ett lagstadgat riktvärde per hushåll."
+}

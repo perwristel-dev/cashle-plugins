@@ -1,0 +1,34 @@
+{
+  "id": "cashle.finance.budget.de",
+  "requires": [
+    "cashle.finance"
+  ],
+  "sources": [
+    {
+      "path": "german-regelbedarf.cashle",
+      "providers": [
+        "cashle.finance.budget.de"
+      ],
+      "resources": [
+        "german/regelbedarf/messages_en.properties",
+        "german/regelbedarf/messages_sv.properties",
+        "german/regelbedarf/messages_de.properties"
+      ]
+    }
+  ],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui/en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui/sv.json"
+    },
+    {
+      "locale": "de",
+      "path": "ui/de.json"
+    }
+  ]
+}
