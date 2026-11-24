@@ -29,6 +29,30 @@ assumption. Special federal exclusions, prior-year benefit repayments and
 lump-sum elections require additional tax facts. [IRS Publication 915](https://www.irs.gov/publications/p915) ·
 [IRS Topic 424](https://www.irs.gov/taxtopics/tc424)
 
+## Main-home sales and ownership costs
+
+For an individual return, choose the reduced Section 121 exclusion when the
+IRS work-move safe harbor applies. The work location must change while you own
+and use the home as your main home. Use the shortest commonly traveled route
+from the home to each workplace. The new work location must be at least
+50 miles farther away, or at least 50 miles from the home for a first job.
+The forecast multiplies $250,000 by the shortest of the whole months of
+qualifying ownership, use and time since the last exclusion, divided by 24 and
+capped at the full amount. Enter 24 months for the look-back input if there was
+no exclusion in the previous two years. Health, unforeseen-event and joint
+reduced exclusions require additional eligibility facts. The full exclusion
+and state coverage follow the existing rules.
+[IRS Publication 523](https://www.irs.gov/publications/p523) ·
+[Treasury Regulation §1.121-3](https://www.ecfr.gov/current/title-26/section-1.121-3)
+
+Enter recurring local property tax from the local bill as a housing expense.
+The US policy uses the federal standard deduction. Mortgage interest and
+property-tax itemization require the taxpayer's Schedule A facts. In
+particular, qualifying mortgage interest depends on use of the loan proceeds,
+loan origination and average qualifying balances, in addition to paid
+interest. [IRS Publication 936](https://www.irs.gov/publications/p936) ·
+[Schedule A instructions](https://www.irs.gov/instructions/i1040sca)
+
 Build the package from the repository root with Node.js and `zip`:
 
 ```sh

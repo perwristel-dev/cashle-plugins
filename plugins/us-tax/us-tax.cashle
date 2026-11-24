@@ -469,17 +469,33 @@ countryTaxPolicy('US') {
                 int use = integer(inputs, 'residenceMonthsLast60')
                 require(ownership <= 60 && use <= 60, 'Ownership and residence months cannot exceed 60.')
                 require(!sold.isBefore(acquired.plusMonths(ownership)), 'Claimed ownership months exceed actual ownership duration.')
-                require(requiredBool(inputs, 'noOtherExclusionLast2Years'),
-                    'A section 121 exclusion used in the previous two years requires separate rules.')
-                boolean qualifies = ownership >= 24 && use >= 24
-                if (status == 'marriedJoint') {
-                    int spouseUse = integer(inputs, 'spouseResidenceMonthsLast60')
-                    require(spouseUse <= 60, 'Spouse residence months cannot exceed 60.')
-                    require(requiredBool(inputs, 'spouseNoOtherExclusionLast2Years'), 'Spouse section 121 look-back requirement must be verified.')
-                    qualifies = qualifies && spouseUse >= 24
+                def treatment = inputs.getOrDefault('section121Treatment', 'full')
+                require(treatment in ['full', 'workMove'], 'Choose the full or work-related reduced Section 121 exclusion.')
+                if (treatment == 'workMove') {
+                    require(status != 'marriedJoint', 'A reduced joint Section 121 exclusion requires separate spouse facts.')
+                    LocalDate workChange = date(inputs, 'workChangeDate')
+                    require(!workChange.isBefore(acquired) && !workChange.isAfter(sold) && requiredBool(inputs, 'mainHomeAtWorkChange'),
+                        'The work-location change must occur while the person owns and uses the property as a main home.')
+                    require(inputs.containsKey('oldWorkDistanceMiles'), 'Provide the old work distance, or zero for a first work location.')
+                    double oldDistance = nonnegativeAmount(inputs, 'oldWorkDistanceMiles')
+                    double newDistance = number(inputs, 'newWorkDistanceMiles', Double.NaN)
+                    require(Double.isFinite(newDistance) && newDistance - oldDistance >= 50d,
+                        'The new work location must be at least 50 miles farther from the home than the old location.')
+                    int sincePrior = integer(inputs, 'monthsSincePreviousExclusion')
+                    exclusion = 250000d * Math.min(24, Math.min(sincePrior, Math.min(ownership, use))) / 24d
+                } else {
+                    require(requiredBool(inputs, 'noOtherExclusionLast2Years'),
+                        'The full Section 121 exclusion requires no prior exclusion in the previous two years.')
+                    boolean qualifies = ownership >= 24 && use >= 24
+                    if (status == 'marriedJoint') {
+                        int spouseUse = integer(inputs, 'spouseResidenceMonthsLast60')
+                        require(spouseUse <= 60, 'Spouse residence months cannot exceed 60.')
+                        require(requiredBool(inputs, 'spouseNoOtherExclusionLast2Years'), 'Spouse section 121 look-back requirement must be verified.')
+                        qualifies = qualifies && spouseUse >= 24
+                    }
+                    require(qualifies, 'This requested full section 121 exclusion does not satisfy the ordinary 2-of-5-year tests.')
+                    exclusion = status == 'marriedJoint' ? 500000d : 250000d
                 }
-                require(qualifies, 'This requested full section 121 exclusion does not satisfy the ordinary 2-of-5-year tests; reduced exclusions are unsupported.')
-                exclusion = status == 'marriedJoint' ? 500000d : 250000d
             }
             double profit = gain(inputs)
             double taxable = Math.max(0d, profit - exclusion)
