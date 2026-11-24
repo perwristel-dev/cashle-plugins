@@ -1,0 +1,28 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.it-unit-linked' from '../italian-unit-linked.cashle'
+    id 'cashle.finance.it-unit-linked.tax-policy' from '../italian-unit-linked.cashle'
+    id 'cashle.tax.it' from '../../italian-tax/italian-tax.cashle'
+}
+
+finance {
+    language 'en'
+    plan { from '2026-01-01'; until '2027-01-01'; currency 'EUR'; inflation 0d }
+    person('self') { birthYear 1980; birthMonth 1 }
+    tax {
+        country 'IT'
+        preliminaryRate 0d
+        options([ruleYear: 2025, residency: 'full-year', region: 'configured-flat-region',
+            municipality: 'configured-town', regionalRate: 0.0123d, municipalRate: 0.008d,
+            flatLocalRatesConfirmed: true, municipalExemption: 0d, employeeSocialContributions: 0d,
+            employmentProfile: 'resolved-inps', employmentContract: 'indefinite', settlementDate: '2027-05-01'])
+    }
+    italianUnitLinked('Life policy') {
+        balance 30000d
+        settings([costBasis:20000d, closeEnabled:true, closeDate:'2026-09-01',
+            policyOptions:[eligibleGovernmentGainPercent:0d]])
+    }
+}
+collect {}

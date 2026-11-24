@@ -1,0 +1,6 @@
+{
+  "label": "Italian unit-linked life insurance",
+  "help": "Enter the redeemable market value and remaining premiums separately. Partial and full surrenders use the proportionate gain. Keep returns within the policy.",
+  "governmentShare": "Eligible government-bond share of the gain",
+  "governmentShareHelp": "Use the insurer's eligible share of the surrender gain. Leave this at zero if you use the standard 26% estimate."
+}
