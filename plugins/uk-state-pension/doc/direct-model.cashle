@@ -1,0 +1,12 @@
+plugins {
+    id 'cashle.finance'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.gb.public' from '../uk-state-pension.cashle'
+}
+
+finance {
+    plan { from '2026-04-01'; until '2026-10-01'; currency 'GBP'; inflation 0d }
+    person('self') { birthYear 1960; birthMonth 4 }
+    ukStatePension('New State Pension') { settings([birthDay: 6, weeklyEntitlement: 241.30d]) }
+}
+collect { }

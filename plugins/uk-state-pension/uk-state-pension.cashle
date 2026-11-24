@@ -1,0 +1,131 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.sdk.model.ScheduleSpec
+import java.time.DateTimeException
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.temporal.ChronoUnit
+import java.util.function.Supplier
+
+final class NewStatePensionRules {
+    static final LocalDate RATE_DATE = LocalDate.of(2026, 4, 6)
+    static final double FULL_WEEKLY_RATE = 241.30d
+    static final LocalDate EARLIEST_NEW_PENSION_AGE = LocalDate.of(2016, 4, 6)
+    static final LocalDate COMMON_AGE_FROM = LocalDate.of(1954, 10, 6)
+    private static final LocalDate RISE_TO_67 = LocalDate.of(1960, 4, 6)
+    private static final LocalDate RISE_TO_68 = LocalDate.of(1977, 4, 6)
+    private static final List<LocalDate> TRANSITION_TO_68 = [
+        LocalDate.of(2044, 5, 6), LocalDate.of(2044, 7, 6), LocalDate.of(2044, 9, 6), LocalDate.of(2044, 11, 6),
+        LocalDate.of(2045, 1, 6), LocalDate.of(2045, 3, 6), LocalDate.of(2045, 5, 6), LocalDate.of(2045, 7, 6),
+        LocalDate.of(2045, 9, 6), LocalDate.of(2045, 11, 6), LocalDate.of(2046, 1, 6), LocalDate.of(2046, 3, 6)
+    ].asImmutable()
+
+    static boolean whole(Object value, int min, int max) {
+        value instanceof Number && value.doubleValue() >= min && value.doubleValue() <= max && value.doubleValue() == value.intValue()
+    }
+
+    static LocalDate birthDate(Map person, Object day) {
+        if (!whole(person?.birthYear, 1900, 2300) || !whole(person?.birthMonth, 1, 12)) return null
+        YearMonth month = YearMonth.of(person.birthYear.intValue(), person.birthMonth.intValue())
+        if (day == null || day == '') return month.atEndOfMonth()
+        whole(day, 1, month.lengthOfMonth()) ? month.atDay(day.intValue()) : null
+    }
+
+    static LocalDate date(Object value) {
+        if (!(value instanceof String)) return null
+        try { LocalDate.parse(value) } catch (DateTimeException ignored) { null }
+    }
+
+    static LocalDate statePensionAge(LocalDate birth, Object confirmed) {
+        if (birth == null) return null
+        if (birth < COMMON_AGE_FROM) {
+            // The pre-October-1954 timetable depends on eligibility under the historical sex-specific schedules.
+            LocalDate result = date(confirmed)
+            return result != null && result >= EARLIEST_NEW_PENSION_AGE &&
+                result >= birth.withDayOfMonth(1).plusYears(60) && result <= birth.plusYears(66) ? result : null
+        }
+        if (birth < RISE_TO_67) return birth.plusYears(66)
+        if (birth < RISE_TO_67.plusMonths(11)) {
+            int tier = (int) ChronoUnit.MONTHS.between(RISE_TO_67, birth) + 1
+            return birth.plusYears(66).plusMonths(tier)
+        }
+        if (birth < RISE_TO_68) return birth.plusYears(67)
+        if (birth < RISE_TO_68.plusYears(1)) return TRANSITION_TO_68[(int) ChronoUnit.MONTHS.between(RISE_TO_68, birth)]
+        birth.plusYears(68)
+    }
+
+    static LocalDate requestedDate(Map claim, LocalDate birth) {
+        if (claim.reference == 'age' && whole(claim.age, 0, 130)) return birth?.plusYears(claim.age.longValue())
+        if (claim.reference != 'date' || !whole(claim.year, 1900, 2430) || !whole(claim.month, 1, 12) ||
+                !whole(claim.getOrDefault('day', 1), 1, 31)) return null
+        try { LocalDate.of(claim.year.intValue(), claim.month.intValue(), claim.getOrDefault('day', 1).intValue()) }
+        catch (DateTimeException ignored) { null }
+    }
+
+    static double deferralFactor(LocalDate eligibility, LocalDate start) {
+        long weeks = ChronoUnit.WEEKS.between(eligibility, start)
+        weeks < 9L ? 1d : 1d + weeks / 900d
+    }
+}
+
+financeModule('cashlab.uk-state-pension', 1) {
+    pluginId 'cashle.finance.pension.gb.public'
+    messages 'british.statepension.messages'
+    dsl('ukStatePension') { id ->
+        [name: id, owner: 'self', weeklyEntitlement: NewStatePensionRules.FULL_WEEKLY_RATE,
+         payoutStart: [reference: 'statutory'], increaseForDeferral: false]
+    }
+
+    calculation {
+        def person = profile.people.find { it.id == input.owner && it.id != 'joint' }
+        LocalDate birth = NewStatePensionRules.birthDate(person, input.birthDay)
+        requireInput('invalid.person') { birth != null }
+        def income = owner(birth == null ? 'self' : input.owner).account {
+            name input.name instanceof String && !input.name.isBlank() ? input.name : text('name')
+            classify AccountKind.INCOME, new AccountTag('cashle.household.economic-nature', 1, 'income.pension.public', Set.of(AccountKind.INCOME))
+        }
+        if (!enabled) return
+
+        LocalDate earliest = NewStatePensionRules.statePensionAge(birth, input.confirmedStatePensionDate)
+        requireInput('invalid.eligibility') { earliest != null }
+        requireInput('invalid.amount') {
+            input.weeklyEntitlement instanceof Number && Double.isFinite(input.weeklyEntitlement.doubleValue()) &&
+                input.weeklyEntitlement.doubleValue() >= 0d
+        }
+        requireInput('invalid.deferral') { input.increaseForDeferral instanceof Boolean }
+        double monthlyPension = input.weeklyEntitlement.doubleValue() * (52d / 12d)
+        requireInput('invalid.amount') { Double.isFinite(monthlyPension) }
+
+        Map claim = input.payoutStart instanceof Map ? input.payoutStart : [:]
+        LocalDate explicit = claim.reference == 'statutory' ? earliest : NewStatePensionRules.requestedDate(claim, birth)
+        boolean milestoneStart = claim.reference == 'milestone' && claim.milestoneId instanceof String && !claim.milestoneId.isBlank()
+        requireInput('invalid.start') { claim.getOrDefault('offset', 0) == 0 && (explicit != null || milestoneStart) }
+        if (monthlyPension == 0d) return
+
+        Supplier<LocalDate> requested = milestoneStart ? milestone(claim.milestoneId) : { explicit } as Supplier<LocalDate>
+        LocalDate firstPossible = explicit == null || explicit < earliest ? earliest : explicit
+        def period = monthlyFromPlanStart
+        LocalDate from = period.fromInclusive()
+        LocalDate firstMonth = (firstPossible < from ? from : firstPossible).withDayOfMonth(1)
+        double fx = exchangeRate('GBP', profile.currency)
+        boolean increase = input.increaseForDeferral
+        taxableReceipt(input.owner, 'pension', 'monthly') {
+            on ScheduleSpec.every(Frequency.MONTH, firstMonth).atMonthEnd().within(from, period.untilExclusive())
+            until deathOf(input.owner)
+            debit cash
+            credit income
+            amount {
+                LocalDate chosen = requested.get()
+                if (chosen == null) return 0d
+                LocalDate start = chosen < earliest ? earliest : chosen
+                if (today < start) return 0d
+                LocalDate monthStart = today.withDayOfMonth(1)
+                LocalDate covered = [monthStart, start, from].max()
+                double monthShare = (ChronoUnit.DAYS.between(covered, today) + 1d) / today.lengthOfMonth()
+                double uplift = increase ? NewStatePensionRules.deferralFactor(earliest, start) : 1d
+                monthlyPension * monthShare * uplift * fx * inflationFactor(NewStatePensionRules.RATE_DATE, today)
+            }
+        }
+    }
+}

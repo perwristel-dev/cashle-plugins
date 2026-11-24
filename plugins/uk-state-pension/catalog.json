@@ -1,0 +1,16 @@
+{
+  "name": "UK New State Pension",
+  "names": {
+    "en": "UK New State Pension",
+    "sv": "Brittisk statlig pension"
+  },
+  "description": {
+    "en": "New State Pension forecast or award with a legislated claim age and lifetime payments.",
+    "sv": "Brittisk statlig pension med prognos eller beslutat belopp, lagstadgad pensionsålder och livsvariga utbetalningar."
+  },
+  "country": "GB",
+  "category": "income",
+  "releases": [
+    "2e8bfd3ca456e3a22bebf3a069dfbd5327e4ad03e13db9998a0b8d9c9f0a5301"
+  ]
+}

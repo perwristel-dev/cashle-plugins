@@ -2,7 +2,8 @@
 
 The ZIP contains the residence and private-property editors, English and
 Swedish translations, and Cashle DSL rules for the 2026/27 tax year. The
-rules cover annual income tax, employee National Insurance, savings interest,
+rules cover annual income tax on earnings and taxable pension income, employee
+National Insurance on earnings, savings interest,
 dividends, foreign listed shares and capital gains, including the fiscal
 calendar and carried capital losses. Private Residence Relief and the
 60-day residential capital gains payment use the entered property facts.
@@ -28,3 +29,8 @@ cashle-cli/build/install/cashle/bin/cashle plugins/uk-tax/doc/direct-model.cashl
 
 The [UK policy notes](../../docs/tax-anglosphere-research.md#uk) document the
 enacted rates, qualifying assumptions and official sources.
+
+The `pension` basis is for taxable State Pension and workplace or private pension
+receipts. These use non-savings income tax bands alongside salary and are outside
+the employee National Insurance base. See [HMRC’s guidance on pension income](https://www.gov.uk/tax-on-pension/taxed)
+and [employee National Insurance rates](https://www.gov.uk/national-insurance/how-much-you-pay).

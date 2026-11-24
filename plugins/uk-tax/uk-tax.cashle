@@ -23,7 +23,7 @@ import static dev.cashle.tax.support.Inputs.number
 import static dev.cashle.tax.support.Inputs.require
 
 int referenceYear = 2026
-def publicBases = ['salary', 'capitalIncome', 'dividendIncome', 'capitalGains', 'investmentCapitalLoss'].asImmutable()
+def publicBases = ['salary', 'pension', 'capitalIncome', 'dividendIncome', 'capitalGains', 'investmentCapitalLoss'].asImmutable()
 def bases = (publicBases + ['capitalLossBroughtForward']).asImmutable()
 def monetary = (bases + ['personalAllowanceToSavings', 'personalAllowanceToDividends']).toSet().asImmutable()
 def allowed = (monetary + ['ruleYear', 'residency', 'birthYear', 'region', 'niCategory', 'noticeDatesByYear',
@@ -136,18 +136,19 @@ countryTaxPolicy('GB') {
             'Declare annualised employee NI category A, or verified state-pension-age category C.')
         for (String key : monetary) require(number(options, key, 0d) >= 0d, "$key must be nonnegative.")
         double salary = number(options, 'salary', 0d)
+        double nonSavingsIncome = salary + number(options, 'pension', 0d)
         double savings = number(options, 'capitalIncome', 0d)
         double dividends = number(options, 'dividendIncome', 0d)
         require(salary == 0d || !'A'.equals(options.get('niCategory')) || birth >= 1962d,
             'Older employees must verify pension-age NI category; category A supports birthYear from 1962.')
-        double allowance = Math.max(0d, 12570d - Math.max(0d, salary + savings + dividends - 100000d) / 2d)
+        double allowance = Math.max(0d, 12570d - Math.max(0d, nonSavingsIncome + savings + dividends - 100000d) / 2d)
 
         // An entered allocation may place personal allowance in a different income class.
-        double paSavings = number(options, 'personalAllowanceToSavings', Math.min(savings, Math.max(0d, allowance - salary)))
-        double paDividends = number(options, 'personalAllowanceToDividends', Math.min(dividends, Math.max(0d, allowance - salary - paSavings)))
+        double paSavings = number(options, 'personalAllowanceToSavings', Math.min(savings, Math.max(0d, allowance - nonSavingsIncome)))
+        double paDividends = number(options, 'personalAllowanceToDividends', Math.min(dividends, Math.max(0d, allowance - nonSavingsIncome - paSavings)))
         require(paSavings <= savings && paDividends <= dividends && paSavings + paDividends <= allowance,
             'Personal allowance allocations exceed income or allowance.')
-        double nonSavings = Math.max(0d, salary - (allowance - paSavings - paDividends))
+        double nonSavings = Math.max(0d, nonSavingsIncome - (allowance - paSavings - paDividends))
         double taxSavings = Math.max(0d, savings - paSavings)
         double taxDividends = Math.max(0d, dividends - paDividends)
         double nonSavingsTax = 'scotland'.equals(options.get('region')) ?
