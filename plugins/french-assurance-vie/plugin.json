@@ -1,0 +1,48 @@
+{
+  "id": "cashle.finance.fr-assurance-vie",
+  "requires": [
+    "cashle.finance",
+    "cashle.dsl.groovy",
+    "cashle.account.support",
+    "cashle.account.tax.support"
+  ],
+  "sources": [
+    {
+      "path": "french-assurance-vie.cashle",
+      "providers": [
+        "cashle.finance.fr-assurance-vie"
+      ],
+      "resources": [
+        "assurancevie/Account_fr.properties",
+        "assurancevie/Account_en.properties",
+        "assurancevie/Account_sv.properties"
+      ]
+    },
+    {
+      "path": "french-assurance-vie-tax.cashle",
+      "providers": [
+        "cashle.finance.fr-assurance-vie.tax"
+      ],
+      "resources": [
+        "assurancevie/Tax_fr.properties",
+        "assurancevie/Tax_en.properties",
+        "assurancevie/Tax_sv.properties"
+      ]
+    }
+  ],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {
+      "locale": "fr",
+      "path": "ui/fr.json"
+    },
+    {
+      "locale": "en",
+      "path": "ui/en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui/sv.json"
+    }
+  ]
+}

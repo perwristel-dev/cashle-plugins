@@ -1,0 +1,10 @@
+investmentAccount('cashlab.fr-assurance-vie', 1) {
+    pluginId 'cashle.finance.fr-assurance-vie'
+    dsl 'frenchAssuranceVie'
+    messages 'assurancevie.Account'
+    country 'FR'
+    kind 'FRassuranceVie'
+    taxPolicy 'assurance-vie'
+    prepaidTax false
+    transfers true
+}

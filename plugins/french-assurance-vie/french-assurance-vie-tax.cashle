@@ -1,0 +1,106 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.InvestmentCarry
+import dev.cashle.tax.InvestmentPosition
+import dev.cashle.tax.InvestmentRules
+import dev.cashle.tax.InvestmentWithdrawalResult
+import dev.cashle.tax.TaxPolicyField
+import dev.cashle.tax.TaxStateField
+
+import java.time.LocalDate
+
+LocalDate postReform = LocalDate.of(2017, 9, 27)
+double tolerance = 1e-7d
+
+def stateAmount = { values, String key ->
+    double value = values.getOrDefault(key, 0d)
+    InvestmentRules.nonnegative(value, key)
+    value
+}
+
+def validateContract = { options, LocalDate opened, checks ->
+    checks.require(checks.bool(options, 'completePortfolio', false), 'coverage')
+    checks.require(opened != null && !opened.isBefore(postReform), 'opening')
+}
+
+def assessWithdrawal = { request, checks ->
+    LocalDate opened = request.acquiredDate()
+    validateContract(request.policyOptions(), opened, checks)
+    checks.require(request.date() != null && !request.date().isBefore(opened), 'withdrawalDate')
+    def position = request.position()
+    double withdrawn = Math.min(request.amount(), position.marketValue())
+    checks.require(request.closeAccount() || withdrawn == 0d || withdrawn < position.marketValue(), 'close')
+    // The gain is proportional when the policy is in profit. For a UC partial
+    // surrender at a loss, BOFiP caps returned premiums at the amount withdrawn.
+    double principal = position.marketValue() == 0d ? 0d :
+        Math.min(withdrawn, withdrawn * position.costBasis() / position.marketValue())
+    double gain = Math.max(0d, withdrawn - principal)
+    def remaining = request.closeAccount() ? new InvestmentPosition(0d, 0d, 0d) :
+        new InvestmentPosition(Math.max(0d, position.marketValue() - withdrawn),
+            Math.max(0d, position.costBasis() - principal), 0d)
+    new InvestmentWithdrawalResult(remaining, gain, 0d, gain)
+}
+
+accountTaxPolicy('assurance-vie') {
+    pluginId 'cashle.finance.fr-assurance-vie.tax'
+    messages 'assurancevie.Tax'
+    country 'FR'
+    ruleYear 2025
+    openingStateInNativeCurrency true
+    existingYearFacts true
+    resetAcquiredDateWhenEmptyDeposit false
+    annualBases 'referenceIncome'
+    annualOnly 'cashlab.fr-assurance-vie'
+
+    policyFields([
+        completePortfolio: new TaxPolicyField('Complete eligible post-2017 unit-linked portfolio', 'boolean')
+    ])
+    stateFields([
+        priorYearPremiums: new TaxStateField('Unreturned premiums at previous 31 December', true),
+        youngGains: new TaxStateField('Current-year gains on surrenders before eight years', true)
+    ])
+
+    withdraw { request -> assessWithdrawal(request, delegate) }
+
+    stateAfterWithdrawal { request ->
+        def result = assessWithdrawal(request, delegate)
+        def values = new LinkedHashMap(request.state())
+        if (request.date().isBefore(request.acquiredDate().plusYears(8))) {
+            values.put('youngGains', (double) stateAmount(values, 'youngGains') + result.realizedGain())
+        }
+        Map.copyOf(values)
+    }
+
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        require('single'.equals(options.get('civilStatus')) && 'pfu'.equals(options.get('capitalElection')), 'filing')
+        double premiums = 0d
+        double gains = 0d
+        double young = 0d
+        def carries = new LinkedHashMap()
+        for (def account : accounts) {
+            validateContract(account.policyOptions(), account.acquiredDate(), delegate)
+            require(account.distributedDividends() == 0d, 'externalDistributions')
+            double prior = stateAmount(account.state(), 'priorYearPremiums')
+            double early = stateAmount(account.state(), 'youngGains')
+            require(early <= account.realizedGain() + tolerance, 'youngGains')
+            premiums += prior
+            gains += account.realizedGain()
+            young += early
+            double returned = account.withdrawals() - account.realizedGain()
+            double remaining = prior + account.externalDeposits() - returned
+            require(returned >= -tolerance && remaining + tolerance >= account.minimumPrincipal(), 'premiums')
+            def state = [priorYearPremiums: account.closed() ? 0d : Math.max(0d, remaining), youngGains: 0d]
+            carries.put(account.id(), new InvestmentCarry(0d, 0d, state))
+        }
+        double mature = Math.max(0d, gains - young)
+        // The two nominal limits are shared across the owner's eligible contracts.
+        double reduced = mature * (premiums <= 150_000d ? 1d : 150_000d / premiums)
+        double standard = mature - reduced
+        double allowance = 4_600d
+        double reducedAllowance = Math.min(reduced, allowance)
+        double standardAllowance = Math.min(standard, allowance - reducedAllowance)
+        double tax = 0.075d * (reduced - reducedAllowance) +
+            0.128d * (young + standard - standardAllowance) + 0.172d * gains
+        new InvestmentAnnualAssessment([referenceIncome: gains], tax, carries)
+    }
+}

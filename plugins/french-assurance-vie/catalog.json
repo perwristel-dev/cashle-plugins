@@ -1,0 +1,17 @@
+{
+  "name": "Assurance-vie en unités de compte",
+  "names": {
+    "en": "French unit-linked assurance-vie",
+    "sv": "Fransk fondförsäkring (assurance-vie)"
+  },
+  "description": {
+    "fr": "Projetez les rachats d’assurance-vie en unités de compte et leur fiscalité au PFU.",
+    "en": "Forecast unit-linked assurance-vie surrenders and their flat-tax treatment.",
+    "sv": "Prognostisera uttag från fransk fondförsäkring och beskattning enligt PFU."
+  },
+  "country": "FR",
+  "category": "accounts",
+  "releases": [
+    "1e686f00db30a96049a352734ecc5bf2217294d3695b8fbb505c89ab9fde1daa"
+  ]
+}
