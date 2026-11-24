@@ -1,0 +1,38 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import java.time.LocalDate
+
+final class DutchMinimumHouseholdBudgets {
+    static final LocalDate PRICE_DATE = LocalDate.of(2023, 1, 1)
+    // Published monthly necessary costs and reference rent, in EUR. See table 3.1.
+    static final Map<String, List<Integer>> MONTHLY = [
+        'single-0': [1633, 521], 'single-1': [2110, 651], 'single-2': [2493, 651], 'single-3': [2928, 651],
+        'couple-0': [2400, 593], 'couple-1': [2738, 679], 'couple-2': [3100, 679], 'couple-3': [3522, 679],
+        'aow-single': [1649, 543], 'aow-couple': [2408, 629],
+    ].collectEntries { key, values -> [key, values.asImmutable()] }.asImmutable()
+}
+
+financeModule('cashlab.dutch-minimum-household-budget', 1) {
+    pluginId 'cashle.finance.budget.nl'
+    messages 'budget.DutchMinimumBudget'
+    dsl('dutchMinimumHouseholdBudget') { id -> [name: id, household: 'single-0', includeReferenceRent: false] }
+
+    calculation {
+        def reference = DutchMinimumHouseholdBudgets.MONTHLY[input.household]
+        requireInput('invalid.household') { reference != null }
+        requireInput('invalid.rent') { input.includeReferenceRent instanceof Boolean }
+        double monthly = reference == null ? 0d : reference[0] - (input.includeReferenceRent ? 0 : reference[1])
+        double fx = exchangeRate('EUR', Objects.toString(profile.currency, 'EUR'))
+        def expense = household.account {
+            name Objects.toString(input.name, text('name'))
+            classify AccountKind.EXPENSE, new AccountTag('cashle.household.economic-nature',
+                1, 'expense.consumption.consumer-budget', [AccountKind.EXPENSE] as Set)
+        }
+        requiredExpense('core') {
+            on monthlyFromPlanStart
+            destination expense
+            savings 'core'
+            amount { monthly * fx * inflationFactor(DutchMinimumHouseholdBudgets.PRICE_DATE, today) }
+        }
+    }
+}

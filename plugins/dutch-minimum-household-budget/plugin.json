@@ -1,0 +1,14 @@
+{
+  "id": "cashle.finance.budget.nl",
+  "requires": ["cashle.finance", "cashle.dsl.groovy"],
+  "sources": [{
+    "path": "dutch-minimum-household-budget.cashle",
+    "providers": ["cashle.finance.budget.nl"],
+    "resources": ["budget/DutchMinimumBudget_en.properties", "budget/DutchMinimumBudget_sv.properties"]
+  }],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {"locale": "en", "path": "ui/en.json"},
+    {"locale": "sv", "path": "ui/sv.json"}
+  ]
+}

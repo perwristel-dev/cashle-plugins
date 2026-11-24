@@ -1,0 +1,13 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.cashflow'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.budget.nl' from '../dutch-minimum-household-budget.cashle'
+}
+finance {
+    language 'en'
+    plan { from '2026-07-01'; until '2026-10-01'; currency 'EUR'; inflation 0d }
+    person('self') { name 'Householder'; birthYear 1980; birthMonth 1 }
+    dutchMinimumHouseholdBudget('Living costs') { settings household: 'couple-2', includeReferenceRent: false }
+}
+collect { cashflow { format json; output 'stdout' } }
