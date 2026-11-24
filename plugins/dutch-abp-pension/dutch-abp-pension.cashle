@@ -1,0 +1,95 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
+import dev.cashle.sdk.model.ScheduleSpec
+import java.time.LocalDate
+import java.time.YearMonth
+import java.util.function.Supplier
+
+final class DutchAbpDates {
+    static LocalDate readDate(Object value) {
+        if (!(value instanceof String) || !value) return null
+        try { LocalDate.parse(value) }
+        catch (java.time.DateTimeException ignored) { null }
+    }
+
+    static boolean whole(Object value, int min, int max) {
+        value instanceof Number && value.doubleValue() == value.intValue() && value >= min && value <= max
+    }
+
+    static LocalDate dateReference(Map request, int offset) {
+        try { LocalDate.of(request.year.intValue(), request.month.intValue(), request.getOrDefault('day', 1).intValue()).plusMonths(offset) }
+        catch (RuntimeException ignored) { null }
+    }
+
+    static LocalDate clamp(LocalDate date, LocalDate earliest, LocalDate latest) {
+        date.isBefore(earliest) ? earliest : date.isAfter(latest) ? latest : date
+    }
+}
+
+financeModule('cashlab.dutch-abp-pension', 1) {
+    pluginId 'cashle.finance.pension.occupational.nl.abp'
+    messages 'abp.messages'
+    dsl('dutchAbpPension') { id -> [name:id, owner:'self', grossMonthly:0d, officialAowDate:'', payoutStart:[reference:'aow', offset:0]] }
+
+    calculation {
+        if (!enabled) return
+        String personId = input.owner ?: 'self'
+        def person = profile.people.find { it.id == personId && it.id != 'joint' }
+        requireInput('owner') { DutchAbpDates.whole(person?.birthYear, 1800, 2300) && DutchAbpDates.whole(person?.birthMonth, 1, 12) }
+        requireInput('amount') { input.grossMonthly instanceof Number && Double.isFinite(input.grossMonthly.doubleValue()) && input.grossMonthly >= 0d }
+        YearMonth birth = YearMonth.of(person.birthYear.intValue(), person.birthMonth.intValue())
+        LocalDate aow = DutchAbpDates.readDate(input.officialAowDate)
+        requireInput('aow') { aow != null && !aow.isBefore(birth.plusYears(65).atDay(1)) && !aow.isAfter(birth.plusYears(75).atEndOfMonth()) }
+        LocalDate earliest = birth.plusYears(60).atDay(1)
+        LocalDate latest = aow.plusYears(5)
+        Map request = input.payoutStart instanceof Map ? input.payoutStart : [:]
+        def rawOffset = request.getOrDefault('offset', 0)
+        requireInput('start') { DutchAbpDates.whole(rawOffset, -1200, 1200) }
+        int offset = rawOffset.intValue()
+        LocalDate fixedStart = null
+        Supplier<LocalDate> milestoneStart = null
+        switch (request.reference) {
+            case 'aow': fixedStart = aow.plusMonths(offset); break
+            case 'age':
+                requireInput('start') { DutchAbpDates.whole(request.age, 0, 130) }
+                fixedStart = birth.plusYears(request.age.intValue()).atDay(1).plusMonths(offset)
+                break
+            case 'date': fixedStart = DutchAbpDates.dateReference(request, offset); break
+            case 'retirement': milestoneStart = milestone('retirement:' + (request.personId ?: personId), offset); break
+            case 'milestone':
+                requireInput('start') { request.milestoneId instanceof String && !request.milestoneId.isBlank() }
+                milestoneStart = milestone(request.milestoneId, offset)
+                break
+        }
+        requireInput('start') { fixedStart != null || milestoneStart != null }
+        LocalDate scheduled = fixedStart == null ? earliest : DutchAbpDates.clamp(fixedStart, earliest, latest)
+        double monthly = input.grossMonthly.doubleValue() * exchangeRate('EUR', profile.currency ?: 'EUR')
+        if (monthly == 0d) return
+        def period = monthlyFromPlanStart
+        LocalDate moneyDate = period.anchor()
+        def pension = owner(personId).account {
+            name input.name
+            classify AccountKind.INCOME, new AccountTag('cashle.household.economic-nature', 1, 'income.pension.occupational', [AccountKind.INCOME] as Set)
+            reportingRole ReportingRole.INCOME
+        }
+        taxableReceipt(personId, 'pension', 'monthly') {
+            on ScheduleSpec.every(Frequency.MONTH, scheduled.withDayOfMonth(1)).atMonthEnd().within(period.fromInclusive(), period.untilExclusive())
+            until deathOf(personId)
+            debit cash
+            credit pension
+            amount {
+                LocalDate start = scheduled
+                if (milestoneStart != null) {
+                    LocalDate resolved = milestoneStart.get()
+                    start = resolved == null ? latest : DutchAbpDates.clamp(resolved, earliest, latest)
+                }
+                if (today.isBefore(start)) return 0d
+                double fraction = YearMonth.from(today) == YearMonth.from(start) ?
+                    (today.lengthOfMonth() - start.dayOfMonth + 1) / (double) today.lengthOfMonth() : 1d
+                monthly * fraction * inflationFactor(moneyDate, today)
+            }
+        }
+    }
+}

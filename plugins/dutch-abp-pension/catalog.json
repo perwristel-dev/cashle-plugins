@@ -1,0 +1,16 @@
+{
+  "name": "ABP occupational pension",
+  "names": {
+    "en": "ABP occupational pension",
+    "sv": "Tjänstepension ABP"
+  },
+  "description": {
+    "en": "Lifetime ABP pension for Dutch government and education employment.",
+    "sv": "Livsvarig ABP-pension för nederländsk offentlig sektor och utbildning."
+  },
+  "country": "NL",
+  "category": "income",
+  "releases": [
+    "8fb1ee7089fdef3aef5cb447ab61d66f0dfb11ae0cdb8a3520e4d1bbb3ff3c04"
+  ]
+}

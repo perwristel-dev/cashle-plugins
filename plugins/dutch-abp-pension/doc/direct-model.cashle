@@ -1,0 +1,13 @@
+plugins {
+    id 'cashle.finance'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.occupational.nl.abp' from '../dutch-abp-pension.cashle'
+}
+finance {
+    plan { from '2028-01-01'; until '2029-01-01'; currency 'EUR'; inflation 0d }
+    person('self') { birthYear 1967; birthMonth 7 }
+    dutchAbpPension('ABP') {
+        settings([grossMonthly:950d, officialAowDate:'2034-10-15', payoutStart:[reference:'date', year:2028, month:8, day:1]])
+    }
+}
+collect {}
