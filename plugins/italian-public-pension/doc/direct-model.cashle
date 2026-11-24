@@ -1,0 +1,13 @@
+plugins {
+    id 'cashle.finance'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.pension.public.it' from '../italian-public-pension.cashle'
+}
+finance {
+    plan { from '2027-10-01'; until '2028-01-01'; currency 'EUR'; inflation 0d }
+    person('self') { birthYear 1960; birthMonth 9 }
+    italianInpsPension('Pensione di vecchiaia INPS') {
+        settings([monthlyQuote:1200d, qualifyingYears:20d])
+    }
+}
+collect {}

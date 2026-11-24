@@ -1,0 +1,22 @@
+{
+  "Pensione di vecchiaia INPS": "Italiensk allmän ålderspension",
+  "Pagamento della pensione INPS": "Utbetalning av INPS-pension",
+  "Importo mensile lordo ordinario INPS": "Ordinarie bruttobelopp per månad från INPS",
+  "Requisiti di accesso": "Uttagsgrund",
+  "Contributi anteriori al 1996, pensione ordinaria": "Avgifter före 1996, ordinarie ålderspension",
+  "Primo contributo dal 1996, soglia INPS soddisfatta": "Första avgifter från 1996, INPS beloppsgräns uppnådd",
+  "Primo contributo dal 1996, accesso con cinque anni effettivi": "Första avgifter från 1996, uttag med fem faktiska avgiftsår",
+  "Decorrenza confermata dall’INPS": "Start bekräftad av INPS",
+  "Anni di contribuzione al momento del raggiungimento dell’età": "Kvalificerande avgiftsår när ålderskravet uppfylls",
+  "Data di decorrenza confermata": "Bekräftat startdatum",
+  "Pagamento vitalizio con tredicesima": "Livsvarig utbetalning med trettonde månadsbelopp",
+  "La decorrenza confermata deve cadere il primo giorno del mese.": "Bekräftat startdatum måste vara den första dagen i en månad.",
+  "Servono almeno cinque anni di contribuzione effettiva.": "Ange minst fem år med faktiska avgifter.",
+  "Servono almeno 20 anni di contribuzione utile.": "Ange minst 20 kvalificerande avgiftsår.",
+  "Importo lordo mensile": "Bruttobelopp per månad",
+  "Nome": "Namn",
+  "Titolare": "Ägare",
+  "Decorrenza desiderata": "Önskad uttagsstart",
+  "Prima decorrenza utile": "Tidigaste tillåtna start",
+  "Età": "Ålder"
+}
