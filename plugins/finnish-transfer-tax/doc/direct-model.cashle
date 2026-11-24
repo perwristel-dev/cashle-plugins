@@ -1,0 +1,15 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.cashflow'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.transfer-tax.fi' from '../finnish-transfer-tax.cashle'
+}
+finance {
+    plan { from '2026-01-01'; until '2027-01-01'; currency 'EUR'; inflation 0d }
+    income 'Household income', 10000d
+    finnishTransferTax('Transfer tax on an existing flat') {
+        settings property:'existing-shares-broker', deedDate:'2026-06-15', purchasePrice:120000d,
+            companyDebt:80000d, buyerShare:50d
+    }
+}
+collect { cashflow {} }

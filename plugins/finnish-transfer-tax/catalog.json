@@ -1,0 +1,16 @@
+{
+  "name": "Finnish residential transfer tax",
+  "names": {
+    "en": "Finnish residential transfer tax",
+    "sv": "Finländsk överlåtelseskatt för bostad"
+  },
+  "description": {
+    "en": "Transfer tax for Finnish housing-company shares and real estate.",
+    "sv": "Överlåtelseskatt för finländska bostadsaktier och fastigheter."
+  },
+  "country": "FI",
+  "category": "expenses",
+  "releases": [
+    "7da7cce50ee9c03240712a02fba3a2374ca55dae927ff074cf7e740c650f217b"
+  ]
+}
