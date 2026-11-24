@@ -22,7 +22,11 @@ export function budgetInput(data) {
   delete input.selfDeathDate;
   delete input.partnerDeathDate;
   delete input.partnerSeparationDate;
-  for (const [category] of consumerBudgetCategoryLabels) delete input[`category_${category}Necessary`];
+  for (const [category] of consumerBudgetCategoryLabels) {
+    for (const suffix of ['Necessary', 'FundingMode', 'FundingSourceMode', 'FundingSourceAccount']) {
+      delete input[`category_${category}${suffix}`];
+    }
+  }
   return input;
 }
 
@@ -81,8 +85,7 @@ export function consumerBudgetDefinition(context) {
       check('splitCategories', 'Redovisa grundbudgeten per kategori', false),
     ],
     sections: [section('included-categories', 'Kostnader som ingår', consumerBudgetCategoryLabels.map(([key, label]) => check(`include_${key}`, label, true, { preserveWhenInactive: true })), () => expenseText('Välj vilka kostnader budgeten ska omfatta')),
-    budgetPolicySection('base', 'Grundbudget', data => !data.splitCategories),
-    ...consumerBudgetCategoryLabels.map(([key, label]) => budgetPolicySection(`category_${key}`, label, data => data.splitCategories)),
+    budgetPolicySection('base', 'Grundbudget'),
     budgetPolicySection('extra', 'Överkonsumtion', data => data.extraPercent > 0)],
     engineInput: (data, inputContext) => consumerBudgetEngineInput(data, inputContext),
     summarize: data => ({ title: data.name, amount: expenseText('{percent} % extra', { percent: data.extraPercent }), detail: expenseText('Månadsvis · Konsumentverkets budget') }),

@@ -5,6 +5,7 @@ Konsumentverket’s 2026 reference amounts and the plan’s inflation and FX
 assumptions. Its saved module type is `cashlab.consumer-budget@1`.
 
 The required baseline can be reported as one expense or split by category.
+One savings policy applies to the entire baseline in either view.
 A positive deviation is one additional expense with its own necessity and
 savings settings. The schedule starts on the plan’s opening day and runs
 monthly. It follows the case household and its residence. Each adult stops

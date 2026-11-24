@@ -37,3 +37,23 @@ test('consumer budget reference resolves both life milestones from the plan', ()
   assert.deepEqual(input.lifeEnds, { self: '2050-01-01', partner: '2040-01-01' });
   assert.deepEqual(input.profile, model.profile);
 });
+
+test('category reporting uses the same editable funding fields as a combined budget', () => {
+  const definition = consumerBudgetDefinition({
+    translate: key => key,
+    savingsFundingFields: prefix => [
+      { key: prefix + 'FundingMode' },
+      { key: prefix + 'FundingSourceMode' },
+      { key: prefix + 'FundingSourceAccount' },
+    ],
+  });
+  const fundingFields = splitCategories => definition.inlineFields
+    .filter(field => field.key.includes('Funding') && (!field.when || field.when({ splitCategories })))
+    .map(field => field.key);
+  const expected = ['baseFundingMode', 'baseFundingSourceMode', 'baseFundingSourceAccount'];
+  assert.deepEqual(fundingFields(false), expected);
+  assert.deepEqual(fundingFields(true), expected);
+  assert.deepEqual(consumerBudgetEngineInput({
+    baseFundingMode: 'never', category_foodFundingMode: 'always', category_foodFundingSourceAccount: 'bank',
+  }, { model }).input, { baseFundingMode: 'never' });
+});

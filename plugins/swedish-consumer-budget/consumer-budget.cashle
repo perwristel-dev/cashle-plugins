@@ -91,7 +91,7 @@ financeModule('cashlab.consumer-budget', 1) {
                     on monthlyFromPlanStart
                     destination expense
                     amount { selected ? nominal([category], baseShare) : 0d }
-                    savings 'category_' + category
+                    savings 'base'
                 }
             }
         } else {
