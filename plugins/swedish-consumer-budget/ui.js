@@ -1,6 +1,5 @@
 const PROVIDER = 'cashle.finance.budget.se';
 const sourceModule = { language: 'groovy-cashle-plugin', provider: PROVIDER, source: 'consumer-budget.cashle' };
-const eventEditor = context => `${context.elementPrefix ?? 'cashle'}-consumer-budget-events`;
 
 const check = (key, label, value, options) => ({ key, label, kind: 'check', default: value, ...options });
 const text = (key, label, value) => ({ key, label, kind: 'text', default: value });
@@ -16,32 +15,39 @@ export const consumerBudgetCategoryLabels = [
   ['electricity', 'Hushållsel'], ['water_sewer', 'Vatten och avlopp'], ['home_insurance', 'Hemförsäkring'],
 ];
 
-export function withoutBaselineNecessity(data) {
+export function budgetInput(data) {
   const input = { ...data };
   delete input.baseNecessary;
+  delete input.childEvents;
+  delete input.selfDeathDate;
+  delete input.partnerDeathDate;
+  delete input.partnerSeparationDate;
   for (const [category] of consumerBudgetCategoryLabels) delete input[`category_${category}Necessary`];
   return input;
 }
 
+const lifeReferences = plan => (plan?.milestones ?? [])
+  .filter(row => row.builtin === 'life' && ['self', 'partner'].includes(row.personId))
+  .map(row => ({ reference: 'life', personId: row.personId }));
+
 export function consumerBudgetEngineInput(data, context) {
-  const timeReferences = (context?.model?.plan?.milestones ?? [])
-    .filter(row => row.builtin === 'life' && ['self','partner'].includes(row.personId))
-    .map(row => ({reference:'life',personId:row.personId}));
-  for (const event of data.childEvents ?? []) if (event.moveOut?.reference) timeReferences.push(structuredClone(event.moveOut));
-  return { input: withoutBaselineNecessity(data), timeReferences };
+  return { input: budgetInput(data), timeReferences: lifeReferences(context?.model?.plan) };
 }
 
 /** Submit entered household facts and resolved residence dates to the selected engine provider. */
 export function consumerBudgetReferenceInput(model, context) {
   const plan = context.casePlan(model);
   const changes = context.sourceResidenceChanges(model);
-  return { profile: structuredClone(model.profile), date: plan.from, language: context.language,
+  const dates = { plan, profile: model.profile };
+  const lifeEnds = Object.fromEntries(lifeReferences(plan).map(time =>
+    [time.personId, context.resolveTimeDate(time, dates)]));
+  return { profile: structuredClone(model.profile), date: plan.from, language: context.language, lifeEnds,
     residenceChanges: changes.map(change => ({ ...change,
-      date: context.resolveTimeDate(change.at, { plan, profile: model.profile }) })) };
+      date: context.resolveTimeDate(change.at, dates) })) };
 }
 
 export function consumerBudgetDefinition(context) {
-  const { sourceResidenceChanges, casePlan: getPlan, savingsFundingFields, savingsFundingSummary, translate: expenseText } = context;
+  const { sourceResidenceChanges, savingsFundingFields, savingsFundingSummary, translate: expenseText } = context;
   const hasSwedishConsumerBudgetResidence = model => model?.profile?.tax?.country === 'SE' || sourceResidenceChanges(model).some(change => (!change.owner || change.owner === 'joint' || change.owner === 'self') && change.settings?.country === 'SE');
   const budgetPolicySection = (prefix, title, when) => {
     const overspending = prefix === 'extra';
@@ -57,15 +63,9 @@ export function consumerBudgetDefinition(context) {
     id: 'consumer-budget', label: 'Budget enligt Konsumentverket', category: 'expenses', taxCountries: ['SE'],
     capabilities: { consumerBudget: true },
     availability: model => hasSwedishConsumerBudgetResidence(model) ? [] : [expenseText('Budget enligt Konsumentverket kräver svensk skattehemvist.')],
-    normalizeData: data => ({ childEvents: [], selfDeathDate: '', partnerDeathDate: '', partnerSeparationDate: '', splitCategories: false, ...withoutBaselineNecessity(data) }),
+    normalizeData: data => ({ splitCategories: false, ...budgetInput(data) }),
     validateData: (data, context) => {
-      const validDate = value => value === '' || (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`)) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value);
       if (typeof data.splitCategories !== 'boolean') return [expenseText('Välj hur grundbudgeten ska redovisas.')];
-      if (!Array.isArray(data.childEvents)) return [expenseText('Barnens händelser är ogiltiga.')];
-      const ids = data.childEvents.map(event => event?.childId);
-      if (ids.some(id => typeof id !== 'string' || !id) || new Set(ids).size !== ids.length || data.childEvents.some(event => !validDate(event.moveOutDate ?? '') || !validDate(event.deathDate ?? '')) || !['selfDeathDate', 'partnerDeathDate', 'partnerSeparationDate'].every(key => validDate(data[key] ?? ''))) return [expenseText('Ange giltiga datum för hushållets händelser.')];
-      const milestones = context?.plan === undefined ? getPlan(context ?? {}).milestones : context.plan?.milestones;
-      if (data.childEvents.some(event => event.moveOut !== undefined && (!event.moveOut || event.moveOut.reference !== 'milestone' || !Number.isInteger(event.moveOut.offset ?? 0) || !Array.isArray(milestones) || !milestones.some(item => item.id === event.moveOut.milestoneId)))) return [expenseText('Välj en giltig milstolpe för barnets utflytt.')];
       const profile = context?.profile;
       if (profile) {
         if (!hasSwedishConsumerBudgetResidence(context)) return [expenseText('Budget enligt Konsumentverket kräver svensk skattehemvist under någon del av planen.')];
@@ -81,7 +81,6 @@ export function consumerBudgetDefinition(context) {
       check('splitCategories', 'Redovisa grundbudgeten per kategori', false),
     ],
     sections: [section('included-categories', 'Kostnader som ingår', consumerBudgetCategoryLabels.map(([key, label]) => check(`include_${key}`, label, true, { preserveWhenInactive: true })), () => expenseText('Välj vilka kostnader budgeten ska omfatta')),
-    { id: 'household-events', title: 'Händelser i hushållet', element: eventEditor(context), fields: [], summary: () => expenseText('Valfria datum för förändringar i hushållet') },
     budgetPolicySection('base', 'Grundbudget', data => !data.splitCategories),
     ...consumerBudgetCategoryLabels.map(([key, label]) => budgetPolicySection(`category_${key}`, label, data => data.splitCategories)),
     budgetPolicySection('extra', 'Överkonsumtion', data => data.extraPercent > 0)],
@@ -103,8 +102,6 @@ export function createBudgetPlugin(context) {
   return { ...module, pluginId: PROVIDER, sourceModule, usageModel: 'identity', translations: context.translations };
 }
 
-export default async function (context) {
-  const { registerBudgetEvents } = await context.importModule('budget-events.js');
-  registerBudgetEvents(context, eventEditor(context));
+export default function (context) {
   return { modules: [createBudgetPlugin(context)] };
 }

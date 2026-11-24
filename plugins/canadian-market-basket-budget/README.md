@@ -2,7 +2,7 @@
 
 Use this monthly household expense for a modest basic-cost benchmark. Select
 one of the 65 published Statistics Canada Market Basket Measure (MBM) regions
-and enter the number of people in the economic family. Select the local
+for the case household. Select the local
 population group where Statistics Canada groups municipalities by size.
 
 The model adds the chosen non-shelter components from the 2025 observations
@@ -14,8 +14,9 @@ basket component already covered elsewhere.
 Statistics Canada prices a reference family of four, or five in Nunavut.
 Cashle applies the MBM square-root family-size adjustment to the selected
 component subtotal and divides by 12. The derived amount is a planning
-benchmark for the entered family size. The projected region and size stay
-at their entered values, and the expense stops during a modeled period
+benchmark for the case household. Children count from their birth month,
+with half-time residence counted as half a member. Adults count until their
+life-expectancy milestones. The expense stops during a modeled period
 outside Canada. The plan supplies inflation and exchange rates.
 
 Data reproduced from Statistics Canada, table 11-10-0066-01, release of

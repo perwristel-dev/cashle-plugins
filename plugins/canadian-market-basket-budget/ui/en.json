@@ -2,7 +2,6 @@
   "label": "Canadian Market Basket budget",
   "field.name": "Name",
   "field.region": "Statistics Canada region",
-  "field.householdSize": "Economic family size",
   "select.region": "Choose the applicable region",
   "section.components": "Non-shelter components",
   "component.food": "Food",
@@ -11,9 +10,8 @@
   "component.communications": "Communication services",
   "component.other": "Other essentials",
   "component.inuusiqattiarniq": "Inuusiqattiarniq (Nunavut)",
-  "help.budget": "A modest basic standard based on Statistics Canada’s 2025 Market Basket Measure. Enter shelter separately and deselect any costs you already budget for. Change the preset if your region or family size changes.",
+  "help.budget": "A modest basic standard based on Statistics Canada’s 2025 Market Basket Measure. Enter shelter separately and deselect any costs you already budget for. Household size follows the case profile and the plan’s life-expectancy milestones.",
   "invalid.region": "Choose a published Market Basket Measure region.",
-  "invalid.household": "Enter a whole family size from 1 to 20.",
   "invalid.name": "Enter a name of 1 to 80 characters.",
   "invalid.components": "Choose which non-shelter basket costs to include.",
   "invalid.duplicate": "Use one Market Basket budget for this household."

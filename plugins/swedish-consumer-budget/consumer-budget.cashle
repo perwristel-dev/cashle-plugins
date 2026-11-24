@@ -3,7 +3,6 @@ import dev.cashle.core.AccountTag
 import dev.cashle.core.i18n.Messages
 import java.time.DateTimeException
 import java.time.LocalDate
-import java.util.function.Supplier
 
 financeModule('cashlab.consumer-budget', 1) {
     pluginId 'cashle.finance.budget.se'
@@ -13,8 +12,7 @@ financeModule('cashlab.consumer-budget', 1) {
     calculation {
         requireInput('error.swedishResidence') { BudgetHousehold.hasSwedishResidence(taxSettings, profile) }
         def label = { String key -> text(key) }
-        def members = BudgetHousehold.members(profile, input, label)
-        def separated = BudgetHousehold.enteredDate(input.partnerSeparationDate)
+        def members = BudgetHousehold.members(profile, label)
         boolean split = input.splitCategories == true
         if (input.splitCategories != null && !(input.splitCategories instanceof Boolean)) {
             throw new IllegalArgumentException(text('error.splitCategories'))
@@ -35,12 +33,7 @@ financeModule('cashlab.consumer-budget', 1) {
             : input.citySize.toString().toLowerCase(Locale.ROOT)
         if (!(citySize in ['small', 'medium', 'large'])) throw new IllegalArgumentException(text('error.citySize'))
         double currencyFactor = exchangeRate('SEK', Objects.toString(profile.currency, 'SEK'))
-        def adultLife = [:]
-        for (member in members.findAll { it.adult }) {
-            String key = member.id == 'self' ? 'selfDeathDate' : 'partnerDeathDate'
-            LocalDate entered = BudgetHousehold.enteredDate(input.get(key))
-            adultLife[member.id] = entered == null ? plannedDeathOf(member.id) : ({ -> entered } as Supplier)
-        }
+        def adultLife = members.findAll { it.adult }.collectEntries { [(it.id): plannedDeathOf(it.id)] }
         LocalDate cachedDay = null
         String cachedCity = null
         List cachedMembers = []
@@ -52,30 +45,9 @@ financeModule('cashlab.consumer-budget', 1) {
         def pricesAt = { LocalDate day ->
             if (!residence('self', day)) return [:]
             def present = members.findAll { member ->
-                LocalDate end = member.end
-                if (member.adult) {
-                    end = BudgetHousehold.earlier(end, adultLife[member.id].get())
-                    if (member.id == 'partner') end = BudgetHousehold.earlier(end, separated)
-                } else {
-                    def move = member.moveOut
-                    if (move && move.reference != 'never') {
-                        if (move.reference != 'milestone' || !(move.milestoneId instanceof String)) {
-                            throw new IllegalArgumentException(text('error.moveOutMilestone'))
-                        }
-                        def offset = move.offset == null ? 0 : move.offset
-                        if (!BudgetHousehold.wholeNumber(offset, -1200, 1200)) {
-                            throw new IllegalArgumentException(text('error.moveOutOffset'))
-                        }
-                        try {
-                            end = BudgetHousehold.earlier(end, milestone(move.milestoneId, offset.intValue()).get())
-                        } catch (NullPointerException missingMilestone) {
-                            throw new IllegalArgumentException(text('error.moveOutMilestoneMissing') + ' ' + move.milestoneId, missingMilestone)
-                        }
-                    }
-                }
-                return (end == null || day.isBefore(end)) &&
-                    (!member.adult || member.id != 'partner' || residence('partner', day)) &&
-                    (member.parentage != 'partner' || separated == null || day.isBefore(separated))
+                LocalDate end = member.adult ? adultLife[member.id].get() : null
+                (end == null || day.isBefore(end)) &&
+                    (member.id != 'partner' || residence('partner', day))
             }
             String city = citySize
             LocalDate lastMove = null
@@ -281,16 +253,6 @@ class BudgetHousehold {
         Double.isFinite(number) && number == Math.rint(number) && minimum <= number && number <= maximum
     }
 
-    static LocalDate earlier(LocalDate left, LocalDate right) {
-        if (left == null) return right
-        if (right == null) return left
-        left.isBefore(right) ? left : right
-    }
-
-    static LocalDate enteredDate(Object value) {
-        value instanceof String && !value.isBlank() ? LocalDate.parse(value) : null
-    }
-
     static boolean hasSwedishResidence(Map tax, Map profile) {
         if (tax.isEmpty()) return false
         Map authored = tax.containsKey('country') || tax.containsKey('residences') ? tax : object(profile.tax)
@@ -301,7 +263,7 @@ class BudgetHousehold {
         mode == 'couple' || (mode == 'household' && household.hasPartner == true)
     }
 
-    static List<Map> members(Map profile, Map data, Closure message) {
+    static List<Map> members(Map profile, Closure message) {
         String mode = Objects.toString(profile.mode, 'individual')
         if (!(mode in MODES)) throw new IllegalArgumentException(message('error.householdMode'))
         Map household = object(profile.household)
@@ -317,10 +279,6 @@ class BudgetHousehold {
         }
         if (people.count { it.id == 'self' } != 1) throw new IllegalArgumentException(message('error.selfMissing'))
         if (partner && people.count { it.id == 'partner' } != 1) throw new IllegalArgumentException(message('error.partnerMissing'))
-        Map childEvents = [:]
-        for (event in data.childEvents instanceof List ? data.childEvents : []) {
-            if (event instanceof Map && event.childId instanceof String) childEvents[event.childId] = event
-        }
         if (mode == 'household' && !(household.children instanceof List)) throw new IllegalArgumentException(message('error.childrenMissing'))
         Set<String> childIds = [] as Set
         for (child in mode == 'household' ? household.children : []) {
@@ -335,14 +293,9 @@ class BudgetHousehold {
             }
             String id = Objects.toString(child.id, '')
             if (id && !childIds.add(id)) throw new IllegalArgumentException(message('error.duplicateChildren'))
-            Map event = childEvents.getOrDefault(id, [:])
-            Map move = object(event.moveOut)
-            LocalDate moveDate = move.isEmpty() ? enteredDate(event.moveOutDate) : null
-            people.add([id: id, adult: false, birth: LocalDate.of(year.intValue(), month.intValue(), 1),
-                share: child.residence == 'half' ? 0.5d : 1d, parentage: Objects.toString(child.parentage, 'mine'),
-                end: earlier(moveDate, enteredDate(event.deathDate)), moveOut: move])
+            people.add([adult: false, birth: LocalDate.of(year.intValue(), month.intValue(), 1),
+                share: child.residence == 'half' ? 0.5d : 1d])
         }
-        if (!childIds.containsAll(childEvents.keySet())) throw new IllegalArgumentException(message('error.childEvent'))
         people
     }
 
@@ -358,7 +311,10 @@ class BudgetHousehold {
         Map household = object(profile.household)
         if (mode == 'household' && (!(household.hasPartner instanceof Boolean) || !(household.children instanceof List))) return null
         List<Map> people = []
+        Map lifeEnds = object(input.lifeEnds)
         for (id in hasPartner(mode, household) ? ['self', 'partner'] : ['self']) {
+            LocalDate end = referenceDate(lifeEnds[id])
+            if (end != null && !day.isBefore(end)) continue
             Map person = object(profile.people.find { object(it).id == id })
             LocalDate birth = referenceBirth(person, false)
             if (birth == null || birth.isAfter(day)) return null

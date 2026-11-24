@@ -6,10 +6,20 @@ plugins {
 }
 
 finance {
-    plan { from '2026-01-01'; until '2026-04-01'; currency 'CAD'; inflation 0d }
+    plan {
+        from '2026-01-01'; until '2026-04-01'; currency 'CAD'; inflation 0d
+        settings milestones:[
+            [id:'life:partner', builtin:'life', personId:'partner', rule:[type:'date', date:'2026-02-01']],
+            [id:'life:self', builtin:'life', personId:'self', rule:[type:'date', date:'2026-03-01']]
+        ]
+    }
+    profileSettings([mode:'household', household:[hasPartner:true,
+        children:[[id:'child', birthYear:2020, residence:'full', parentage:'mine']]]])
+    person('self') { birthYear 1990; birthMonth 1 }
+    person('partner') { birthYear 1990; birthMonth 1 }
     income 'household income', 10000d
     canadianMarketBasketBudget('Toronto household budget') {
-        settings region:'mbm-30', householdSize:4
+        settings region:'mbm-30'
     }
 }
 collect { cashflow {} }

@@ -8,7 +8,6 @@ export default function (context) {
   const fields = [
     { key: 'name', label: 'field.name', kind: 'text', default: t('label') },
     { key: 'region', label: 'field.region', kind: 'select', default: '', options: [['', 'select.region'], ...regions] },
-    { key: 'householdSize', label: 'field.householdSize', kind: 'number', default: 4, min: 1, max: 20, integer: true },
   ];
   const included = categories.map(key => ({
     key: 'include_' + key, label: 'component.' + key, kind: 'check', default: true,
@@ -21,11 +20,17 @@ export default function (context) {
     validateData: data => regions.some(([id]) => id === data.region) ? [] : ['invalid.region'],
     validateLinks: model => model.modules.filter(row => row.type === `cashlab.${type}` && row.enabled !== false).length > 1
       ? ['invalid.duplicate'] : [],
-    engineInput: data => ({ input: data }),
+    normalizeData: ({ householdSize, ...data }) => data,
+    engineInput({ householdSize, ...input }, inputContext) {
+      const timeReferences = (inputContext?.model?.plan?.milestones ?? [])
+        .filter(row => row.builtin === 'life' && ['self', 'partner'].includes(row.personId))
+        .map(row => ({ reference: 'life', personId: row.personId }));
+      return { input, timeReferences };
+    },
     summarize: data => ({ title: data.name, detail: regions.find(([id]) => id === data.region)?.[1] || t('select.region') }),
   });
   return { modules: [{
-    ...module, pluginId: provider, translations: context.translations,
+    ...module, pluginId: provider, translations: context.translations, usageModel: 'identity',
     sourceModule: { language: 'groovy-cashle-plugin', provider, source: 'canadian-market-basket-budget.cashle' },
   }] };
 }

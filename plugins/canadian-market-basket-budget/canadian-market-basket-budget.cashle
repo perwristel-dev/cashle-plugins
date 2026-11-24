@@ -20,17 +20,13 @@ financeModule('cashlab.canadian-market-basket-budget', 1) {
     pluginId 'cashle.finance.budget.ca'
     messages 'canadian.budget.messages'
     dsl('canadianMarketBasketBudget') { id ->
-        [name: id, region: '', householdSize: 4, include_food: true, include_clothing: true, include_transport: true,
+        [name: id, region: '', include_food: true, include_clothing: true, include_transport: true,
          include_communications: true, include_other: true, include_inuusiqattiarniq: true]
     }
     calculation {
         if (!enabled) return
         def row = CanadianMarketBasket.REGIONS[input.region]
         requireInput('invalid.region') { row != null }
-        requireInput('invalid.household') {
-            input.householdSize instanceof Number && input.householdSize >= 1 && input.householdSize <= 20 &&
-                input.householdSize.doubleValue() == Math.rint(input.householdSize.doubleValue())
-        }
         requireInput('invalid.name') { input.name instanceof String && !input.name.isBlank() && input.name.trim().length() <= 80 }
         requireInput('invalid.components') {
             CanadianMarketBasket.CATEGORIES.every { input.get('include_' + it) instanceof Boolean }
@@ -39,7 +35,14 @@ financeModule('cashlab.canadian-market-basket-budget', 1) {
         CanadianMarketBasket.CATEGORIES.eachWithIndex { key, index ->
             if (input.get('include_' + key)) total += row[index + 1]
         }
-        double monthlyCad = total * Math.sqrt(input.householdSize.doubleValue() / row[0]) / 12d
+        def family = profile.household instanceof Map ? profile.household : [:]
+        boolean hasPartner = profile.mode == 'couple' || (profile.mode == 'household' && family.hasPartner == true)
+        def adults = (hasPartner ? ['self', 'partner'] : ['self']).collect { plannedDeathOf(it) }
+        def children = (profile.mode == 'household' ? family.children ?: [] : []).collect { child ->
+            [birth: LocalDate.of(child.birthYear.intValue(), (child.birthMonth ?: 1).intValue(), 1),
+             share: child.residence == 'half' ? 0.5d : 1d]
+        }
+        double baseMonthlyCad = total / 12d
         double fx = exchangeRate('CAD', profile.currency ?: 'CAD')
         def expense = household.account {
             name input.name
@@ -51,7 +54,9 @@ financeModule('cashlab.canadian-market-basket-budget', 1) {
             destination expense
             amount {
                 if ((residenceAt('self', today)?.country() ?: 'CA') != 'CA') return 0d
-                monthlyCad * inflationFactor(CanadianMarketBasket.PRICE_DATE, today) * fx
+                double size = adults.count { def end = it.get(); end == null || today.isBefore(end) }
+                size += children.sum(0d) { child -> today.isBefore(child.birth) ? 0d : child.share }
+                baseMonthlyCad * Math.sqrt(size / row[0]) * inflationFactor(CanadianMarketBasket.PRICE_DATE, today) * fx
             }
             savings 'base'
         }

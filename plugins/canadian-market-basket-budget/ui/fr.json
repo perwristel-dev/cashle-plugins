@@ -2,7 +2,6 @@
   "label": "Budget du panier de consommation canadien",
   "field.name": "Nom",
   "field.region": "Région de Statistique Canada",
-  "field.householdSize": "Taille de la famille économique",
   "select.region": "Choisissez la région applicable",
   "section.components": "Composantes hors logement",
   "component.food": "Alimentation",
@@ -11,9 +10,8 @@
   "component.communications": "Services de communication",
   "component.other": "Autres dépenses essentielles",
   "component.inuusiqattiarniq": "Inuusiqattiarniq (Nunavut)",
-  "help.budget": "Un niveau de vie de base modeste selon la mesure du panier de consommation 2025 de Statistique Canada. Saisissez le logement séparément et décochez les coûts déjà budgétés. Modifiez ce choix si la région ou la taille de la famille change.",
+  "help.budget": "Un niveau de vie de base modeste selon la mesure du panier de consommation 2025 de Statistique Canada. Saisissez le logement séparément et décochez les coûts déjà budgétés. La taille du ménage suit le profil du dossier et les jalons d’espérance de vie du plan.",
   "invalid.region": "Choisissez une région publiée de la mesure du panier de consommation.",
-  "invalid.household": "Entrez un nombre entier de 1 à 20 personnes dans la famille.",
   "invalid.name": "Entrez un nom de 1 à 80 caractères.",
   "invalid.components": "Choisissez les coûts hors logement à inclure.",
   "invalid.duplicate": "Utilisez un seul budget du panier de consommation pour ce ménage."

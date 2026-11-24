@@ -2,7 +2,6 @@
   "label": "Kanadensisk varukorgsbudget",
   "field.name": "Namn",
   "field.region": "Region enligt Statistics Canada",
-  "field.householdSize": "Antal i ekonomisk familj",
   "select.region": "Välj tillämplig region",
   "section.components": "Kostnader utöver boende",
   "component.food": "Mat",
@@ -11,9 +10,8 @@
   "component.communications": "Kommunikationstjänster",
   "component.other": "Övriga nödvändiga utgifter",
   "component.inuusiqattiarniq": "Inuusiqattiarniq (Nunavut)",
-  "help.budget": "En måttlig grundnivå enligt Statistics Canadas varukorgsmått för 2025. Lägg in boendet separat och välj bort utgifter som redan ingår i budgeten. Ändra inställningen om regionen eller familjestorleken ändras.",
+  "help.budget": "En måttlig grundnivå enligt Statistics Canadas varukorgsmått för 2025. Lägg in boendet separat och välj bort utgifter som redan ingår i budgeten. Hushållets storlek följer ärendets hushållsprofil och planens livslängdsmilstolpar.",
   "invalid.region": "Välj en publicerad region i varukorgsmåttet.",
-  "invalid.household": "Ange mellan 1 och 20 personer i familjen.",
   "invalid.name": "Ange ett namn på 1 till 80 tecken.",
   "invalid.components": "Välj vilka varukorgskostnader utöver boende som ska ingå.",
   "invalid.duplicate": "Använd en varukorgsbudget för hushållet."
