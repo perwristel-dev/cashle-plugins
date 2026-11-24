@@ -1,0 +1,22 @@
+{
+  "label": "Nederländsk minimibudget för hushåll",
+  "field.name": "Namn",
+  "field.household": "Referenshushåll",
+  "field.rent": "Inkludera referenshyran för sociala bostäder 2023",
+  "field.funding": "Finansiering",
+  "option.single-0": "Ensamstående vuxen utan barn",
+  "option.single-1": "Ensamstående förälder med ett barn",
+  "option.single-2": "Ensamstående förälder med två barn",
+  "option.single-3": "Ensamstående förälder med tre barn",
+  "option.couple-0": "Par i arbetsför ålder utan barn",
+  "option.couple-1": "Par med ett barn",
+  "option.couple-2": "Par med två barn",
+  "option.couple-3": "Par med tre barn",
+  "option.aow-single": "Ensamstående över AOW-åldern",
+  "option.aow-couple": "Par över AOW-åldern",
+  "help.scope": "Nibuds publicerade budgetar från 2023 visar minsta nödvändiga kostnader för tio hushållstyper vid det sociala minimumet. Priserna följer planens inflation.",
+  "help.rent": "Lämna avmarkerat om planen redan innehåller hyra eller bolånekostnader. Energi och vatten, lokala avgifter och grundläggande socialt deltagande ingår fortfarande.",
+  "summary.withRent": "Inkluderar referenshyra",
+  "summary.withoutRent": "Hyra anges separat",
+  "invalid.duplicate": "En plan kan ha en nederländsk minimibudget för hushållet."
+}

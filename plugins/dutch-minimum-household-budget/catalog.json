@@ -1,0 +1,16 @@
+{
+  "name": "Dutch minimum household budget",
+  "names": {
+    "en": "Dutch minimum household budget",
+    "sv": "Nederländsk minimibudget för hushåll"
+  },
+  "description": {
+    "en": "Minimum cost reference for ten Dutch household types, using the 2023 Nibud budgets published by the Social Minimum Commission.",
+    "sv": "Minimikostnader för tio nederländska hushållstyper enligt Nibuds budgetar från 2023, publicerade av kommissionen för socialt minimum."
+  },
+  "country": "NL",
+  "category": "expenses",
+  "releases": [
+    "412eecc9e9faf54b71447453fa93d0b0433ad17864876b7830a6710f3fb92d37"
+  ]
+}

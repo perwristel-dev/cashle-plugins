@@ -1,0 +1,22 @@
+{
+  "label": "Dutch minimum household budget",
+  "field.name": "Name",
+  "field.household": "Reference household",
+  "field.rent": "Include the 2023 social-rent benchmark",
+  "field.funding": "Funding",
+  "option.single-0": "Single adult without children",
+  "option.single-1": "Single parent with one child",
+  "option.single-2": "Single parent with two children",
+  "option.single-3": "Single parent with three children",
+  "option.couple-0": "Working-age couple without children",
+  "option.couple-1": "Couple with one child",
+  "option.couple-2": "Couple with two children",
+  "option.couple-3": "Couple with three children",
+  "option.aow-single": "Single adult over AOW age",
+  "option.aow-couple": "Couple over AOW age",
+  "help.scope": "The published 2023 Nibud budgets describe minimum necessary expenses for ten households at the social minimum. Prices follow plan inflation.",
+  "help.rent": "Leave this off if your plan already includes actual rent or mortgage costs. Utilities, local charges and minimum social participation remain in the benchmark.",
+  "summary.withRent": "Includes reference social rent",
+  "summary.withoutRent": "Rent entered separately",
+  "invalid.duplicate": "A plan can have one Dutch minimum household budget."
+}
