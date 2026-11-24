@@ -1,0 +1,178 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
+import dev.cashle.core.i18n.Messages
+import dev.cashle.sdk.composition.ModuleContext
+import dev.cashle.sdk.composition.ModuleInput
+import dev.cashle.sdk.finance.FinanceContext
+import dev.cashle.sdk.finance.FinanceModule
+import dev.cashle.sdk.finance.FundingPort
+import dev.cashle.sdk.finance.MetricsPort
+import dev.cashle.sdk.finance.TaxPort
+import dev.cashle.sdk.model.AccountHandle
+import dev.cashle.sdk.model.FlowHandle
+import dev.cashle.sdk.model.ScheduleSpec
+import groovy.transform.CompileStatic
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.temporal.ChronoUnit
+import java.util.function.Supplier
+
+financeModule('cashlab.us-social-security', 1) {
+    pluginId 'cashle.finance.pension.public.us'
+    dsl('usSocialSecurity') { String id ->
+        [name: id, owner: 'self', basis: 'full-retirement', monthlyBenefit: 0d, birthDay: 3,
+         payoutStart: [reference: 'age', age: 67, offset: 0]]
+    }
+    factory { ModuleInput input -> new SocialSecurityRetirement(input) }
+}
+
+@CompileStatic
+final class SocialSecurityRetirement implements FinanceModule {
+    private final ModuleInput entry
+    private FinanceContext context
+    private Messages messages
+    private String owner
+    private AccountHandle income
+    private FlowHandle payment
+    private Supplier<LocalDate> requested, lastPaymentExclusive
+    private LocalDate birth
+    private YearMonth earliest, fullRetirement, maximumCredit
+    private double monthlyBenefit, exchange
+    private boolean quote, taxable
+
+    SocialSecurityRetirement(ModuleInput entry) { this.entry = entry }
+
+    @Override void declare(ModuleContext ignored) {}
+
+    @Override void declareFinance(FinanceContext finance) {
+        context = finance
+        messages = finance.messages(SocialSecurityRetirement, 'us.socialsecurity.Messages')
+        taxable = !finance.taxSettings().isEmpty()
+        Map<String, Object> data = entry.data()
+        Object ownerValue = data.get('owner')
+        if (!(ownerValue instanceof String) || ownerValue == 'joint') throw invalid('person')
+        owner = (String) ownerValue
+        Map<?, ?> person = ((List<?>) finance.profile().get('people')).find { Object value ->
+            owner == ((Map<?, ?>) value).get('id')
+        } as Map<?, ?>
+        if (person == null || !whole(person.get('birthYear'), 1900, 9800) ||
+                !whole(person.get('birthMonth'), 1, 12)) throw invalid('person')
+        YearMonth birthMonth = YearMonth.of(((Number) person.get('birthYear')).intValue(),
+            ((Number) person.get('birthMonth')).intValue())
+        Object birthDay = data.getOrDefault('birthDay', 3)
+        if (!whole(birthDay, 1, birthMonth.lengthOfMonth())) throw invalid('birthDay')
+        birth = birthMonth.atDay(((Number) birthDay).intValue())
+
+        income = finance.owner(owner).account().classify(AccountKind.INCOME,
+            new AccountTag('cashle.household.economic-nature', 1, 'income.pension.public', Set.of(AccountKind.INCOME)))
+        income.setName(Objects.toString(data.get('name'), entry.id()))
+        income.addReportingRole(ReportingRole.INCOME)
+    }
+
+    @Override void wireFinance(FinanceContext finance) {
+        Map<String, Object> data = entry.data()
+        Object basis = data.get('basis')
+        quote = basis == 'claim-quote'
+        if (!quote && basis != 'full-retirement') throw invalid('benefit')
+        int cohort = birth.minusDays(1).getYear()
+        if (!quote && cohort < 1943) throw invalid('cohort')
+        Object amount = data.get('monthlyBenefit')
+        if (!(amount instanceof Number) || !Double.isFinite(((Number) amount).doubleValue()) ||
+                ((Number) amount).doubleValue() < 0d) throw invalid('benefit')
+        monthlyBenefit = ((Number) amount).doubleValue()
+        exchange = finance.exchangeRate('USD', Objects.toString(finance.profile().get('currency'), 'USD'))
+
+        YearMonth age62 = YearMonth.from(birth.plusYears(62))
+        earliest = birth.getDayOfMonth() <= 2 ? age62 : age62.plusMonths(1)
+        fullRetirement = attainedMonth(fullRetirementMonths(cohort))
+        maximumCredit = attainedMonth(70 * 12)
+        Object start = data.get('payoutStart')
+        if (!(start instanceof Map)) throw invalid('start')
+        Map<String, Object> time = new LinkedHashMap<>((Map<String, Object>) start)
+        Object offset = time.getOrDefault('offset', 0)
+        if (!whole(offset, -1200, 1200)) throw invalid('start')
+        if (time.get('reference') == 'age') {
+            Object age = time.get('age')
+            if (!whole(age, 0, 120)) throw invalid('start')
+            LocalDate month = attainedMonth(((Number) age).intValue() * 12 + ((Number) offset).intValue()).atDay(1)
+            requested = () -> month
+        } else {
+            if (!(time.get('reference') in ['date', 'retirement', 'milestone'])) throw invalid('start')
+            if (time.get('reference') == 'retirement') time.put('personId', owner)
+            requested = finance.timeDate(time)
+        }
+
+        Supplier<LocalDate> lifeEnd = finance.lifeEnd(owner)
+        lastPaymentExclusive = () -> {
+            LocalDate death = lifeEnd.get()
+            // A payment in the month of death covers the preceding entitlement month.
+            death == null ? null : YearMonth.from(death).plusMonths(1).atDay(1)
+        }
+        ScheduleSpec calendar = ScheduleSpec.every(Frequency.MONTH, earliest.plusMonths(1).atDay(1)).atMonthEnd()
+        payment = finance.model().flow(calendar, finance.cash(), income, () -> paymentAmount())
+    }
+
+    private double paymentAmount() {
+        LocalDate today = context.model().clock().getDate()
+        LocalDate end = lastPaymentExclusive.get()
+        LocalDate desired = requested.get()
+        if (desired == null || (end != null && !today.isBefore(end))) return 0d
+        YearMonth claim = YearMonth.from(desired)
+        if (desired.getDayOfMonth() > 1) claim = claim.plusMonths(1)
+        if (claim.isBefore(earliest)) claim = earliest
+        YearMonth entitlement = YearMonth.from(today).minusMonths(1)
+        if (entitlement.isBefore(claim)) return 0d
+        double amount = quote ? monthlyBenefit : adjustedBenefit(claim, entitlement)
+        amount * exchange * context.inflationFactor(context.from(), today)
+    }
+
+    private double adjustedBenefit(YearMonth claim, YearMonth entitlement) {
+        long months = ChronoUnit.MONTHS.between(fullRetirement, claim)
+        if (months < 0L) {
+            long early = -months
+            long reduction = Math.min(36L, early) * 4L + Math.max(0L, early - 36L) * 3L
+            return Math.floor(monthlyBenefit * (720L - reduction) / 720d)
+        }
+        // Credits earned during the first payment year post the following January unless claiming at 70.
+        YearMonth creditedThrough = claim.isAfter(maximumCredit) ? maximumCredit : claim
+        if (claim.isBefore(maximumCredit) && entitlement.getYear() == claim.getYear()) {
+            YearMonth january = YearMonth.of(claim.getYear(), 1)
+            if (january.isBefore(creditedThrough)) creditedThrough = january
+        }
+        long credited = Math.max(0L, ChronoUnit.MONTHS.between(fullRetirement, creditedThrough))
+        Math.floor(monthlyBenefit * (150L + credited) / 150d)
+    }
+
+    private YearMonth attainedMonth(int ageMonths) {
+        YearMonth.from(birth.minusDays(1).plusMonths(ageMonths))
+    }
+
+    private static int fullRetirementMonths(int cohort) {
+        if (cohort <= 1937) return 65 * 12
+        if (cohort <= 1942) return 65 * 12 + 2 * (cohort - 1937)
+        if (cohort <= 1954) return 66 * 12
+        if (cohort <= 1959) return 66 * 12 + 2 * (cohort - 1954)
+        67 * 12
+    }
+
+    private static boolean whole(Object value, int minimum, int maximum) {
+        value instanceof Number && ((Number) value).doubleValue() == ((Number) value).intValue() &&
+            ((Number) value).intValue() >= minimum && ((Number) value).intValue() <= maximum
+    }
+
+    @Override void funding(FundingPort port) {
+        port.receiptUntil(payment, taxable ? FundingPort.ReceiptTax.TAXABLE : FundingPort.ReceiptTax.TAX_FREE,
+            false, lastPaymentExclusive)
+    }
+
+    @Override void metrics(MetricsPort port) { port.income(income, false) }
+
+    @Override void tax(TaxPort port) {
+        if (taxable) port.income(owner, income, 'socialSecurityBenefits', 'monthly', 'US',
+            () -> context.from(), () -> monthlyBenefit > 0d, Map.of())
+    }
+
+    private IllegalArgumentException invalid(String key) { new IllegalArgumentException(messages.text(key)) }
+}

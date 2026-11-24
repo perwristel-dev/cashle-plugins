@@ -27,7 +27,7 @@ export default function (context) {
   const commonErrors = (o, profile) => {
     const errors = [];
     if (o.ruleYear !== 2026 || o.residency !== 'full-year') errors.push(taxText('Välj regelår 2026 och bekräfta hemvist hela året.'));
-    if ((profile?.people ?? []).some(p => Number.isInteger(p.birthYear) && (p.birthYear < 1 || p.birthYear > 2007))) errors.push(taxText('Reglerna stöder vuxna från 19 års ålder i regelåret. Äldre personer stöds för de angivna inkomstslagen; pensionsförmåner och barnprofiler kräver andra regler.'));
+    if ((profile?.people ?? []).some(p => Number.isInteger(p.birthYear) && (p.birthYear < 1 || p.birthYear > 2007))) errors.push(taxText('Reglerna stöder vuxna från 19 års ålder i regelåret.'));
     return errors;
   };
   const positive = (o, fields, errors) => { for (const key of fields) if (!Number.isFinite(o[key]) || o[key] < 0) errors.push(taxText('{field}: ange ett ändligt belopp som är 0 eller större.', { field: key })); };
@@ -55,13 +55,38 @@ export default function (context) {
     const choice = (key, label, options, value = '', extra = {}) => ({ key, label, kind: 'select', options, default: value, ...extra });
     const common = [choice('propertyType', 'Bostadstyp', [['detachedHome', 'Privat småhus'], ['residentialHome', 'Annan privat bostad']], 'detachedHome'), number('ownershipShare', 'Laglig ägarandel', 1, { exclusiveMin: true, max: 1 }), date('acquiredDate', 'Ursprungligt förvärvsdatum', { required: true }), date('contractDate', 'Bindande försäljningskontrakt'), date('paymentDueDate', 'Faktisk avvikande betalningsdag (valfritt)', { help: 'Lämna tomt för lagens ordinarie årliga betalningsdag. Extra preliminära betalningar modelleras separat.' })];
     const claiming = o => o.claimSection121;
-    const jointClaim = o => o.claimSection121 && o.filingStatus === 'marriedJoint';
-    return { help: 'USA: federal beräkning för privat bostad i någon av de 50 delstaterna eller DC. Bostadens delstat måste vara samma som ägarens hemvist under försäljningsåret. Utanför de sju verifierade delstaterna måste delstats- och lokalskatt väljas som schablon i personkortets skatteinställningar. Schablonen använder federalt AGI-underlag; delstatens egna bostadsundantag beräknas inte. Bostäder i en annan delstat kräver separata regler och stöds inte. Section 121 kräver verifierad 2-av-5-årstid och att ingen annan uteslutning använts de senaste två åren. Privat förlust är inte avdragsgill. Ingen verksamhet, uthyrning, avskrivning, nonqualified use eller partiell uteslutning. Tillträdesdagen styr innehavstid och skatteår. Slutlig skatt förfaller normalt 15 april följande år med helg-/Emancipation Day-justering; individuella uppskov anges som datum.', fields: [...common,
+    const reduced = o => o.claimSection121 && o.section121Treatment === 'workMove';
+    const fullClaim = o => o.claimSection121 && !reduced(o);
+    const jointClaim = o => fullClaim(o) && o.filingStatus === 'marriedJoint';
+    return { help: 'USA: federal beräkning för privat bostad i någon av de 50 delstaterna eller DC. Bostadens delstat måste vara samma som ägarens hemvist under försäljningsåret. Utanför de sju verifierade delstaterna måste delstats- och lokalskatt väljas som schablon i personkortets skatteinställningar. Schablonen använder federalt AGI-underlag; delstatens egna bostadsundantag beräknas inte. Bostäder i en annan delstat kräver separata regler och stöds inte. Section 121 kan ge full uteslutning vid 2-av-5-årsvillkoren eller nedsatt uteslutning vid kvalificerad arbetsflytt. Privat förlust är inte avdragsgill. Ingen verksamhet, uthyrning, avskrivning, nonqualified use eller andra skäl för nedsatt uteslutning. Tillträdesdagen styr innehavstid och skatteår. Slutlig skatt förfaller normalt 15 april följande år med helg-/Emancipation Day-justering; individuella uppskov anges som datum.', fields: [...common,
       choice('state', 'Bostadens och ägarens delstat', [['', 'Välj'], ...usStates]),
       choice('filingStatus', 'Deklarationsstatus försäljningsåret', [['', 'Välj'], ['single', 'Single'], ['marriedSeparate', 'Married filing separately'], ['headOfHousehold', 'Head of household']]),
-      check('claimSection121', 'Begär full ordinarie Section 121-uteslutning'), number('ownershipMonthsLast60', 'Ägarmånader under de senaste 60 månaderna', 0, { integer: true, max: 60, when: claiming }), number('residenceMonthsLast60', 'Månader som huvudsaklig bostad under de senaste 60', 0, { integer: true, max: 60, when: claiming }), check('noOtherExclusionLast2Years', 'Ingen annan Section 121-uteslutning under de föregående två åren', { mustBeTrue: true, when: claiming }), number('spouseResidenceMonthsLast60', 'Makens boendemånader under de senaste 60', 0, { integer: true, max: 60, when: jointClaim }), check('spouseNoOtherExclusionLast2Years', 'Maken har inte använt annan uteslutning under de föregående två åren', { mustBeTrue: true, when: jointClaim }),
+      check('claimSection121', 'Begär Section 121-uteslutning'),
+      choice('section121Treatment', 'Typ av Section 121-uteslutning', [['full', 'Full uteslutning'], ['workMove', 'Nedsatt uteslutning vid arbetsflytt']], 'full', { when: claiming }),
+      number('ownershipMonthsLast60', 'Ägarmånader under de senaste 60 månaderna', 0, { integer: true, max: 60, when: claiming }),
+      number('residenceMonthsLast60', 'Månader som huvudsaklig bostad under de senaste 60', 0, { integer: true, max: 60, when: claiming }),
+      check('noOtherExclusionLast2Years', 'Ingen annan Section 121-uteslutning under de föregående två åren', { mustBeTrue: true, when: fullClaim }),
+      date('workChangeDate', 'Datum för byte av arbetsplats', { required: true, when: reduced }),
+      check('mainHomeAtWorkChange', 'Jag ägde och bodde i bostaden när arbetsplatsen byttes', { mustBeTrue: true, when: reduced }),
+      number('oldWorkDistanceMiles', 'Tidigare arbetsplats från bostaden (miles)', 0, { when: reduced, help: 'Ange noll om du saknade tidigare arbetsplats. Använd den kortaste vanliga resvägen.' }),
+      number('newWorkDistanceMiles', 'Ny arbetsplats från bostaden (miles)', 0, { when: reduced, help: 'Den nya arbetsplatsen måste ligga minst 50 miles längre från bostaden.' }),
+      number('monthsSincePreviousExclusion', 'Hela månader sedan föregående Section 121-uteslutning', 24, { integer: true, max: 24, when: reduced, help: 'Ange 24 om du inte använt uteslutningen de senaste två åren.' }),
+      number('spouseResidenceMonthsLast60', 'Makens boendemånader under de senaste 60', 0, { integer: true, max: 60, when: jointClaim }),
+      check('spouseNoOtherExclusionLast2Years', 'Maken har inte använt annan uteslutning under de föregående två åren', { mustBeTrue: true, when: jointClaim }),
     ] };
   })();
+
+  const retirementFields = [
+    choice('estimatedStateRetirementTreatment', 'Pensionsinkomster i lokal schablon', [
+      ['', 'Välj'], ['neither', 'Inga pensionsinkomster'], ['pension', 'Privat pension'],
+      ['socialSecurity', 'Social Security'], ['both', 'Privat pension och Social Security'],
+    ], { when: o => o.stateTaxMethod === 'estimated-flat', help: 'Välj vilka pensionsinkomster som ska ingå om planen innehåller pension. För Social Security använder prognosen den federala beskattningsformeln med det lokala inkomstunderlaget.' }),
+    choice('socialSecuritySpouseResidence', 'Boende vid separat deklaration med Social Security', [
+      ['', 'Välj'], ['apart', 'Bodde isär hela året'], ['together', 'Bodde tillsammans någon gång under året'],
+    ], { when: o => o.filingStatus === 'marriedSeparate' }),
+    number('taxExemptInterest', 'Skattefri ränta per år (USD)', { money: true,
+      help: 'Årsbelopp för beräkning av beskattningsbar Social Security.' }),
+  ];
 
   const unitedStatesTax = {
     translate: taxText,
@@ -69,9 +94,9 @@ export default function (context) {
     requiresTaxPlan: true,
     sourceTax: { language: 'groovy-cashle-plugin', provider: 'cashle.tax.us', source: 'us-tax.cashle' },
     id: 'US', label: 'USA', currency: 'USD', ruleYear: 2026,
-    supportedBases: ['salary', 'capitalIncome', 'qualifiedDividends', 'shortTermCapitalGains', 'shortTermCapitalLosses', 'longTermCapitalGains', 'longTermCapitalLosses'],
+    supportedBases: ['salary', 'pension', 'socialSecurityBenefits', 'capitalIncome', 'qualifiedDividends', 'shortTermCapitalGains', 'shortTermCapitalLosses', 'longTermCapitalGains', 'longTermCapitalLosses'],
     propertyTax: propertyTax,
-    description: 'USA 2026: federal inkomstskatt, kvalificerad utdelning, kort/lång kapitalvinst, AMT, NIIT och anställds FICA. Verifierade delstatsregler finns för AK, FL, NV, SD, TN, TX och WY. Alla 50 delstater och DC kan använda en uttryckligt vald, ändringsbar schablon för lokal inkomstskatt på ett AGI-liknande underlag av lokalt skattepliktiga inkomster. Förvalet 5 % är ett prognosantagande, inte en fastställd skattesats. Individuell deklaration, standardavdrag inklusive ålderstillägg från 65 och enhanced senior deduction med avtrappning. Inga barn-, utbildnings- eller andra personliga skattereduktioner. Sambeskattning, Social Security-utbetalningar, andra pensionsinkomster och pensionskonton stöds inte i planen.',
+    description: 'USA 2026: federal inkomstskatt på lön, pension och investeringsinkomster samt FICA på lön. Social Security beskattas enligt reglerna för kombinerad inkomst. Verifierade delstatsregler finns för AK, FL, NV, SD, TN, TX och WY. Övriga delstater och DC kräver en uttryckligt vald schablon. Planen använder individuella deklarationer med standardavdrag och tillämpliga ålderstillägg.',
     sourceSettings: {
       defaultOptions: { federalTaxable: true, localTaxable: true },
       fields: [
@@ -87,8 +112,8 @@ export default function (context) {
       },
     },
     source: 'https://www.irs.gov/irb/2025-45_IRB',
-    defaultOptions: { ruleYear: 2026, residency: '', state: '', stateTaxMethod: 'verified', estimatedStateTaxRate: .05, filingStatus: '', openingShortTermCapitalLoss: 0, openingLongTermCapitalLoss: 0, seniorDeductionEligible: true, januaryFirstBirthday: false },
-    fields: [...commonFields, ...usStateTaxFields, choice('filingStatus', 'Deklarationsstatus', [['', 'Välj'], ['single', 'Single'], ['marriedSeparate', 'Married filing separately'], ['headOfHousehold', 'Head of household – verifierad behörighet']]), number('openingShortTermCapitalLoss', 'Ingående kortfristig kapitalförlust (USD)', { money: true }), number('openingLongTermCapitalLoss', 'Ingående långfristig kapitalförlust (USD)', { money: true }), { key: 'seniorDeductionEligible', label: 'Giltigt SSN för enhanced senior deduction när åldersvillkoret uppfylls', kind: 'check', help: 'Från 65: upp till 6 000 USD med inkomstavtrappning. Married filing separately har inte rätt till detta extra avdrag. Regelutgåvan 2026 återanvänds i prognosår.' }, { key: 'januaryFirstBirthday', label: 'Födelsedagen är den 1 januari (USA:s särskilda åldersgräns)', kind: 'check', help: 'En person född den 1 januari anses uppnå åldern dagen före födelsedagen. Kräver separata personinställningar om två vuxna har olika födelsedagar.' }],
+    defaultOptions: { ruleYear: 2026, residency: '', state: '', stateTaxMethod: 'verified', estimatedStateTaxRate: .05, filingStatus: '', taxExemptInterest: 0, socialSecuritySpouseResidence: '', estimatedStateRetirementTreatment: '', openingShortTermCapitalLoss: 0, openingLongTermCapitalLoss: 0, seniorDeductionEligible: true, januaryFirstBirthday: false },
+    fields: [...commonFields, ...usStateTaxFields, choice('filingStatus', 'Deklarationsstatus', [['', 'Välj'], ['single', 'Single'], ['marriedSeparate', 'Married filing separately'], ['headOfHousehold', 'Head of household – verifierad behörighet']]), ...retirementFields, number('openingShortTermCapitalLoss', 'Ingående kortfristig kapitalförlust (USD)', { money: true }), number('openingLongTermCapitalLoss', 'Ingående långfristig kapitalförlust (USD)', { money: true }), { key: 'seniorDeductionEligible', label: 'Giltigt SSN för enhanced senior deduction när åldersvillkoret uppfylls', kind: 'check', help: 'Från 65: upp till 6 000 USD med inkomstavtrappning. Married filing separately har inte rätt till detta extra avdrag. Regelutgåvan 2026 återanvänds i prognosår.' }, { key: 'januaryFirstBirthday', label: 'Födelsedagen är den 1 januari (USA:s särskilda åldersgräns)', kind: 'check', help: 'En person född den 1 januari anses uppnå åldern dagen före födelsedagen. Kräver separata personinställningar om två vuxna har olika födelsedagar.' }],
     validate(o, profile) { const errors = commonErrors(o, profile); errors.push(...validateUsStateTax(o)); if (!['single', 'marriedSeparate', 'headOfHousehold'].includes(o.filingStatus)) errors.push(taxText('Välj stödd individuell deklarationsstatus.')); positive(o, ['openingShortTermCapitalLoss', 'openingLongTermCapitalLoss'], errors); if ((profile?.people?.length ?? 0) > 1 && (o.openingShortTermCapitalLoss > 0 || o.openingLongTermCapitalLoss > 0)) errors.push(taxText('Ingående USA-förlust för två vuxna behöver separata personinställningar; gemensamma profilfält får inte dubblera samma förlust.')); return errors; },
     assessmentOptions(o) { const { openingShortTermCapitalLoss, openingLongTermCapitalLoss, ...options } = o; return { ...options, initialState: { shortTermCapitalLossCarry: openingShortTermCapitalLoss, longTermCapitalLossCarry: openingLongTermCapitalLoss, localShortTermCapitalLossCarry: openingShortTermCapitalLoss, localLongTermCapitalLossCarry: openingLongTermCapitalLoss, ...(options.initialState ?? {}) } }; },
   };

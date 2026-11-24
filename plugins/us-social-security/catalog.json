@@ -1,0 +1,16 @@
+{
+  "name": "Social Security retirement",
+  "names": {
+    "en": "US Social Security retirement",
+    "sv": "Amerikansk allmän ålderspension"
+  },
+  "description": {
+    "en": "Project monthly lifetime US retirement benefits from an SSA estimate or award.",
+    "sv": "Beräkna livsvarig amerikansk ålderspension från ett uppskattat eller beviljat belopp från SSA."
+  },
+  "country": "US",
+  "category": "accounts",
+  "releases": [
+    "d84db2b5381f917906bd3aa5aca570139ab00bb1c9c0a8d868287a5be6a20295"
+  ]
+}
