@@ -1,0 +1,16 @@
+{
+  "name": "Icelandic supplementary pension savings",
+  "names": {
+    "en": "Icelandic supplementary pension savings",
+    "sv": "Isländskt frivilligt pensionssparande"
+  },
+  "description": {
+    "en": "Voluntary pension contributions with taxable retirement withdrawals and approved tax-free first-home payments.",
+    "sv": "Frivilliga pensionsavgifter med skattepliktigt pensionsuttag och godkänt skattefritt bostadsuttag."
+  },
+  "country": "IS",
+  "category": "accounts",
+  "releases": [
+    "e20376dc6873b798b4aade35df44c35d45ef742fb84eb80a3287d886cd49bd11"
+  ]
+}

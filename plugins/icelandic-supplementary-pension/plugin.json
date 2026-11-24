@@ -1,0 +1,26 @@
+{
+  "id": "cashle.finance.pension.is.supplementary",
+  "requires": [
+    "cashle.finance"
+  ],
+  "ui": "ui.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui-en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui-sv.json"
+    }
+  ],
+  "sources": [
+    {
+      "path": "icelandic-supplementary-pension.cashle",
+      "resources": [
+        "icelandic/supplementary/messages_en.properties",
+        "icelandic/supplementary/messages_sv.properties"
+      ]
+    }
+  ]
+}

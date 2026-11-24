@@ -1,0 +1,173 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
+import dev.cashle.core.i18n.Messages
+import dev.cashle.sdk.composition.ModuleContext
+import dev.cashle.sdk.composition.ModuleInput
+import dev.cashle.sdk.finance.FinanceContext
+import dev.cashle.sdk.finance.FinanceModule
+import dev.cashle.sdk.finance.FundingPort
+import dev.cashle.sdk.finance.MetricsPort
+import dev.cashle.sdk.finance.TaxPort
+import dev.cashle.sdk.model.AccountHandle
+import dev.cashle.sdk.model.FlowHandle
+import dev.cashle.sdk.model.NodeHandle
+import dev.cashle.sdk.model.ScheduleSpec
+import dev.cashle.sdk.model.Variable
+import java.time.DateTimeException
+import java.time.LocalDate
+import java.time.YearMonth
+import java.util.function.Supplier
+
+financeModule('cashlab.icelandic-supplementary-pension', 1) {
+    pluginId 'cashle.finance.pension.is.supplementary'
+    dsl('icelandicSupplementaryPension') { id ->
+        [name: id, owner: 'self', openingCapital: 0d, grossMonthlyPay: 0d,
+         employeeRate: 4d, annualReturn: 0d, approvedHomeAmount: 0d]
+    }
+    factory { ModuleInput input -> new IcelandicSupplementaryPension(input) }
+}
+
+final class IcelandicSupplementaryPension implements FinanceModule {
+    private static final String NATURE = 'cashle.household.economic-nature'
+    private static final double EMPLOYER_RATE = 0.02d
+    private final ModuleInput input
+    private String personId
+    private Messages messages
+    private LocalDate birth, ordinaryDate
+    private Supplier<LocalDate> death
+    private AccountHandle capital, equity, income
+    private FlowHandle homePayment, ordinaryPayment
+    private Variable balance
+    private double fx
+    private boolean taxable
+
+    IcelandicSupplementaryPension(ModuleInput input) { this.input = input }
+    @Override void declare(ModuleContext ignored) {}
+
+    @Override void declareFinance(FinanceContext finance) {
+        if (!input.enabled()) return
+        def data = input.data()
+        messages = finance.messages(IcelandicSupplementaryPension, 'icelandic.supplementary.messages')
+        personId = data.owner ?: 'self'
+        def person = finance.profile().people.find { it.id == personId && it.id != 'joint' }
+        require(whole(person?.birthYear, 1900, 2300) && whole(person?.birthMonth, 1, 12), 'invalid.person')
+        YearMonth birthMonth = YearMonth.of(person.birthYear.intValue(), person.birthMonth.intValue())
+        def day = data.birthDay
+        require(day == null || day == '' || whole(day, 1, birthMonth.lengthOfMonth()), 'invalid.person')
+        birth = day == null || day == '' ? birthMonth.atEndOfMonth() : birthMonth.atDay(day.intValue())
+        String name = data.name instanceof String && !data.name.isBlank() ? data.name : messages.text('name')
+        def personAccount = finance.owner(personId)
+        capital = personAccount.account().classify(AccountKind.ASSET, new AccountTag(NATURE, 1, 'asset.pension', Set.of(AccountKind.ASSET)))
+        capital.setName(name)
+        capital.addReportingRole(ReportingRole.PENSION)
+        equity = personAccount.account()
+        equity.setKind(AccountKind.EQUITY)
+        equity.setName(name + ' – ' + messages.text('equity'))
+        taxable = !finance.taxSettings().isEmpty()
+        ordinaryDate = optionalDate(data.ordinaryPaymentDate, 'invalid.ordinaryDate')
+        if (ordinaryDate != null) {
+            income = personAccount.account().classify(AccountKind.INCOME,
+                new AccountTag(NATURE, 1, 'income.pension.occupational', Set.of(AccountKind.INCOME)))
+            income.setName(name + ' – ' + messages.text('income'))
+            income.addReportingRole(ReportingRole.INCOME)
+        }
+    }
+
+    @Override void wireFinance(FinanceContext finance) {
+        if (capital == null) return
+        def data = input.data()
+        LocalDate from = finance.from()
+        LocalDate until = finance.until()
+        LocalDate contributionUntil = optionalDate(data.contributionUntil, 'invalid.contributions')
+        LocalDate homeDate = optionalDate(data.homePaymentDate, 'invalid.homeDate')
+        double homeAmount = number(data.approvedHomeAmount, 0d, Double.MAX_VALUE, 'invalid.homeAmount')
+        require((homeAmount == 0d && homeDate == null) || (homeAmount > 0d && homeDate != null && homeDate >= from && homeDate < until),
+            'invalid.homeDate')
+        require(ordinaryDate == null || ordinaryDate >= birth.plusYears(60) && ordinaryDate >= from && ordinaryDate < until,
+            'invalid.ordinaryDate')
+        require(homeDate == null || ordinaryDate == null || homeDate <= ordinaryDate, 'invalid.order')
+        require(contributionUntil == null || contributionUntil >= from, 'invalid.contributions')
+        double pay = number(data.grossMonthlyPay, 0d, Double.MAX_VALUE, 'invalid.contributions')
+        require(data.employeeRate instanceof Number && data.employeeRate.doubleValue() in [2d, 4d], 'invalid.contributions')
+        double credit = pay * (data.employeeRate.doubleValue() / 100d + EMPLOYER_RATE)
+        double growth = Math.pow(1d + number(data.annualReturn, -99d, 100d, 'invalid.return') / 100d, 1d / 12d)
+        death = finance.lifeEnd(personId)
+        fx = finance.exchangeRate('ISK', finance.profile().currency ?: 'ISK')
+        def model = finance.model()
+        def clock = model.clock()
+        balance = model.variable(number(data.openingCapital, 0d, Double.MAX_VALUE, 'invalid.capital'))
+        model.valueAccount(capital, equity, { balance.value * fx })
+        ScheduleSpec monthEnds = ScheduleSpec.every(Frequency.MONTH, from.withDayOfMonth(1)).atMonthEnd().within(from, until)
+        def accrue = model.action(monthEnds, {
+            LocalDate day = clock.date
+            if (!alive(day) || (ordinaryDate != null && day > ordinaryDate)) return
+            double contribution = contributionUntil == null || day < contributionUntil ? credit : 0d
+            balance.value = balance.value * growth + contribution
+        })
+
+        NodeHandle releasedForHome = null
+        if (homeDate != null) {
+            def amount = model.variable(0d)
+            ScheduleSpec payment = ScheduleSpec.on(homeDate)
+            releasedForHome = model.action(payment, {
+                if (!alive(homeDate)) return
+                amount.value = Math.min(homeAmount, balance.value)
+                balance.value -= amount.value
+            }, accrue)
+            homePayment = model.flow(payment, finance.cash(), equity, { amount.value * fx }, releasedForHome)
+        }
+        if (ordinaryDate != null) {
+            def amount = model.variable(0d)
+            ScheduleSpec payment = ScheduleSpec.on(ordinaryDate)
+            NodeHandle[] dependencies = releasedForHome == null ? [accrue] as NodeHandle[] : [accrue, releasedForHome] as NodeHandle[]
+            def release = model.action(payment, {
+                if (!alive(ordinaryDate)) return
+                amount.value = balance.value
+                balance.value = 0d
+            }, dependencies)
+            ordinaryPayment = model.flow(payment, finance.cash(), income, { amount.value * fx }, release)
+        }
+    }
+
+    @Override void funding(FundingPort port) {
+        if (homePayment != null) port.eventFlow(homePayment, { false })
+        if (ordinaryPayment != null)
+            port.receiptUntil(ordinaryPayment, taxable ? FundingPort.ReceiptTax.TAXABLE : FundingPort.ReceiptTax.TAX_FREE, false, death)
+    }
+
+    @Override void tax(TaxPort port) {
+        if (income != null && taxable)
+            port.income(personId, income, 'pension', 'yearly', 'IS', { ordinaryDate }, { true }, Map.of())
+    }
+
+    @Override void metrics(MetricsPort port) {
+        if (capital != null) port.balance(capital, { balance.value * fx })
+        if (income != null) port.income(income, false)
+    }
+
+    private boolean alive(LocalDate date) {
+        LocalDate end = death.get()
+        end == null || date < end
+    }
+
+    private LocalDate optionalDate(Object value, String key) {
+        if (value == null || value == '') return null
+        require(value instanceof String, key)
+        try { LocalDate.parse(value) } catch (DateTimeException ignored) { throw new IllegalArgumentException(messages.text(key)) }
+    }
+
+    private static boolean whole(Object value, int min, int max) {
+        value instanceof Number && value.doubleValue() >= min && value.doubleValue() <= max && value.doubleValue() == value.intValue()
+    }
+
+    private double number(Object value, double min, double max, String key) {
+        require(value instanceof Number && Double.isFinite(value.doubleValue()) && value.doubleValue() >= min && value.doubleValue() <= max, key)
+        value.doubleValue()
+    }
+
+    private void require(boolean valid, String key) {
+        if (!valid) throw new IllegalArgumentException(messages.text(key))
+    }
+}
