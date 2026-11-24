@@ -1,0 +1,37 @@
+{
+  "id": "cashle.finance.de-life-insurance",
+  "requires": [
+    "cashle.finance",
+    "cashle.account.support",
+    "cashle.account.tax.support"
+  ],
+  "sources": [
+    {
+      "path": "german-life-insurance.cashle",
+      "providers": [
+        "cashle.finance.de-life-insurance",
+        "cashle.finance.de-life-insurance.policy"
+      ],
+      "resources": [
+        "german/lifeinsurance/messages_en.properties",
+        "german/lifeinsurance/messages_sv.properties",
+        "german/lifeinsurance/messages_de.properties"
+      ]
+    }
+  ],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui/en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui/sv.json"
+    },
+    {
+      "locale": "de",
+      "path": "ui/de.json"
+    }
+  ]
+}
