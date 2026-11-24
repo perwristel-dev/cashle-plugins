@@ -1,0 +1,16 @@
+{
+  "name": "Icelandic home stamp duty",
+  "names": {
+    "en": "Icelandic home stamp duty",
+    "sv": "Isländsk stämpelskatt vid bostadsköp"
+  },
+  "description": {
+    "en": "Stamp duty on an Icelandic home purchase, including the qualifying first-buyer rate.",
+    "sv": "Stämpelskatt vid isländskt bostadsköp, inklusive skattenedsättning för förstagångsköpare."
+  },
+  "country": "IS",
+  "category": "tax",
+  "releases": [
+    "208e95ea7e4378978d2adfc6dc5e1966c7856adb988b722e7d708ffbee3f75c4"
+  ]
+}

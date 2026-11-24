@@ -1,0 +1,102 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.i18n.Messages
+import dev.cashle.sdk.composition.ModuleContext
+import dev.cashle.sdk.composition.ModuleInput
+import dev.cashle.sdk.finance.AssetLifecycle
+import dev.cashle.sdk.finance.CollateralAsset
+import dev.cashle.sdk.finance.FinanceContext
+import dev.cashle.sdk.finance.FinanceModule
+import dev.cashle.sdk.finance.FundingPort
+import dev.cashle.sdk.finance.FundingSchedule
+import dev.cashle.sdk.finance.MetricsPort
+import dev.cashle.sdk.model.AccountHandle
+import dev.cashle.sdk.model.Variable
+import java.time.LocalDate
+
+financeModule('cashlab.icelandic-home-stamp-duty', 1) {
+    pluginId 'cashle.finance.property.is.stamp-duty'
+    dsl('icelandicStampDuty') { id ->
+        [name: id, firstBuyerShare: 0d]
+    }
+    factory { ModuleInput entry -> new IcelandicHomeStampDuty(entry) }
+}
+
+final class IcelandicHomeStampDuty implements FinanceModule {
+    private static final String ROLE = 'cashle.finance.property.is.stamp-duty.v1'
+    private final ModuleInput entry
+    private AccountHandle account
+    private AssetLifecycle asset
+    private FinanceContext context
+    private Variable ownedOnce
+    private Messages messages
+    private double tax
+
+    IcelandicHomeStampDuty(ModuleInput entry) { this.entry = entry }
+
+    @Override void declare(ModuleContext ignored) {}
+
+    @Override void declareFinance(FinanceContext context) {
+        if (!entry.enabled()) return
+        messages = context.messages(IcelandicHomeStampDuty, 'icelandic.stampduty.messages')
+        def data = entry.data()
+        double valuation = number(data.valuation, 1d, Double.MAX_VALUE, 'invalid.valuation')
+        double share = number(data.firstBuyerShare, 0d, 100d, 'invalid.share') / 100d
+        double fx = context.exchangeRate('ISK', context.profile().currency ?: 'ISK')
+        tax = valuation * 0.008d * (1d - 0.5d * share) * fx
+        account = context.household().account()
+        account.setKind(AccountKind.EXPENSE)
+        account.setName(data.name instanceof String && !data.name.isBlank() ? data.name : messages.text('name'))
+    }
+
+    @Override void wireFinance(FinanceContext context) {
+        if (account == null) return
+        this.context = context
+        Object assetId = entry.data().assetId
+        require(assetId instanceof String && !assetId.isBlank(), 'invalid.asset')
+        asset = context.findAssetLifecycle(assetId).orElse(null)
+        def collateral = context.findCollateralAsset(assetId).orElse(null)
+        require(asset != null && asset.acquisitionExpenseId() != null && collateral?.kind() == CollateralAsset.Kind.DWELLING,
+            'invalid.asset')
+        require(context.claimExclusive(asset.account(), ROLE), 'invalid.duplicate')
+        ownedOnce = context.model().variable(0d)
+    }
+
+    @Override void funding(FundingPort port) {
+        if (asset == null || tax == 0d) return
+        port.requiredExpenseWithSavings(entry.id(), FundingPort.CASH, account, { tax },
+            FundingSchedule.once(asset.acquisitionDate()), { due() }, { 1d }, asset.acquisitionExpenseId(),
+            false, true, { rejected() }, { tax }, '*', false)
+        port.commitment({
+            LocalDate today = context.model().clock().date
+            LocalDate purchase = asset.acquisitionDate().get()
+            LocalDate next = context.nextReceiptDate().get()
+            purchase != null && purchase > today && next != null && purchase < next && asset.acquisitionRequired().asBoolean ? tax : 0d
+        })
+    }
+
+    @Override void metrics(MetricsPort port) {
+        if (account != null) port.spending(account, { 1d }, { true })
+    }
+
+    private boolean due() {
+        boolean owned = asset.owned().asBoolean
+        if (owned) ownedOnce.value = 1d
+        !asset.account().inactive && (owned || asset.acquisitionPending().asBoolean)
+    }
+
+    private boolean rejected() {
+        boolean owned = asset.owned().asBoolean
+        if (owned) ownedOnce.value = 1d
+        LocalDate purchase = asset.acquisitionDate().get()
+        purchase != null && purchase <= context.model().clock().date && ownedOnce.value == 0d && !asset.acquisitionPending().asBoolean
+    }
+
+    private double number(Object value, double min, double max, String key) {
+        require(value instanceof Number && Double.isFinite(value.doubleValue()) && value.doubleValue() >= min && value.doubleValue() <= max, key)
+        value.doubleValue()
+    }
+
+    private void require(boolean condition, String key) {
+        if (!condition) throw new IllegalArgumentException(messages.text(key))
+    }
+}

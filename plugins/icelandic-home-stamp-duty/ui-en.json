@@ -1,0 +1,14 @@
+{
+  "label": "Icelandic home stamp duty",
+  "field.name": "Name",
+  "field.asset": "Home purchase",
+  "field.valuation": "Official registered property valuation",
+  "field.firstBuyerShare": "Share eligible for first-home relief",
+  "option.asset": "Choose a scheduled home purchase",
+  "help.valuation": "Enter the official ISK valuation that applies to the chargeable document.",
+  "help.firstBuyerShare": "Enter the confirmed share that qualifies for the half rate, after any spouse or partner limitation. Use zero for an ordinary purchase.",
+  "invalid.asset": "Choose a residential property with a modeled acquisition.",
+  "invalid.valuation": "Enter a positive official property valuation in ISK.",
+  "invalid.share": "Enter an eligible ownership share between 0% and 100%.",
+  "invalid.duplicate": "Use one stamp-duty expense per property."
+}

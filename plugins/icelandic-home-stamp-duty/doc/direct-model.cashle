@@ -1,0 +1,22 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.assets'
+    id 'cashle.finance.savings'
+    id 'groovy-cashle-plugin'
+    id 'cashle.finance.property.is.stamp-duty' from '../icelandic-home-stamp-duty.cashle'
+}
+finance {
+    language 'en'
+    plan { from '2026-11-01'; until '2027-02-01'; currency 'ISK'; inflation 0d }
+    person('self') { birthYear 1988; birthMonth 2 }
+    savings('funds') { balance 100_000_000d }
+    house('First home') {
+        value 75_000_000d
+        settings([purchasePrice: 75_000_000d, purchaseBasis: 'nominal', purchaseNecessary: true,
+                  purchaseDate: [reference: 'date', year: 2026, month: 12, day: 1, offset: 0]])
+    }
+    icelandicStampDuty('Stamp Duty Land Tax') {
+        settings([assetId: 'First home', valuation: 60_000_000d, firstBuyerShare: 100d])
+    }
+}
+collect { }
