@@ -32,5 +32,6 @@
   "invalidEligibility": "Ange första datum då arbetsgivarens plan tillåter uttag.",
   "invalidDeferral": "Bekräfta pensioneringsdatum för tillåtet uppskov vid fortsatt arbete eller ange ett tillåtet uttagsdatum senast under det första obligatoriska uttagsåret.",
   "invalidOpeningRmd": "Ange återstående obligatoriskt uttag under prognosens första kalenderår.",
-  "invalidStart": "Välj start efter ålder, datum, pensionering eller milstolpe."
+  "invalidStart": "Välj start efter ålder, datum, pensionering eller milstolpe.",
+  "age": "Ålder"
 }

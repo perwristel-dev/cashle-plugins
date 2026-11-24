@@ -45,6 +45,12 @@ function firstRmdYear(person, data) {
 
 export default function (context) {
   const t = context.translate;
+  const needsOpeningRmd = (data, model) => {
+    const person = personFor(data, model);
+    const from = context.casePlan(model)?.from;
+    return person && validDate(from) && data.openingBalance > 0 &&
+      Number(from.slice(0, 4)) >= firstRmdYear(person, data) && !from.endsWith('-01-01');
+  };
   const amount = (value, model) => new Intl.NumberFormat(model?.profile?.locale ?? context.language, {
     style: 'currency', currency: 'USD', maximumFractionDigits: 2,
   }).format(value);
@@ -59,7 +65,7 @@ export default function (context) {
     { key: 'contributionUntil', kind: 'date', label: 'contributionUntil', default: '',
       when: hasContributions, required: true, preserveWhenInactive: true, forecastEditable: true },
     { key: 'openingYearRmd', kind: 'number', label: 'openingYearRmd', default: null, min: 0, unit: 'USD',
-      help: 'openingRmdHelp' },
+      when: needsOpeningRmd, preserveWhenInactive: true, help: 'openingRmdHelp' },
     { key: 'eligibleDate', kind: 'date', label: 'eligibleDate', default: '', help: 'eligibilityHelp' },
     { key: 'workingDeferral', kind: 'check', label: 'workingDeferral', default: false, help: 'deferralHelp' },
   ];
@@ -68,7 +74,7 @@ export default function (context) {
       ['rmd-only', 'rmdOnly'], ['lump-sum', 'lumpSum'], ['installments', 'installments'], ['annuity', 'annuity'],
     ], forecastEditable: true },
     { key: 'payoutStart', kind: 'time', label: 'payoutStart', default: defaultStart,
-      choices: startChoices, currentDatePrecision: 'day', when: voluntary, preserveWhenInactive: true,
+      choices: startChoices, choiceLabels: { age: 'age' }, currentDatePrecision: 'day', when: voluntary, preserveWhenInactive: true,
       forecastEditable: true, normalize: (time, _model, data) => ['age', 'retirement'].includes(time?.reference)
         ? { ...time, personId: data.owner } : time },
     { key: 'installmentYears', kind: 'number', label: 'installmentYears', default: 15, min: 1, max: 40,
@@ -113,9 +119,7 @@ export default function (context) {
           (validDate(data.eligibleDate) && Number(data.eligibleDate.slice(0, 4)) > rmdYear)) {
         errors.push('invalidDeferral');
       }
-      const from = context.casePlan(model)?.from;
-      if (validDate(from) && data.openingBalance > 0 && Number(from.slice(0, 4)) >= rmdYear &&
-          !from.endsWith('-01-01') && !Number.isFinite(data.openingYearRmd)) {
+      if (needsOpeningRmd(data, model) && !Number.isFinite(data.openingYearRmd)) {
         errors.push('invalidOpeningRmd');
       }
       if (voluntary(data)) {
@@ -133,7 +137,9 @@ export default function (context) {
       if (context.casePlan(model).milestones?.some(row => row.builtin === 'life' && row.personId === data.owner)) {
         timeReferences.push({ reference: 'life', personId: data.owner });
       }
-      return { input: { ...data, payoutStart }, timeReferences };
+      const { openingYearRmd, ...input } = data;
+      return { input: { ...input, payoutStart,
+        ...(needsOpeningRmd(data, model) ? { openingYearRmd } : {}) }, timeReferences };
     },
     summarize: (data, model) => ({ title: data.name, amount: amount(data.openingBalance, model), detail: t('balanceSummary') }),
   });

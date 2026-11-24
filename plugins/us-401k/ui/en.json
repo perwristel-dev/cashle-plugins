@@ -32,5 +32,6 @@
   "invalidEligibility": "Enter the first date the employer plan allows distributions.",
   "invalidDeferral": "Confirm the retirement date for the permitted working deferral, or enter an eligibility date by the first required distribution year.",
   "invalidOpeningRmd": "Enter the remaining required distribution for the first calendar year.",
-  "invalidStart": "Choose a start by age, date, retirement or milestone."
+  "invalidStart": "Choose a start by age, date, retirement or milestone.",
+  "age": "Age"
 }
