@@ -1,0 +1,7 @@
+{
+  "label": "Kela essential-cost benchmark",
+  "description": "Finnish essential daily living needs from Kela’s March 2026 statutory budget.",
+  "name": "Name",
+  "adjustment": "Adjustment from benchmark",
+  "summary": "Monthly essential costs excluding housing"
+}

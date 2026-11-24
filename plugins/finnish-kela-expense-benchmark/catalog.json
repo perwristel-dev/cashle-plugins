@@ -1,0 +1,16 @@
+{
+  "name": "Kela essential-cost benchmark",
+  "names": {
+    "en": "Kela essential-cost benchmark",
+    "sv": "FPA:s referens för nödvändiga utgifter"
+  },
+  "description": {
+    "en": "Finnish essential daily living needs from Kela’s March 2026 statutory budget.",
+    "sv": "Finländsk referens för nödvändiga vardagsutgifter enligt FPA:s grunddel från mars 2026."
+  },
+  "country": "FI",
+  "category": "expense",
+  "releases": [
+    "6f936ea4f6039013a422a6933e7ce7ee20711791cc50eaad0325ca7c7637d710"
+  ]
+}
