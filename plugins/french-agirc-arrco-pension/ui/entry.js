@@ -1,9 +1,8 @@
 const pluginId = 'cashle.finance.pension.occupational.fr.agirc-arrco';
 const label = 'Retraite complémentaire Agirc-Arrco';
-const incomeLabel = 'Versement Agirc-Arrco';
 const fromPoints = data => data.basis === 'points';
 const number = (key, label, options = {}) => ({ key, label, kind: 'number', default: 0, min: 0, ...options });
-const savingsFields = [
+const pensionFields = [
   { key: 'name', kind: 'text', label: 'Nom', default: label },
   { key: 'owner', kind: 'owner', label: 'Titulaire', default: 'self' },
   { key: 'bornOnFirst', kind: 'check', label: 'Titulaire né le premier jour du mois', default: false },
@@ -37,14 +36,9 @@ export default context => {
     };
   };
   const quote = (data, model) => new Intl.NumberFormat(model?.locale ?? 'en', { style: 'currency', currency: 'EUR' }).format(data.monthlyQuote);
-  const receipt = context.schemaModule({
-    id: 'french-agirc-arrco-pension-receipt', label: incomeLabel, pluginId, category: 'income', fields: incomeFields, sections: [],
-    engineInput, summarize: (data, model) => ({ title: context.translate(incomeLabel),
-      ...(fromPoints(data) ? {} : { amount: quote(data, model) }), detail: context.translate('Versement mensuel viager') }),
-  });
-  const savings = context.schemaModule({
-    id: 'french-agirc-arrco-pension', label, pluginId, category: 'accounts', financesTab: 'savings',
-    fields: [...savingsFields, ...incomeFields], inlineFields: savingsFields, sections: [], engineInput,
+  const pension = context.schemaModule({
+    id: 'french-agirc-arrco-pension', label, pluginId, category: 'income', financesTab: 'income',
+    fields: [...pensionFields, ...incomeFields], sections: [], engineInput,
     creationConstraints: { finances: { individualOwners: true }, projections: { individualOwners: true } },
     validateData: (data, model) => {
       const owner = model?.profile?.people?.find(person => data.owner === person.id);
@@ -59,8 +53,8 @@ export default context => {
       detail: context.translate(fromPoints(data) ? 'Points Agirc-Arrco acquis' : 'Estimation mensuelle brute') }),
   });
   const translations = Object.fromEntries(Object.entries(context.translations).map(([locale, messages]) => [locale, { label: messages[label] ?? label }]));
-  return { modules: [{ ...savings, translations, usageModel: 'identity', acceptsDeposits: false, acceptsRemainder: false,
+  return { modules: [{ ...pension, translations, usageModel: 'identity', acceptsDeposits: false, acceptsRemainder: false,
     sourceModule: { language: 'groovy-cashle-plugin', provider: pluginId, source: 'french-agirc-arrco-pension.cashle' },
-    secondaryView: { category: 'income', label: () => context.translate(incomeLabel), editor: receipt.editor, summarize: receipt.summarize },
+    previousCategories: ['accounts'],
   }] };
 };

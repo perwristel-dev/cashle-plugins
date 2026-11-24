@@ -2,8 +2,7 @@
 
 Ange andelen AOW som SVB bedömer att du har tjänat in vid AOW-åldern och
 vilken boendesituation SVB använder. Varje helt försäkringsår ger två procent
-av full pension under den 50-åriga intjänandeperioden. Posten visar en pensionsrätt
-under Sparande och den livsvariga utbetalningen under Inkomster.
+av full pension under den 50-åriga intjänandeperioden. Ange pensionsrätt och livsvarig utbetalning i samma post under Inkomster.
 [SVB om intjäning](https://www.svb.nl/nl/aow/wat-is-aow/hoe-gaat-de-opbouw-van-de-aow) ·
 [SVB om boendesituation](https://www.svb.nl/en/aow-pension/living-situations/which-aow-pension-rate-applies-in-your-situation)
 

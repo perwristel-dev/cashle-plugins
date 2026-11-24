@@ -50,22 +50,11 @@ export default function (context) {
     const time = data.payoutStart ?? defaultStart;
     return ['age', 'retirement'].includes(time.reference) ? { ...time, personId: data.owner } : time;
   };
-  const payoutSummary = (data, model) => {
-    const time = timeFor(data);
-    const desired = context.resolveTimeDate(time, model);
-    return {
-      title: t('payout'), amount: resolveStart(data, model, desired, time.reference === 'age') ?? undefined,
-      detail: t('lifetime'),
-    };
-  };
-  const payoutEditor = context.schemaModule({
-    id: `${type}-payout`, category: 'income', label: 'payout', fields: payoutFields, sections: [],
-  }).editor;
   const pension = context.schemaModule({
-    id: type, category: 'accounts', financesTab: 'savings', label: 'label', pluginId: provider,
+    id: type, category: 'income', financesTab: 'income', label: 'label', pluginId: provider,
     taxCountries: ['US'],
     creationConstraints: { finances: { individualOwners: true }, projections: { individualOwners: true } },
-    fields: [...statementFields, ...payoutFields], inlineFields: statementFields, sections: [],
+    fields: [...statementFields, ...payoutFields], sections: [],
     creationData: () => ({ name: t('label') }),
     validateData(data, model) {
       const person = personFor(data, model);
@@ -103,8 +92,7 @@ export default function (context) {
     ...pension, translations: context.translations, acceptsDeposits: false, acceptsRemainder: false,
     usageModel: 'identity',
     sourceModule: { language: 'groovy-cashle-plugin', provider, source: 'us-social-security.cashle' },
-    secondaryView: { category: 'income', financesTab: 'income', label: () => t('payout'),
-      editor: payoutEditor, summarize: payoutSummary },
+    previousCategories: ['accounts'],
     withdrawal: {
       start: data => ({ key: 'payoutStart', time: timeFor(data) }),
       limits: (data, { model }) => ({

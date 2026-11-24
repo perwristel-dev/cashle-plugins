@@ -1,6 +1,6 @@
 # Norwegian public-sector occupational pension
 
-Add **Norwegian public-sector occupational pension** in Savings. Enter the gross monthly lifelong amount quoted by Statens pensjonskasse (SPK) or KLP in NOK at the plan’s starting purchasing power. The corresponding Income row edits the same pension’s start. Cashle adds the right to the forecast as income when payments begin. The quoted right has no spendable or inheritable account balance.
+Add **Norwegian public-sector occupational pension** in Income. Enter the gross monthly lifelong amount quoted by Statens pensjonskasse (SPK) or KLP in NOK at the plan’s starting purchasing power. Set the payment start in the same record. Cashle adds the right to the forecast as income when payments begin. The quoted right has no spendable or inheritable account balance.
 
 ## Ordinary post-2020 pension
 

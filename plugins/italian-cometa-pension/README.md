@@ -18,7 +18,7 @@ Italian tax residence, use quotes after the fund or insurer’s definitive tax
 withholding. The statutory final tax on the applicable portion of ordinary
 post-2006 benefits ranges from 15% to 9% depending on membership. Use a separate tax assessment for mixed-period benefits that remain subject to ordinary IRPEF.
 
-The Savings view shows the projected statement position for the claim.
+Enter the projected statement position and payout quote in the same Income record.
 Cashle adds the net payments to wealth when they arrive. Future contributions,
 fund growth and changes to the annuity tariff need a refreshed quote.
 This model covers the ordinary individual lifetime annuity and the optional

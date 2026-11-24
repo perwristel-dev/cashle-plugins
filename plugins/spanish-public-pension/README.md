@@ -1,8 +1,7 @@
 # Jubilación – spansk allmän ålderspension
 
 Ange det ordinarie bruttobeloppet per utbetalning från INSS och beräknade hela
-avgiftsmånader vid uttag. Under Sparande visas samma pensionsrätt som styr
-utbetalningen under Inkomster. En standardpension kräver minst 15 års avgifter
+avgiftsmånader vid uttag. Ange pensionsrätt och utbetalning i samma post under Inkomster. En standardpension kräver minst 15 års avgifter
 varav två under de sista 15 åren. Ett bekräftat datum från INSS kan användas
 vid individuella villkor. Ange ett besked som motsvarar det valda uttaget.
 [Seguridad Social om villkoren](https://prestaciones.seg-social.es/servicio/pension-jubilacion.html?categoria=jubilacion)

@@ -11,18 +11,16 @@ const rightsFields = [
 
 export default function createPlugin(context) {
   const { translate } = context;
-  const income = context.schemaModule({ id: 'dutch-aow-pension-receipt', category: 'income', label: 'income', fields: incomeFields, sections: [] });
-  const savings = context.schemaModule({
-    id: 'dutch-aow-pension', label, category: 'accounts', financesTab: 'savings', fields: [...rightsFields, ...incomeFields], inlineFields: rightsFields, sections: [],
+  const pension = context.schemaModule({
+    id: 'dutch-aow-pension', label, category: 'income', financesTab: 'income', fields: [...rightsFields, ...incomeFields], sections: [],
     creationData: () => ({ name: translate(label) }),
     creationConstraints: { finances: { individualOwners: true }, projections: { individualOwners: true } },
     engineInput: input => ({ input, timeReferences: [{ reference: 'life', personId: input.owner }] }),
     summarize: data => ({ title: data.name, amount: `${data.insurancePercent}%`, detail: translate('right') }),
   });
   return { modules: [{
-    ...savings, pluginId: provider, usageModel: 'identity', translations: context.translations, acceptsDeposits: false, acceptsRemainder: false,
+    ...pension, pluginId: provider, usageModel: 'identity', translations: context.translations, acceptsDeposits: false, acceptsRemainder: false,
     sourceModule: { language: 'groovy-cashle-plugin', provider, source: 'dutch-aow-pension.cashle' },
-    secondaryView: { category: 'income', label: () => translate('income'), editor: income.editor,
-      summarize: data => ({ title: data.name, amount: data.officialStart || translate('statutory'), detail: translate('lifetime') }) },
+    previousCategories: ['accounts'],
   }] };
 }

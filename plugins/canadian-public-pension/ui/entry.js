@@ -51,9 +51,9 @@ const starts = [
 export default function createPlugin(context) {
   const { translate: t } = context;
   const module = context.schemaModule({
-    id: 'canadian-public-pension', category: 'accounts', financesTab: 'savings', label: 'label',
+    id: 'canadian-public-pension', category: 'income', financesTab: 'income', label: 'label',
     creationConstraints: { finances: { individualOwners: true }, projections: { individualOwners: true } },
-    fields: [...rights, ...oas, ...starts], inlineFields: rights,
+    fields: [...rights, ...oas, ...starts],
     sections: [{ id: 'oas', title: t('section.oas'), fields: oas }],
     creationData: () => ({ name: t('label') }),
     validateData(data, model) {
@@ -102,17 +102,11 @@ export default function createPlugin(context) {
       return { title: data.name, amount: data.earningsMonthly > 0 ? `${amount} ${t('unit.perMonth')}` : '', detail: t('summary.rights') };
     },
   });
-  const claimEditor = context.schemaModule({
-    id: 'canadian-public-pension-claim', category: 'income', label: 'label.claim', fields: starts, sections: [],
-  }).editor;
   return { modules: [{
     ...module,
     pluginId: provider,
     sourceModule: { language: 'groovy-cashle-plugin', provider, source: 'canadian-public-pension.cashle' },
     taxCountries: ['CA'], usageModel: 'identity', translations: context.translations, acceptsDeposits: false, acceptsRemainder: false,
-    secondaryView: {
-      category: 'income', financesTab: 'income', label: () => t('label.claim'), editor: claimEditor,
-      summarize: data => ({ title: data.name, amount: t('summary.lifetime'), detail: t('summary.claim') }),
-    },
+    previousCategories: ['accounts'],
   }] };
 }

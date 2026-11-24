@@ -1,6 +1,6 @@
 # Australian Age Pension
 
-Add **Australian Age Pension** in Savings to record the public benefit for one person. The same entry appears in Income, where you choose when to start payments. Age Pension is a government payment with no personal account balance. [Services Australia Age Pension](https://www.servicesaustralia.gov.au/age-pension)
+Add **Australian Age Pension** in Income and choose when payments start. Age Pension is a government payment with no personal account balance. [Services Australia Age Pension](https://www.servicesaustralia.gov.au/age-pension)
 
 ## Estimating your payment
 

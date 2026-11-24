@@ -1,6 +1,6 @@
 # Finnish public pension
 
-Finnish statutory earnings-related old-age pension (*työeläke*) with an optional estimate of the national and guarantee pensions paid by Kela (*kansaneläke* and *takuueläke*). Cashle shows the same record in **Savings** and **Income**. The Savings row shows the gross earnings-related entitlement in EUR per month. The Income row controls the lifetime payout. The entitlement creates no investment balance, inheritance, or withdrawal source.
+Finnish statutory earnings-related old-age pension (*työeläke*) with an optional estimate of the national and guarantee pensions paid by Kela (*kansaneläke* and *takuueläke*). Enter the gross monthly entitlement and lifetime payout start in one **Income** record. The entitlement creates no investment balance, inheritance, or withdrawal source.
 
 ## Inputs
 

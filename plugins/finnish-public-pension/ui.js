@@ -159,8 +159,8 @@ export default function (context) {
       version: 1,
       label: 'Finnish public pension',
       translations,
-      category: 'accounts',
-      financesTab: 'savings',
+      category: 'income',
+      financesTab: 'income',
       taxCountries: ['FI'],
       creationConstraints: { finances: { individualOwners: true }, projections: { individualOwners: true } },
       acceptsDeposits: false,
@@ -178,19 +178,10 @@ export default function (context) {
       editor: {
         currentKeys: ['name', 'owner', 'monthlyRight', 'alreadyReceiving'],
         basicComponent: tags.rights,
-        detailedSections: [{ id: 'kela', title: 'kelaSection', translateTitle: translate, element: tags.kela }],
+        detailedSections: [{ id: 'kela', title: 'kelaSection', translateTitle: translate, element: tags.kela },
+          { id: 'payout', title: 'payoutLabel', translateTitle: translate, element: tags.payout }],
       },
-      secondaryView: {
-        category: 'income',
-        financesTab: 'income',
-        label: () => translate('payoutLabel'),
-        editor: { basicComponent: tags.payout, detailedSections: [] },
-        summarize: data => ({
-          title: data.name,
-          amount: translate(data.alreadyReceiving ? 'alreadyReceiving' : 'lifelong'),
-          detail: translate(data.payoutStart?.reference === 'minimum' && !data.alreadyReceiving ? 'minimum' : 'payoutSummary'),
-        }),
-      },
+      previousCategories: ['accounts'],
     }],
   };
 }

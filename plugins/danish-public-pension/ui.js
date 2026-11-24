@@ -43,14 +43,11 @@ const claimFields = [
 ];
 
 export default function createPlugin(context) {
-  const { translate: t, casePlan, resolveTimeDate } = context;
-  const claimEditor = context.schemaModule({
-    id: 'danish-folkepension-claim', category: 'income', label: 'label.claim', fields: claimFields, sections: [],
-  }).editor;
+  const { translate: t } = context;
   const module = context.schemaModule({
-    id: 'danish-public-pension', category: 'accounts', financesTab: 'savings', label: 'label', taxCountries: ['DK'],
+    id: 'danish-public-pension', category: 'income', financesTab: 'income', label: 'label', taxCountries: ['DK'],
     creationConstraints: { finances: { individualOwners: true }, projections: { individualOwners: true } },
-    fields: [...rightsFields, ...claimFields], inlineFields: rightsFields, sections: [],
+    fields: [...rightsFields, ...claimFields], sections: [],
     creationData(model) {
       const profile = model?.profile;
       const partnered = profile?.mode === 'couple' || (profile?.mode === 'household' && profile.household?.hasPartner);
@@ -92,27 +89,6 @@ export default function createPlugin(context) {
     translations: context.translations,
     acceptsDeposits: false,
     acceptsRemainder: false,
-    secondaryView: {
-      category: 'income', financesTab: 'income', label: () => t('label.claim'), editor: claimEditor,
-      summarize(data, model) {
-        const eligibility = firstEligibleMonth(owner(data, model));
-        const request = scheduled(data)
-          ? resolveTimeDate({ ...data.payoutStart, personId: data.owner }, { plan: casePlan(model), profile: model?.profile })
-          : eligibility;
-        let start = null;
-        if (eligibility && request) {
-          const [year, month, day] = request.split('-').map(Number);
-          const monthStart = new Date(Date.UTC(year, month - (day === 1 ? 1 : 0), 1)).toISOString().slice(0, 10);
-          start = monthStart < eligibility ? eligibility : monthStart;
-          if (deferred(data)) {
-            const last = `${Number(eligibility.slice(0, 4)) + 10}${eligibility.slice(4)}`;
-            if (start > last) start = last;
-          }
-        }
-        const detail = start ? t('summary.effective', { date: start })
-          : data.payoutStart?.reference === 'milestone' ? t('summary.milestone') : t('summary.rights');
-        return { title: data.name, amount: t('summary.lifetime'), detail };
-      },
-    },
+    previousCategories: ['accounts'],
   }] };
 }

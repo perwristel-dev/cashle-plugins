@@ -19,11 +19,9 @@ function normalizeTime(data) {
 
 export default function createPlugin(context) {
   const { translate, language } = context;
-  const income = context.schemaModule({ id: 'dutch-abp-pension-receipt', category: 'income', label: 'income',
-    fields: [payoutStart, { kind: 'message', label: 'window' }], sections: [] });
-  const savings = context.schemaModule({
-    id: 'dutch-abp-pension', label: 'label', category: 'accounts', financesTab: 'savings',
-    fields: [...inputs, payoutStart], inlineFields: inputs, sections: [],
+  const pension = context.schemaModule({
+    id: 'dutch-abp-pension', label: 'label', category: 'income', financesTab: 'income',
+    fields: [...inputs, payoutStart], sections: [],
     creationData: () => ({ name: translate('label') }),
     creationConstraints: { finances: { individualOwners: true }, projections: { individualOwners: true } },
     engineInput(data) {
@@ -38,9 +36,8 @@ export default function createPlugin(context) {
     },
   });
   return { modules: [{
-    ...savings, pluginId: provider, usageModel: 'identity', translations: context.translations, acceptsDeposits: false, acceptsRemainder: false,
+    ...pension, pluginId: provider, usageModel: 'identity', translations: context.translations, acceptsDeposits: false, acceptsRemainder: false,
     sourceModule: { language: 'groovy-cashle-plugin', provider, source: 'dutch-abp-pension.cashle' },
-    secondaryView: { category: 'income', label: () => translate('income'), editor: income.editor,
-      summarize: data => ({ title: data.name, detail: translate('lifetime') }) },
+    previousCategories: ['accounts'],
   }] };
 }

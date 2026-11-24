@@ -1,6 +1,6 @@
 # TyEL – finsk arbetspension
 
-Under Sparande anges den redan intjänade månadspensionen där pensionsbolaget
+Under Inkomster anges den redan intjänade månadspensionen där pensionsbolaget
 har räknat med livslängdskoefficienten. Ange också uppskattad pensionsgrundande
 bruttolön för ett helt år om anställningen fortsätter. Rättigheten sparas som
 ett förväntat månadsbelopp. Den höjer inte planens nettoförmögenhet.

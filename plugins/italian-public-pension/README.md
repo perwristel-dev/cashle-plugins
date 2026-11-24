@@ -1,6 +1,6 @@
 # INPS ordinary old-age pension
 
-In Savings, enter the ordinary gross monthly amount from the INPS estimate for
+In Income, enter the ordinary gross monthly amount from the INPS estimate for
 the selected claim date. Under Income, set the claim by age, date, retirement
 or another milestone. The forecast rounds the requested date up to the first
 of a month, applies the applicable eligibility floor, and assumes timely

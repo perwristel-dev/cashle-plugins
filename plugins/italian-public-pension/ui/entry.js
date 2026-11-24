@@ -1,6 +1,5 @@
 const pluginId = 'cashle.finance.pension.public.it';
 const label = 'Pensione di vecchiaia INPS';
-const incomeLabel = 'Pagamento della pensione INPS';
 const confirmed = data => data.claimRoute === 'confirmed';
 const capitalFields = [
   { key: 'name', kind: 'text', label: 'Nome', default: label },
@@ -33,14 +32,9 @@ export default context => {
     };
   };
   const money = (data, model) => new Intl.NumberFormat(model?.locale ?? 'en', { style: 'currency', currency: 'EUR' }).format(data.monthlyQuote);
-  const receipt = context.schemaModule({
-    id: 'italian-public-pension-receipt', label: incomeLabel, pluginId, category: 'income', fields: incomeFields, sections: [],
-    engineInput, summarize: (data, model) => ({ title: context.translate(incomeLabel), amount: money(data, model),
-      detail: context.translate('Pagamento vitalizio con tredicesima') }),
-  });
   const account = context.schemaModule({
-    id: 'italian-public-pension', label, pluginId, category: 'accounts', financesTab: 'savings',
-    fields: [...capitalFields, ...incomeFields], inlineFields: capitalFields, sections: [], engineInput,
+    id: 'italian-public-pension', label, pluginId, category: 'income', financesTab: 'income',
+    fields: [...capitalFields, ...incomeFields], sections: [], engineInput,
     creationConstraints: { finances: { individualOwners: true }, projections: { individualOwners: true } },
     validateData: data => {
       if (confirmed(data)) {
@@ -56,6 +50,6 @@ export default context => {
   const translations = Object.fromEntries(Object.entries(context.translations).map(([locale, messages]) => [locale, { label: messages[label] ?? label }]));
   return { modules: [{ ...account, translations, usageModel: 'identity', acceptsDeposits: false, acceptsRemainder: false,
     sourceModule: { language: 'groovy-cashle-plugin', provider: pluginId, source: 'italian-public-pension.cashle' },
-    secondaryView: { category: 'income', label: () => context.translate(incomeLabel), editor: receipt.editor, summarize: receipt.summarize },
+    previousCategories: ['accounts'],
   }] };
 };

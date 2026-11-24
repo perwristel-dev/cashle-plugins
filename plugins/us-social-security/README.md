@@ -1,7 +1,6 @@
 # US Social Security retirement
 
-Add the benefit in Savings and set its payment timing in Income. Both entries
-edit one benefit. It contributes lifetime income and has no balance in net worth
+Enter the benefit and payment timing in one Income record. It contributes lifetime income and has no balance in net worth
 or inheritance. This plugin covers the individual's own Social Security
 retirement benefit.
 

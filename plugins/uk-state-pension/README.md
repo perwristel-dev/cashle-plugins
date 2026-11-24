@@ -1,6 +1,6 @@
 # UK New State Pension
 
-Add the individual entitlement in Savings and choose the claim start in Income.
+Enter the individual entitlement and claim start in one Income record.
 Enter the gross weekly amount from a GOV.UK forecast or award in 2026/27 pounds.
 The 2026/27 full-rate illustration is £241.30/week. A forecast or award reflects
 qualifying years, transitional starting amounts, contracting out and protected

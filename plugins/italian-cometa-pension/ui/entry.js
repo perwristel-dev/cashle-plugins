@@ -1,6 +1,5 @@
 const pluginId = 'cashle.finance.pension.occupational.it.cometa';
 const label = 'Fondo Cometa';
-const incomeLabel = 'Prestazione pensionistica Cometa';
 const money = (key, label, options = {}) => ({ key, label, kind: 'number', default: 0, min: 0, unit: 'EUR', ...options });
 const date = (key, label) => ({ key, label, kind: 'date', default: '', required: true });
 const capitalFields = [
@@ -30,14 +29,9 @@ export default context => {
     };
   };
   const formatted = (value, model) => new Intl.NumberFormat(model?.locale ?? 'en', { style: 'currency', currency: 'EUR' }).format(value);
-  const receipt = context.schemaModule({
-    id: 'italian-cometa-pension-receipt', label: incomeLabel, pluginId, category: 'income', fields: incomeFields, sections: [],
-    engineInput, summarize: (data, model) => ({ title: context.translate(incomeLabel), amount: formatted(data.netMonthlyQuote, model),
-      detail: context.translate('Rendita vitalizia mensile netta') }),
-  });
   const account = context.schemaModule({
-    id: 'italian-cometa-pension', label, pluginId, category: 'accounts', financesTab: 'savings',
-    fields: [...capitalFields, ...incomeFields], inlineFields: capitalFields, sections: [], engineInput,
+    id: 'italian-cometa-pension', label, pluginId, category: 'income', financesTab: 'income',
+    fields: [...capitalFields, ...incomeFields], sections: [], engineInput,
     creationConstraints: { finances: { individualOwners: true }, projections: { individualOwners: true } },
     validateData: data => {
       const errors = [];
@@ -54,6 +48,6 @@ export default context => {
   const translations = Object.fromEntries(Object.entries(context.translations).map(([locale, messages]) => [locale, { label: messages[label] ?? label }]));
   return { modules: [{ ...account, translations, usageModel: 'identity', acceptsDeposits: false, acceptsRemainder: false,
     sourceModule: { language: 'groovy-cashle-plugin', provider: pluginId, source: 'italian-cometa-pension.cashle' },
-    secondaryView: { category: 'income', label: () => context.translate(incomeLabel), editor: receipt.editor, summarize: receipt.summarize },
+    previousCategories: ['accounts'],
   }] };
 };

@@ -44,14 +44,11 @@ const claimFields = [
 
 export default function createPlugin(context) {
   const { translate: t, resolveTimeDate, casePlan } = context;
-  const claimEditor = context.schemaModule({
-    id: 'uk-state-pension-claim', category: 'income', label: 'label.claim', fields: claimFields, sections: [],
-  }).editor;
   const format = value => new Intl.NumberFormat(context.language, { style: 'currency', currency: 'GBP' }).format(value);
   const module = context.schemaModule({
-    id: 'uk-state-pension', category: 'accounts', financesTab: 'savings', label: 'label', taxCountries: ['GB'],
+    id: 'uk-state-pension', category: 'income', financesTab: 'income', label: 'label', taxCountries: ['GB'],
     creationConstraints: { finances: { individualOwners: true }, projections: { individualOwners: true } },
-    fields: [...rightsFields, ...claimFields], inlineFields: rightsFields, sections: [],
+    fields: [...rightsFields, ...claimFields], sections: [],
     validateData(data, model) {
       const errors = [];
       const person = model?.profile?.people?.find(entry => entry.id === data.owner && entry.id !== 'joint');
@@ -96,12 +93,6 @@ export default function createPlugin(context) {
     translations: context.translations,
     acceptsDeposits: false,
     acceptsRemainder: false,
-    secondaryView: {
-      category: 'income', financesTab: 'income', label: () => t('label.claim'), editor: claimEditor,
-      summarize(data) {
-        const detail = scheduled(data) ? t('summary.scheduled') : t('option.statutory');
-        return { title: data.name, amount: t('summary.lifetime'), detail };
-      },
-    },
+    previousCategories: ['accounts'],
   }] };
 }

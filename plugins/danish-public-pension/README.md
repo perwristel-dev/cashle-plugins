@@ -1,6 +1,6 @@
 # Danish state pension (Folkepension)
 
-Add **Danish state pension** in Savings. The row shows the recipient’s residence-based entitlement. Its Income row edits the same saved pension and controls when payments start. Folkepension is a public benefit with no personal balance, contributions, transferable capital or inheritable asset.
+Add **Danish state pension** in Income to enter the residence-based entitlement and payment start. Folkepension is a public benefit with no personal balance, contributions, transferable capital or inheritable asset.
 
 ## Entitlement and gross payment
 

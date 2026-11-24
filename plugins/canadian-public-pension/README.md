@@ -1,7 +1,6 @@
 # Canadian public pension
 
-One pension record per person connects the rights in Savings to the payment
-dates in Income. Enter either CPP or QPP according to the administering plan.
+Enter pension rights and payment dates in one Income record per person. Enter either CPP or QPP according to the administering plan.
 A person with contributions under both plans should use the combined estimate
 from the plan that will pay the pension.
 

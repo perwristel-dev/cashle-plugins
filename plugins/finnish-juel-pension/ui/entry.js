@@ -1,9 +1,7 @@
 const provider = 'cashle.finance.pension.occupational.fi.juel';
 const label = 'JuEL – offentlig arbetspension i Finland';
-const payoutLabel = 'Utbetalning av JuEL';
 const pensionHelp = 'Ange bara JuEL-rättigheter från Keva, efter livslängdskoefficienten och före eventuell uppskovsförhöjning.';
 const transitionHelp = 'Ange en skyddad ålder bara om Keva bekräftat den och villkoren för fortsatt anställning är uppfyllda.';
-const payoutHelp = 'Utbetalning sker månadsvis livet ut. Anställningen måste avslutas före fullt uttag.';
 const basisFields = [
   { key: 'name', kind: 'text', label: 'Namn', default: label },
   { key: 'owner', kind: 'owner', label: 'Person', default: 'self', individualOwnersOnly: true },
@@ -19,13 +17,14 @@ const transitionFields = [
   { key: 'protectedAgeMonths', kind: 'number', label: 'Extra månader', default: 0, min: 0, max: 11, integer: true,
     when: data => data.transition !== 'standard' },
   { key: 'personalMonthlyRight', kind: 'number', label: 'Intjänad månadspension med personligt skydd', default: 0, min: 0, unit: 'EUR',
-    when: data => data.transition === 'personal', help: 'Ange Kevas belopp med fullt skydd här och beloppet före den personliga åldern under Sparande.' },
+    when: data => data.transition === 'personal', help: 'Ange Kevas belopp med fullt skydd här. Ange beloppet före den personliga åldern i fältet för intjänad månadspension.' },
 ];
 const startChoices = ['minimum', 'age', 'now', 'date', 'retirement', 'milestone'];
 const payoutFields = [
   { key: 'payoutStart', kind: 'time', label: 'Önskad uttagsstart', default: { reference: 'minimum', offset: 0 },
     choices: startChoices, choiceLabels: { minimum: 'Första tillåtna månad', age: 'Ålder' },
-    currentDatePrecision: 'day', datePrecision: 'day', forecastEditable: true },
+    currentDatePrecision: 'day', datePrecision: 'day', forecastEditable: true,
+    help: 'Utbetalning sker månadsvis livet ut. Anställningen måste avslutas före fullt uttag.' },
 ];
 
 export default context => {
@@ -49,14 +48,9 @@ export default context => {
     }
     return errors;
   };
-  const receipt = context.schemaModule({
-    id: 'finnish-juel-pension-receipt', label: payoutLabel, pluginId: provider, category: 'income',
-    fields: payoutFields, sections: [], help: payoutHelp, engineInput,
-    summarize: data => ({ title: data.name, detail: context.translate('Livsvarig månadsutbetalning') }),
-  });
-  const savings = context.schemaModule({
-    id: 'finnish-juel-pension', label, pluginId: provider, category: 'accounts', financesTab: 'savings',
-    fields: [...basisFields, ...payoutFields], inlineFields: basisFields, help: pensionHelp,
+  const pension = context.schemaModule({
+    id: 'finnish-juel-pension', label, pluginId: provider, category: 'income', financesTab: 'income',
+    fields: [...basisFields, ...payoutFields], help: pensionHelp,
     sections: [{ id: 'protected-age', title: 'Skyddad pensionsålder', fields: transitionFields, help: transitionHelp }],
     engineInput, validateData,
     creationConstraints: { finances: { individualOwners: true }, projections: { individualOwners: true } },
@@ -68,18 +62,17 @@ export default context => {
   });
   const translations = Object.fromEntries(Object.entries(context.translations).map(([locale, messages]) => [locale, { label: messages[label] ?? label }]));
   return { modules: [{
-    ...savings,
+    ...pension,
     translations,
     usageModel: 'identity',
     acceptsDeposits: false,
     acceptsRemainder: false,
     sourceModule: { language: 'groovy-cashle-plugin', provider, source: 'finnish-juel-pension.cashle' },
     editor: {
-      ...savings.editor,
-      currentKeys: [...savings.editor.currentKeys, ...transitionFields.map(field => field.key)],
-      detailedSections: savings.editor.detailedSections.map(section => ({ ...section, translateTitle: context.translate })),
+      ...pension.editor,
+      currentKeys: [...pension.editor.currentKeys, ...transitionFields.map(field => field.key)],
+      detailedSections: pension.editor.detailedSections.map(section => ({ ...section, translateTitle: context.translate })),
     },
-    secondaryView: { category: 'income', financesTab: 'income', label: () => context.translate(payoutLabel),
-      editor: receipt.editor, summarize: receipt.summarize },
+    previousCategories: ['accounts'],
   }] };
 };

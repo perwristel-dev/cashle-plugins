@@ -44,16 +44,7 @@ export default function (context) {
     { key: 'earlyEligible', kind: 'check', label: 'earlyEligible', default: false, help: 'earlyHelp' },
     { key: 'deferralEligible', kind: 'check', label: 'deferralEligible', default: false, help: 'deferralHelp' },
   ];
-  const withdrawalSummary = (data, model) => {
-    const time = { ...(data.payoutStart ?? standardStart), personId: data.owner };
-    const date = resolveStart(data, model, context.resolveTimeDate(time, model));
-    return { title: t('withdrawal'), amount: date ?? t('scheduledStart'), detail: t('lifetime') };
-  };
 
-  const withdrawalEditor = context.schemaModule({
-    id: `${type}-withdrawal`, category: 'income', label: 'withdrawal',
-    fields: withdrawalFields, sections: [], summarize: withdrawalSummary,
-  }).editor;
 
   const rule = context.validationRules;
   const validate = context.createValidator([
@@ -74,9 +65,9 @@ export default function (context) {
   ]);
 
   const module = context.schemaModule({
-    id: type, category: 'accounts', financesTab: 'savings', label: 'Icelandic public pension', pluginId: provider,
+    id: type, category: 'income', financesTab: 'income', label: 'Icelandic public pension', pluginId: provider,
     creationConstraints: { finances: { individualOwners: true }, projections: { individualOwners: true } },
-    fields: [...entitlementFields, ...withdrawalFields], inlineFields: entitlementFields, sections: [],
+    fields: [...entitlementFields, ...withdrawalFields], sections: [],
     creationData: () => ({ name: t('label') }),
     validateData: (data, model) => validate(data, model),
     engineInput(data, { model }) {
@@ -94,8 +85,7 @@ export default function (context) {
   return { modules: [{
     ...module,
     editor: { ...module.editor, currentKeys: ['name', 'owner', 'residenceYears'] },
-    secondaryView: { category: 'income', financesTab: 'income', label: () => t('withdrawal'),
-      editor: withdrawalEditor, summarize: withdrawalSummary },
+    previousCategories: ['accounts'],
     withdrawal: {
       start(data) {
         const time = data.payoutStart ?? standardStart;

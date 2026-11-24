@@ -129,8 +129,8 @@ export default function (context) {
       version: 1,
       label: 'ATP Livslang Pension',
       translations,
-      category: 'accounts',
-      financesTab: 'savings',
+      category: 'income',
+      financesTab: 'income',
       taxCountries: ['DK'],
       creationConstraints: { finances: { individualOwners: true }, projections: { individualOwners: true } },
       acceptsDeposits: false,
@@ -146,18 +146,8 @@ export default function (context) {
         amount: isLump(data) && data.grossLumpSum > 0 ? amount(data.grossLumpSum, model) : `${amount(data.annualPension, model)} ${translate('perYear')}`,
         detail: translate(isLump(data) && data.grossLumpSum > 0 ? 'lumpRights' : 'annualRights'),
       }),
-      editor: { currentKeys: ['name', 'owner', 'annualPension', 'grossLumpSum'], basicComponent: rightsTag, detailedSections: [] },
-      secondaryView: {
-        category: 'income',
-        financesTab: 'income',
-        label: () => translate('payoutLabel'),
-        editor: { basicComponent: payoutTag, detailedSections: [] },
-        summarize: (data, model) => ({
-          title: data.name,
-          amount: isLump(data) ? amount(data.grossLumpSum * 0.6, model) : translate('lifelong'),
-          detail: translate(isLump(data) ? 'lumpPayout' : 'monthlyPayout'),
-        }),
-      },
+      editor: { currentKeys: ['name', 'owner', 'annualPension', 'grossLumpSum'], basicComponent: rightsTag, detailedSections: [{ id: 'payout', title: 'payoutLabel', translateTitle: translate, element: payoutTag }] },
+      previousCategories: ['accounts'],
     }],
   };
 }

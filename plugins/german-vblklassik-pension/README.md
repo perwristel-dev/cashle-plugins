@@ -1,8 +1,8 @@
 # German public-sector occupational pension (VBLklassik)
 
-Add **German public-sector occupational pension (VBLklassik)** in Savings.
+Add **German public-sector occupational pension (VBLklassik)** in Income.
 Enter the gross monthly EUR amount quoted in the VBL pension information or
-award for the intended start. The Income row edits the same pension's start.
+award for the intended start. Set the payment start in the same record.
 The entitlement produces lifetime income and has no spendable balance.
 [VBL pension information](https://www.vbl.de/de/-/allgemeine-fragen-zur-renteninformation-vblklassik)
 

@@ -1,6 +1,6 @@
 # French basic old-age pension (Assurance retraite)
 
-In Savings, enter the gross monthly amount from Assurance retraite for the
+In Income, enter the gross monthly amount from Assurance retraite for the
 general scheme (régime général) at the projected start. Use the basic pension
 line of the estimate. In Income, set the start for that same record by minimum
 age, age, date, retirement or another milestone. Cashle rounds the request up to

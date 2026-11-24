@@ -1,10 +1,9 @@
 # Icelandic public pension
 
 This plugin projects the ordinary full-rate old-age pension (*ellilífeyrir*)
-administered by Tryggingastofnun (TR). Add it in Savings to enter the recipient,
+administered by Tryggingastofnun (TR). Add it in Income to enter the recipient,
 years of insured Icelandic residence and two gross annual income estimates in
-2026 ISK. The Income row edits the same pension's payment start. The savings
-row represents an entitlement. The engine books only the pension income that
+2026 ISK. Set the payment start in the same record. The engine books only the pension income that
 the recipient receives.
 
 ## Benefit
@@ -21,7 +20,7 @@ the recipient receives.
   67th birthday. An age selection uses the month after that birthday. An
   entered date or milestone uses the first payment day on or after the request,
   within the available range. A conditional milestone must occur before its
-  payment can start. The Income row can edit calendar dates and milestones
+  payment can start. The payment start can use calendar dates and milestones
   directly. The withdrawal timeline can also shift starts anchored to the
   first of a month.
 - The early range starts at age 65 for eligible recipients. The checkbox asks

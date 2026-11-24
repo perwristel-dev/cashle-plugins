@@ -1,9 +1,8 @@
 # German statutory old-age pension
 
-Add **German statutory old-age pension** in Savings. Enter the gross monthly
+Add **German statutory old-age pension** in Income. Enter the gross monthly
 EUR amount from Deutsche Rentenversicherung (DRV) for the right already earned
-(*bisher erworbene Ansprüche*). The Income row edits the start of the same
-pension. The right produces monthly income and has no spendable balance.
+(*bisher erworbene Ansprüche*). Set the payment start in the same record. The right produces monthly income and has no spendable balance.
 [DRV's guide to the pension statement](https://www.deutsche-rentenversicherung.de/SharedDocs/Downloads/DE/Broschueren/national/die_renteninformation_mehr_wissen.pdf?__blob=publicationFile&v=1)
 
 ## Eligibility and start

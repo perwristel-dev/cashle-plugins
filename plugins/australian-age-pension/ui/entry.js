@@ -7,7 +7,6 @@ const scheduled = data => data.startMode === 'scheduled';
 const ownerFor = (data, model) => model?.profile?.people?.find(person => person.id === data.owner && person.id !== 'joint');
 const validBirth = owner => Number.isInteger(owner?.birthYear) && owner.birthYear >= 1800 && owner.birthYear <= 2300 &&
   Number.isInteger(owner.birthMonth) && owner.birthMonth >= 1 && owner.birthMonth <= 12;
-const monthEnd = (year, month) => new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
 const gross = data => quoted(data) ? data.grossFortnightly : fullRates[data.rate];
 
 const rightsFields = [
@@ -31,13 +30,11 @@ const paymentFields = [
 ];
 
 export default function createPlugin(context) {
-  const { translate: t, casePlan, resolveTimeDate, validationRules } = context;
-  const payment = context.schemaModule({ id: 'australian-age-pension-payments', category: 'income',
-    label: 'label.payments', fields: paymentFields, sections: [] });
+  const { translate: t, casePlan, validationRules } = context;
   const module = context.schemaModule({
-    id: 'australian-age-pension', category: 'accounts', financesTab: 'savings', label: 'label',
+    id: 'australian-age-pension', category: 'income', financesTab: 'income', label: 'label',
     creationConstraints: { finances: { individualOwners: true }, projections: { individualOwners: true } },
-    fields: [...rightsFields, ...paymentFields], inlineFields: rightsFields, sections: [],
+    fields: [...rightsFields, ...paymentFields], sections: [],
     availability(model) {
       const country = model?.profile?.tax?.country;
       return country && country !== 'AU' ? [t('invalid.taxCountry')] : [];
@@ -75,26 +72,6 @@ export default function createPlugin(context) {
     ...module, pluginId: provider, usageModel: 'identity', translations: context.translations,
     sourceModule: { language: 'groovy-cashle-plugin', provider, source: 'australian-age-pension.cashle' },
     acceptsDeposits: false, acceptsRemainder: false,
-    secondaryView: {
-      category: 'income', financesTab: 'income', label: () => t('label.payments'), editor: payment.editor,
-      summarize(data, model) {
-        const person = ownerFor(data, model);
-        const plan = casePlan(model);
-        let date = null;
-        if (validBirth(person)) {
-          const floor = monthEnd(person.birthYear + 67, person.birthMonth);
-          const time = data.payoutStart;
-          const request = !scheduled(data) ? floor : time?.reference === 'age' && Number.isInteger(time.age)
-            ? monthEnd(person.birthYear + time.age, person.birthMonth)
-            : resolveTimeDate({ ...time, personId: data.owner }, { plan, profile: model?.profile });
-          if (request) {
-            const [year, month] = [request, floor, plan.from].filter(Boolean).sort().at(-1).split('-').map(Number);
-            date = monthEnd(year, month);
-          }
-        }
-        return { title: data.name, amount: t('summary.lifetime'),
-          detail: date ? t('summary.start', { date }) : t('summary.pending') };
-      },
-    },
+    previousCategories: ['accounts'],
   }] };
 }

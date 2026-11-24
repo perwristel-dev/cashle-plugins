@@ -2,8 +2,7 @@
 
 Ange det bruttobelopp per månad som MijnABP har beräknat för önskad uttagstid.
 Använd prognosen från ABP om beloppet ska omfatta fortsatt intjäning. Ändra
-beloppet om uttagsvalet ändras. Sparande visar den uppskattade rättigheten och
-Inkomster styr utbetalningen från samma post.
+beloppet om uttagsvalet ändras. Ange uppskattad rättighet och utbetalning i samma post under Inkomster.
 [ABP:s pensionsbesked](https://www.abp.nl/pensioen-bij-abp/pensioenreglement/pensioen-1-2-3/laag2)
 
 Fyll i verkligt eller prognostiserat AOW-datum från SVB. Välj uttagsstart via

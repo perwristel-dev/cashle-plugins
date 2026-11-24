@@ -1,6 +1,6 @@
 # ATP Livslang Pension
 
-Denmark's statutory supplementary labour-market pension. Cashle shows the ATP statement amount under **Savings** and the payout under **Income**. Both rows edit one module. The statement amount is a pension entitlement, with no liquid balance or capital in net worth.
+Denmark's statutory supplementary labour-market pension. Enter the ATP statement amount and payout date in one **Income** record. The statement amount is a pension entitlement, with no liquid balance or capital in net worth.
 
 ## Inputs and payment rules
 

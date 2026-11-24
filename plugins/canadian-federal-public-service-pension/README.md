@@ -1,7 +1,7 @@
 # Canadian federal public service pension
 
 Use the federal Pension Centre estimate for the member's chosen departure date
-and pension option. In Savings, enter the pensionable service at departure and
+and pension option. In Income, enter the pensionable service at departure and
 the separate gross annual lifetime and bridge amounts, with any reduction
 already included in the quotes. In Income, choose the payment start and option
 on the same pension record. Pension amounts are in plan-start Canadian dollars.

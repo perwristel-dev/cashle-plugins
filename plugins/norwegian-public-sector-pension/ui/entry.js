@@ -7,7 +7,6 @@ const validBirth = person => Number.isInteger(person?.birthYear) && person.birth
   Number.isInteger(person.birthMonth) && person.birthMonth >= 1 && person.birthMonth <= 12;
 const validMonth = month => /^(?:18\d\d|19\d\d|2[0-3]\d\d|2400)-(?:0[1-9]|1[0-2])$/.test(month);
 const isoMonth = (year, month) => new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10);
-const birthAfterAge = (person, age) => isoMonth(person.birthYear + age, person.birthMonth);
 
 const rulesFields = [
   { key: 'rules', label: 'field.rules', kind: 'select', default: 'ordinary', options: [
@@ -28,14 +27,11 @@ const rightsFields = [
 ];
 
 export default function createPlugin(context) {
-  const { translate: t, casePlan, resolveTimeDate } = context;
-  const claimEditor = context.schemaModule({ id: 'norwegian-public-sector-claim', category: 'income',
-    label: 'label.claim', fields: [...rulesFields, startField], sections: [],
-  }).editor;
+  const { translate: t } = context;
   const module = context.schemaModule({
-    id: 'norwegian-public-sector-pension', category: 'accounts', financesTab: 'savings', label: 'label',
+    id: 'norwegian-public-sector-pension', category: 'income', financesTab: 'income', label: 'label',
     creationConstraints: { finances: { individualOwners: true }, projections: { individualOwners: true } },
-    fields: [...rightsFields, startField], inlineFields: rightsFields, sections: [],
+    fields: [...rightsFields, startField], sections: [],
     creationData(model) {
       const birthYear = recipient({ owner: 'self' }, model)?.birthYear;
       return birthYear && birthYear < 1963 ? { rules: 'confirmed' } : {};
@@ -76,25 +72,6 @@ export default function createPlugin(context) {
     pluginId: provider,
     sourceModule: { language: 'groovy-cashle-plugin', provider, source: 'norwegian-public-sector-pension.cashle' },
     usageModel: 'identity', translations: context.translations, acceptsDeposits: false, acceptsRemainder: false,
-    secondaryView: {
-      category: 'income', financesTab: 'income', label: () => t('label.claim'), editor: claimEditor,
-      summarize(data, model) {
-        let date = !ordinary(data) && validMonth(data.confirmedMonth) ? `${data.confirmedMonth}-01` : null;
-        const person = recipient(data, model);
-        if (ordinary(data) && validBirth(person)) {
-          const entered = data.payoutStart;
-          const resolved = entered?.reference === 'age' && Number.isInteger(entered.age) ? birthAfterAge(person, entered.age)
-            : resolveTimeDate(entered, { plan: casePlan(model), profile: model?.profile });
-          if (resolved) {
-            const [year, month, day] = resolved.split('-').map(Number);
-            const requested = day === 1 ? resolved : isoMonth(year, month);
-            const earliest = birthAfterAge(person, 62);
-            const latest = birthAfterAge(person, 75);
-            date = requested < earliest ? earliest : requested > latest ? latest : requested;
-          }
-        }
-        return { title: data.name, amount: t('summary.life'), detail: date ? t('summary.start', { date }) : t('summary.pending') };
-      },
-    },
+    previousCategories: ['accounts'],
   }] };
 }

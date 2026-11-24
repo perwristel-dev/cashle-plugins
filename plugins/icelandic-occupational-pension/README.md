@@ -2,9 +2,7 @@
 
 This plugin projects the lifetime old-age income that members earn in the
 mutual insurance division (*samtrygging*) of an Icelandic occupational pension
-fund (*lífeyrissjóður*). The Savings row records the recipient and the fund's gross
-monthly estimate in today's ISK. The Income row edits the payment terms for
-the same module. The engine records the fund's payments as income, with no
+fund (*lífeyrissjóður*). Enter the recipient, the fund's gross monthly estimate in today's ISK and the payment terms in one Income record. The engine records the fund's payments as income, with no
 balance in net worth.
 
 ## Use the fund's statement

@@ -1,6 +1,6 @@
 # Agirc-Arrco supplementary pension
 
-In Savings, enter the Agirc-Arrco points from your career statement. Add
+In Income, enter the Agirc-Arrco points from your career statement. Add
 pensionable annual gross pay to project new points from the first whole month
 until claim. The projection uses the 2026 purchase price of €20.1877 and
 standard point rates of 6.2% up to one annual social-security ceiling and 17%

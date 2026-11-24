@@ -42,7 +42,7 @@ const earlyField = { key: 'earliestEarlyMonth', label: 'field.early', kind: 'tex
   help: 'help.early', forecastEditable: true };
 
 export default function createPlugin(context) {
-  const { translate: t, casePlan, resolveTimeDate } = context;
+  const { translate: t } = context;
   const rightsFields = [
     { key: 'name', label: 'field.name', kind: 'text', default: 'label' },
     { key: 'owner', label: 'field.owner', kind: 'owner', default: 'self' },
@@ -51,12 +51,10 @@ export default function createPlugin(context) {
     { key: 'bornOnFirst', label: 'field.bornOnFirst', kind: 'check', default: false },
   ];
   const claimFields = [earlyField, startField];
-  const claimEditor = context.schemaModule({ id: 'german-public-pension-claim', category: 'income',
-    label: 'label.claim', fields: claimFields, sections: [] }).editor;
   const module = context.schemaModule({
-    id: 'german-public-pension', category: 'accounts', financesTab: 'savings', label: 'label',
+    id: 'german-public-pension', category: 'income', financesTab: 'income', label: 'label',
     creationConstraints: { finances: { individualOwners: true }, projections: { individualOwners: true } },
-    fields: [...rightsFields, ...claimFields], inlineFields: rightsFields, sections: [],
+    fields: [...rightsFields, ...claimFields], sections: [],
     validateData(data, model) {
       const person = recipient(data, model);
       if (!person) return ['invalid.owner'];
@@ -85,26 +83,6 @@ export default function createPlugin(context) {
     pluginId: provider,
     sourceModule: { language: 'groovy-cashle-plugin', provider, source: 'german-public-pension.cashle' },
     usageModel: 'identity', translations: context.translations, acceptsDeposits: false, acceptsRemainder: false,
-    secondaryView: {
-      category: 'income', financesTab: 'income', label: () => t('label.claim'), editor: claimEditor,
-      summarize(data, model) {
-        const person = recipient(data, model);
-        const start = data.payoutStart;
-        let date = null;
-        if (validBirth(person) && validStart(start)) {
-          const earliest = firstEligible(data, person);
-          let requested = earliest;
-          if (start.reference === 'age') requested = ageStart(person, start.age * 12, data.bornOnFirst);
-          else if (start.reference !== 'minimum')
-            requested = resolveTimeDate(start, { plan: casePlan(model), profile: model?.profile });
-          if (earliest && requested) {
-            const [year, month, day] = requested.split('-').map(Number);
-            const rounded = day === 1 ? requested : isoDate(year, month + 1);
-            date = rounded < earliest ? earliest : rounded;
-          }
-        }
-        return { title: data.name, amount: t('summary.life'), detail: date ? t('summary.start', { date }) : t('summary.pending') };
-      },
-    },
+    previousCategories: ['accounts'],
   }] };
 }

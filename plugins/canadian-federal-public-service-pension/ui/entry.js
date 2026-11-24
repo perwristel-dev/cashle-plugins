@@ -23,9 +23,9 @@ const payout = [
 export default function createPlugin(context) {
   const { translate: t } = context;
   const main = context.schemaModule({
-    id: 'canadian-federal-public-service-pension', category: 'accounts', financesTab: 'savings', label: 'label',
+    id: 'canadian-federal-public-service-pension', category: 'income', financesTab: 'income', label: 'label',
     creationConstraints: { finances: { individualOwners: true }, projections: { individualOwners: true } },
-    fields: [...rights, ...payout], inlineFields: rights, sections: [],
+    fields: [...rights, ...payout], sections: [],
     creationData: () => ({ name: t('label') }),
     validateData(data, model) {
       const person = model?.profile?.people?.find(person => person.id === data.owner && ['self', 'partner'].includes(person.id));
@@ -58,16 +58,10 @@ export default function createPlugin(context) {
       return { title: data.name, amount: `${annual} ${t('unit.perYear')}`, detail: t('summary.rights') };
     },
   });
-  const claimEditor = context.schemaModule({
-    id: 'canadian-federal-public-service-claim', category: 'income', label: 'label.claim', fields: payout, sections: [],
-  }).editor;
   return { modules: [{
     ...main, pluginId: provider,
     sourceModule: { language: 'groovy-cashle-plugin', provider, source: 'canadian-federal-public-service-pension.cashle' },
     taxCountries: ['CA'], usageModel: 'identity', translations: context.translations, acceptsDeposits: false, acceptsRemainder: false,
-    secondaryView: {
-      category: 'income', financesTab: 'income', label: () => t('label.claim'), editor: claimEditor,
-      summarize: data => ({ title: data.name, amount: t('summary.lifetime'), detail: t('summary.claim') }),
-    },
+    previousCategories: ['accounts'],
   }] };
 }

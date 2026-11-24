@@ -26,19 +26,17 @@ const claimFields = [
 ];
 
 export default function createPlugin(context) {
-  const { translate: t, casePlan, resolveTimeDate } = context;
+  const { translate: t } = context;
   const rightsFields = [
     { key: 'name', label: 'field.name', kind: 'text', default: 'label' },
     { key: 'owner', label: 'field.owner', kind: 'owner', default: 'self' },
     { key: 'grossMonthlyEur', label: 'field.amount', kind: 'number', default: 0, min: 0,
       unit: 'unit.eurMonthly', help: 'help.amount' },
   ];
-  const claimEditor = context.schemaModule({ id: 'german-vblklassik-pension-claim', category: 'income',
-    label: 'label.claim', fields: claimFields, sections: [] }).editor;
   const module = context.schemaModule({
-    id: 'german-vblklassik-pension', category: 'accounts', financesTab: 'savings', label: 'label',
+    id: 'german-vblklassik-pension', category: 'income', financesTab: 'income', label: 'label',
     creationConstraints: { finances: { individualOwners: true }, projections: { individualOwners: true } },
-    fields: [...rightsFields, ...claimFields], inlineFields: rightsFields, sections: [],
+    fields: [...rightsFields, ...claimFields], sections: [],
     validateData(data, model) {
       const person = recipient(data, model);
       if (!person) return ['invalid.owner'];
@@ -66,26 +64,6 @@ export default function createPlugin(context) {
     pluginId: provider,
     sourceModule: { language: 'groovy-cashle-plugin', provider, source: 'german-vblklassik-pension.cashle' },
     usageModel: 'identity', translations: context.translations, acceptsDeposits: false, acceptsRemainder: false,
-    secondaryView: {
-      category: 'income', financesTab: 'income', label: () => t('label.claim'), editor: claimEditor,
-      summarize(data, model) {
-        const earliest = validMonth(data.firstFullPensionMonth) ? `${data.firstFullPensionMonth}-01` : null;
-        const person = recipient(data, model);
-        const start = data.payoutStart;
-        let date = null;
-        if (earliest && validStart(start, person)) {
-          let requested = earliest;
-          if (start.reference === 'age') requested = isoDate(person.birthYear + start.age, person.birthMonth + 1);
-          else if (start.reference !== 'minimum')
-            requested = resolveTimeDate(start, { plan: casePlan(model), profile: model?.profile });
-          if (requested) {
-            const [year, month, day] = requested.split('-').map(Number);
-            const rounded = day === 1 ? requested : isoDate(year, month + 1);
-            date = rounded < earliest ? earliest : rounded;
-          }
-        }
-        return { title: data.name, amount: t('summary.life'), detail: date ? t('summary.start', { date }) : t('summary.pending') };
-      },
-    },
+    previousCategories: ['accounts'],
   }] };
 }
