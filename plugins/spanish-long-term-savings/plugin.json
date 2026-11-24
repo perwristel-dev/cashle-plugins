@@ -1,0 +1,37 @@
+{
+  "id": "cashle.finance.es-long-term-savings",
+  "requires": [
+    "cashle.finance",
+    "cashle.account.support",
+    "cashle.account.tax.support"
+  ],
+  "sources": [
+    {
+      "path": "spanish-long-term-savings.cashle",
+      "providers": [
+        "cashle.finance.es-long-term-savings",
+        "cashle.finance.es-long-term-savings.policy"
+      ],
+      "resources": [
+        "savingsplan/messages_en.properties",
+        "savingsplan/messages_sv.properties",
+        "savingsplan/messages_es.properties"
+      ]
+    }
+  ],
+  "ui": "ui.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui-en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui-sv.json"
+    },
+    {
+      "locale": "es",
+      "path": "ui-es.json"
+    }
+  ]
+}

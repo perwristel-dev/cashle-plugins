@@ -1,0 +1,27 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.income'
+    id 'cashle.tax'
+    id 'cashle.tax.es' from '../../spanish-tax/spanish-tax.cashle'
+    id 'cashle.finance.es-long-term-savings' from '../spanish-long-term-savings.cashle'
+    id 'cashle.finance.es-long-term-savings.policy' from '../spanish-long-term-savings.cashle'
+}
+finance {
+    language 'en'
+    plan { from '2026-01-01'; until '2027-07-01'; currency 'EUR'; inflation 0d }
+    person('self') { birthYear 1980; birthMonth 1 }
+    tax {
+        country 'ES'; preliminaryRate 0d
+        options([ruleYear:2025, residency:'full-year', autonomousCommunity:'Madrid',
+            regionalSchedule:[[upTo:12450,rate:0.095d],[rate:0.14d]], regionalMinimum:5550d,
+            employeeSocialContributions:0d, settlementDate:'2027-05-01'])
+    }
+    salary('work') { amount 30000d; frequency 'annual'; taxTreatment 'taxable' }
+    spanishLongTermSavings('savings') {
+        balance 14000d
+        settings([costBasis:11000d, closeEnabled:true, closeDate:'2026-08-01',
+            policyOptions:[acquiredDate:'2021-08-01'], openingState:[annualDeposits:0d],
+            initialYear:[quarterOpeningValues:[null,null,null,null]]])
+    }
+}
+collect {}
