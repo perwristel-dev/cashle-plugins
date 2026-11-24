@@ -1,0 +1,22 @@
+{
+  "label": "Byggsektorns tjänstepension (PPESC)",
+  "description": "Spansk tjänstepension för byggsektorn med pensionskapital och flexibelt uttag.",
+  "income": "Utbetalning av byggpension",
+  "name": "Namn",
+  "owner": "Person",
+  "capital": "Ingående pensionskapital",
+  "contribution": "Månatlig avgift",
+  "contributionHelp": "Använd beloppet från arbetsgivaren eller VidaCaixa.",
+  "return": "Årlig nettoavkastning",
+  "eligibility": "Tidigaste godkända start",
+  "eligibilityHelp": "Använd datumet som förvaltaren bekräftat för pensionen.",
+  "mode": "Utbetalningstyp",
+  "monthly": "Månadsutbetalningar",
+  "lumpSum": "Engångsbelopp",
+  "duration": "Antal utbetalningar",
+  "months": "månader",
+  "start": "Önskad uttagsstart",
+  "minimum": "Tidigaste godkända start",
+  "age": "Ålder",
+  "right": "Bundet pensionskapital"
+}

@@ -1,0 +1,22 @@
+{
+  "label": "Construction sector pension (PPESC)",
+  "description": "Spanish construction-sector employment pension with a savings balance and flexible payout.",
+  "income": "Construction pension payment",
+  "name": "Name",
+  "owner": "Person",
+  "capital": "Opening pension capital",
+  "contribution": "Monthly contribution",
+  "contributionHelp": "Use the amount from the employer or VidaCaixa.",
+  "return": "Expected annual net return",
+  "eligibility": "Earliest approved start date",
+  "eligibilityHelp": "Use the date confirmed by the provider for this retirement benefit.",
+  "mode": "Payout type",
+  "monthly": "Monthly payments",
+  "lumpSum": "Single lump sum",
+  "duration": "Number of payments",
+  "months": "months",
+  "start": "Preferred start",
+  "minimum": "Earliest approved start",
+  "age": "Age",
+  "right": "Restricted pension savings"
+}
