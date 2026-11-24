@@ -43,6 +43,7 @@ countryTaxPolicy('FI') {
     ruleYear referenceYear
     incomeBases annualBases
     sourceBases publicBases
+    calendarYearEventSchedule true
     investmentCapitalLossCarryYears 10
     messages 'dev.cashle.tax.finland.FinnishTaxSource'
 
