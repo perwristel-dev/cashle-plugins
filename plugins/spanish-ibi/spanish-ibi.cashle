@@ -1,0 +1,150 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
+import dev.cashle.sdk.composition.ModuleContext
+import dev.cashle.sdk.composition.ModuleInput
+import dev.cashle.sdk.finance.AssetLifecycle
+import dev.cashle.sdk.finance.CollateralAsset
+import dev.cashle.sdk.finance.FinanceContext
+import dev.cashle.sdk.finance.FinanceModule
+import dev.cashle.sdk.finance.FundingPort
+import dev.cashle.sdk.finance.FundingSchedule
+import dev.cashle.sdk.finance.MetricsPort
+import dev.cashle.sdk.model.AccountHandle
+import dev.cashle.sdk.model.RuntimeClock
+import dev.cashle.sdk.model.ScheduleSpec
+import dev.cashle.sdk.model.Variable
+
+import java.time.LocalDate
+
+financeModule('cashlab.spanish-ibi', 1) {
+    pluginId 'cashle.finance.es-ibi'
+    dsl('spanishIbi') { id ->
+        [name:id, assetId:'', annualNoticeShare:0d, noticePaymentDate:'', openingYearTaxpayer:'automatic']
+    }
+    factory { ModuleInput input -> new SpanishIbi(input) }
+}
+
+final class SpanishIbi implements FinanceModule {
+    private static final double UNOBSERVED = Integer.MIN_VALUE
+    private final ModuleInput input
+    private AccountHandle expense
+    private AssetLifecycle asset
+    private RuntimeClock clock
+    private Variable acquiredInPlan
+    private Variable soldInPlan
+    private LocalDate planStart
+    private LocalDate notice
+    private LocalDate historicalAcquisition
+    private boolean existingDwelling
+    private boolean historicalLiability
+    private double amount
+    private FinanceContext finance
+
+    SpanishIbi(ModuleInput input) { this.input = input }
+
+    @Override void declare(ModuleContext context) {}
+
+    @Override void declareFinance(FinanceContext context) {
+        if (!input.enabled()) return
+        def data = input.data()
+        def messages = context.messages(SpanishIbi, 'ibi.Messages')
+        notice = enteredDate(data.noticePaymentDate)
+        if (notice == null || notice.dayOfYear == 1) throw new IllegalArgumentException(messages.text('notice'))
+        if (!(data.annualNoticeShare instanceof Number) || !Double.isFinite(data.annualNoticeShare.doubleValue()) ||
+                data.annualNoticeShare < 0d) throw new IllegalArgumentException(messages.text('amount'))
+        finance = context
+        clock = context.model().clock()
+        acquiredInPlan = context.model().variable(UNOBSERVED)
+        soldInPlan = context.model().variable(UNOBSERVED)
+        planStart = context.from()
+        amount = data.annualNoticeShare.doubleValue() * context.exchangeRate('EUR', context.profile().currency ?: 'EUR')
+        expense = context.household().account()
+        expense.setName(data.name)
+        expense.classify(AccountKind.EXPENSE, new AccountTag('cashle.household.economic-nature', 1,
+            'expense.tax.property', [AccountKind.EXPENSE] as Set))
+        expense.addReportingRole(ReportingRole.TAX_EXPENSE)
+    }
+
+    @Override void wireFinance(FinanceContext context) {
+        if (expense == null) return
+        def messages = context.messages(SpanishIbi, 'ibi.Messages')
+        def id = input.data().assetId
+        if (!(id instanceof String) || id.isBlank()) throw new IllegalArgumentException(messages.text('property'))
+        asset = context.findAssetLifecycle(id).orElse(null)
+        def collateral = context.findCollateralAsset(id).orElse(null)
+        if (asset == null || collateral == null || collateral.kind() != CollateralAsset.Kind.DWELLING) {
+            throw new IllegalArgumentException(messages.text('property'))
+        }
+        if (!context.claimExclusive(asset.account(), 'cashle.finance.es-ibi')) {
+            throw new IllegalArgumentException(messages.text('duplicate'))
+        }
+        existingDwelling = asset.owned().getAsBoolean()
+        if (existingDwelling) {
+            historicalAcquisition = collateral.acquiredOn().get()
+            LocalDate firstJanuary = planStart.withDayOfYear(1)
+            LocalDate firstPayment = notice.withYear(planStart.year)
+            if (amount > 0d && notice.year <= planStart.year && planStart.isAfter(firstJanuary) &&
+                    !firstPayment.isBefore(planStart) && firstPayment.isBefore(context.until())) {
+                if (historicalAcquisition != null) {
+                    historicalLiability = !historicalAcquisition.isAfter(firstJanuary)
+                } else {
+                    def selected = input.data().openingYearTaxpayer
+                    if (!(selected in ['liable', 'not-liable'])) throw new IllegalArgumentException(messages.text('firstYear'))
+                    historicalLiability = selected == 'liable'
+                }
+            }
+        }
+        // Checkpoint actual ledger events rather than assuming that every scheduled purchase or sale took place.
+        context.model().beforeBalanceChange(asset.account(), { double delta ->
+            LocalDate day = clock.getDate()
+            if (delta > 0d && asset.acquisitionPending().getAsBoolean() && day == asset.acquisitionDate().get()) {
+                acquiredInPlan.setValue(day.toEpochDay())
+            }
+            if (delta < 0d && asset.owned().getAsBoolean() && asset.disposalPending().getAsBoolean() &&
+                    day == asset.disposalDate().get()) {
+                soldInPlan.setValue(day.toEpochDay())
+            }
+        })
+    }
+
+    @Override void funding(FundingPort port) {
+        if (expense == null) return
+        def schedule = FundingSchedule.fixed(ScheduleSpec.every(Frequency.YEAR, notice))
+        port.requiredExpenseWithSavings(input.id(), FundingPort.CASH, expense,
+            { dueToday() }, schedule, { true }, { 1d }, null, false, true,
+            { false }, { Double.MAX_VALUE }, '*', false)
+    }
+
+    @Override void metrics(MetricsPort port) {
+        if (expense != null) port.spending(expense, { 1d }, { true })
+    }
+
+    private double dueToday() {
+        LocalDate day = clock.getDate()
+        LocalDate firstJanuary = day.withDayOfYear(1)
+        boolean currentlyOwned = asset.owned().getAsBoolean()
+        if (!currentlyOwned && soldInPlan.getValue() <= firstJanuary.toEpochDay()) return 0d
+
+        boolean taxable
+        if (existingDwelling) {
+            taxable = firstJanuary.isBefore(planStart) ? historicalLiability : true
+        } else {
+            double recorded = acquiredInPlan.getValue()
+            LocalDate bought = recorded != UNOBSERVED ? LocalDate.ofEpochDay((long) recorded) :
+                currentlyOwned ? asset.acquisitionDate().get() : null
+            taxable = bought != null && !bought.isAfter(firstJanuary)
+        }
+        taxable ? amount * finance.inflationFactor(notice, day) : 0d
+    }
+
+    private static LocalDate enteredDate(Object value) {
+        if (!(value instanceof String) || !value.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')) return null
+        try {
+            return LocalDate.parse(value)
+        } catch (java.time.format.DateTimeParseException ignored) {
+            return null
+        }
+    }
+}

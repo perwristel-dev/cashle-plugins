@@ -1,0 +1,15 @@
+{
+  "Impuesto sobre Bienes Inmuebles (IBI)": "Spansk årlig fastighetsskatt (IBI)",
+  "Nombre": "Namn",
+  "Vivienda del plan": "Bostad i planen",
+  "Importe anual del recibo a cargo del hogar": "Hushållets årliga andel enligt beskedet",
+  "Fecha de pago del recibo municipal": "Betalningsdatum enligt kommunens besked",
+  "Sujeto pasivo el 1 de enero del primer año": "Skattskyldig den 1 januari under första året",
+  "Usar la fecha de adquisición de la vivienda": "Använd bostadens förvärvsdatum",
+  "Este hogar debía pagar el IBI": "Det här hushållet skulle betala IBI",
+  "Otro titular debía pagar el IBI": "En annan ägare skulle betala IBI",
+  "Si la vivienda ya existía al inicio del plan y falta la fecha histórica de adquisición, indique quién debía pagar el IBI ese año.": "Om bostaden redan ägdes vid planstart och saknar historiskt förvärvsdatum, ange vem som skulle betala årets IBI.",
+  "Seleccione una vivienda del plan.": "Välj en bostad i planen.",
+  "Indique la fecha del recibo posterior al 1 de enero.": "Ange datumet för beskedet efter den 1 januari.",
+  "Importe anual del hogar": "Hushållets årsbelopp"
+}

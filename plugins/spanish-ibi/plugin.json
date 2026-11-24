@@ -1,0 +1,35 @@
+{
+  "id": "cashle.finance.es-ibi",
+  "requires": [
+    "cashle.finance",
+    "cashle.dsl.groovy"
+  ],
+  "sources": [
+    {
+      "path": "spanish-ibi.cashle",
+      "providers": [
+        "cashle.finance.es-ibi"
+      ],
+      "resources": [
+        "ibi/Messages_en.properties",
+        "ibi/Messages_sv.properties",
+        "ibi/Messages_es.properties"
+      ]
+    }
+  ],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui/en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui/sv.json"
+    },
+    {
+      "locale": "es",
+      "path": "ui/es.json"
+    }
+  ]
+}
