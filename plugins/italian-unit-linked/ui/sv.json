@@ -1,0 +1,6 @@
+{
+  "label": "Italiensk fondförsäkring",
+  "help": "Ange återköpsvärdet och återstående premier separat. Vid helt eller delvis återköp beskattas motsvarande vinstandel. Behåll avkastningen i försäkringen.",
+  "governmentShare": "Andel av vinsten från berättigade statsobligationer",
+  "governmentShareHelp": "Använd försäkringsgivarens berättigade andel av återköpsvinsten. Ange noll för standardschablonen på 26 %."
+}

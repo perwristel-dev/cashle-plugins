@@ -1,0 +1,14 @@
+{
+  "id": "cashle.finance.it-unit-linked",
+  "requires": ["cashle.finance", "cashle.account.support", "cashle.account.tax.support"],
+  "sources": [{
+    "path": "italian-unit-linked.cashle",
+    "providers": ["cashle.finance.it-unit-linked", "cashle.finance.it-unit-linked.tax-policy"],
+    "resources": ["italian/unitlinked/Messages_en.properties", "italian/unitlinked/Messages_sv.properties"]
+  }],
+  "ui": "ui/entry.js",
+  "uiTranslations": [
+    {"locale": "en", "path": "ui/en.json"},
+    {"locale": "sv", "path": "ui/sv.json"}
+  ]
+}

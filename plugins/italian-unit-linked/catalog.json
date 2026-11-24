@@ -1,0 +1,16 @@
+{
+  "name": "Polizza vita unit linked",
+  "names": {
+    "en": "Italian unit-linked life insurance",
+    "sv": "Italiensk fondförsäkring"
+  },
+  "description": {
+    "en": "Project the value and surrender tax of an Italian unit-linked life insurance policy.",
+    "sv": "Beräkna värde och skatt vid återköp av en italiensk fondförsäkring."
+  },
+  "country": "IT",
+  "category": "accounts",
+  "releases": [
+    "d50ccaefa9487270635931628f1b6481a3362e03d740da29381e0080016acb9f"
+  ]
+}

@@ -1,0 +1,74 @@
+import dev.cashle.tax.InvestmentAnnualAssessment
+import dev.cashle.tax.InvestmentNetWithdrawalQuote
+import dev.cashle.tax.InvestmentPosition
+import dev.cashle.tax.InvestmentWithdrawal
+import dev.cashle.tax.InvestmentWithdrawalResult
+import dev.cashle.tax.TaxPolicyField
+
+investmentAccount('cashlab.italian-unit-linked', 1) {
+    pluginId 'cashle.finance.it-unit-linked'
+    dsl 'italianUnitLinked'
+    country 'IT'
+    kind 'ITunitLinked'
+    taxPolicy 'unit-linked'
+    prepaidTax false
+    transfers true
+    defaults([reinvestDividends: true])
+}
+
+accountTaxPolicy('unit-linked') {
+    pluginId 'cashle.finance.it-unit-linked.tax-policy'
+    messages 'italian.unitlinked.Messages'
+    country 'IT'
+    ruleYear 2025
+    annualOnly 'cashlab.italian-unit-linked'
+    annualBases 'capitalIncome'
+
+    policyFields([
+        eligibleGovernmentGainPercent: new TaxPolicyField('governmentShare', 'number')
+    ])
+
+    def taxableShare = { checks, options ->
+        double government = checks.number(options, 'eligibleGovernmentGainPercent', 0d)
+        checks.require(Double.isFinite(government) && government >= 0d && government <= 100d, 'invalidShare')
+        1d - government / 100d * 0.5192d
+    }
+    def taxableGainRatio = { checks, request ->
+        double eligible = taxableShare(checks, request.policyOptions())
+        def position = request.position()
+        position.marketValue() == 0d ? 0d :
+            Math.max(0d, 1d - position.costBasis() / position.marketValue()) * eligible
+    }
+    def surrender = { checks, request ->
+        def position = request.position()
+        double amount = Math.min(position.marketValue(), request.amount())
+        double basisUsed = position.marketValue() == 0d ? 0d :
+            position.costBasis() * (amount / position.marketValue())
+        double taxableGain = amount * taxableGainRatio(checks, request)
+        InvestmentPosition remaining = request.closeAccount() ? new InvestmentPosition(0d, 0d, 0d) :
+            new InvestmentPosition(position.marketValue() - amount, position.costBasis() - basisUsed, 0d)
+        new InvestmentWithdrawalResult(remaining, taxableGain, 0d, taxableGain)
+    }
+
+    preliminaryTaxRate { ignored -> 0.26d }
+    withdraw { request -> surrender(delegate, request) }
+    quoteWithdrawalForNet { snapshot, double desiredNet, double rate ->
+        double netRatio = 1d - taxableGainRatio(delegate, snapshot) * rate
+        double gross = netRatio > 0d ? Math.min(snapshot.position().marketValue(), desiredNet / netRatio) : 0d
+        def request = new InvestmentWithdrawal(snapshot.position(), gross, false, snapshot.date(),
+            snapshot.policyOptions(), snapshot.state(), snapshot.acquiredDate(), Double.NaN)
+        def result = surrender(delegate, request)
+        double tax = result.taxableWithdrawal() * rate
+        new InvestmentNetWithdrawalQuote(gross, tax, Math.max(0d, gross - tax), result, snapshot.state())
+    }
+    annualRules { accounts, money, options ->
+        validate(accounts, money)
+        double income = 0d
+        for (def account in accounts) {
+            taxableShare(delegate, account.policyOptions())
+            require(account.distributedDividends() == 0d, 'reinvest')
+            income += account.realizedGain()
+        }
+        new InvestmentAnnualAssessment([capitalIncome: income], 0d, [:])
+    }
+}
