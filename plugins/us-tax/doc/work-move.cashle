@@ -1,0 +1,29 @@
+plugins {
+    id 'cashle.finance'
+    id 'cashle.finance.assets'
+    id 'cashle.tax'
+    id 'groovy-cashle-plugin'
+    id 'cashle.tax.us' from '../us-tax.cashle'
+}
+finance {
+    language 'en'
+    plan { from '2026-01-01'; until '2027-05-01'; currency 'USD'; inflation 0d }
+    person('self') { birthYear 1970; birthMonth 1 }
+    tax {
+        country 'US'
+        preliminaryRate 0d
+        options([ruleYear:2026, residency:'full-year', state:'TX', filingStatus:'single',
+            openingShortTermCapitalLoss:0d, openingLongTermCapitalLoss:0d])
+    }
+    house('home') {
+        owner 'self'
+        value 550000d
+        saleDate '2026-07-01'
+        settings([saleTaxTreatment:'taxable', saleTaxBasis:'privateHomeGain', taxCostBasis:300000d,
+           propertyTax:[country:'US', options:[state:'TX', filingStatus:'single', propertyType:'detachedHome',
+              acquiredDate:'2025-06-01', contractDate:'2026-06-20', claimSection121:true, section121Treatment:'workMove',
+              ownershipMonthsLast60:13, residenceMonthsLast60:12, monthsSincePreviousExclusion:24,
+              workChangeDate:'2026-06-14', mainHomeAtWorkChange:true, oldWorkDistanceMiles:10d, newWorkDistanceMiles:60d]]])
+    }
+}
+collect {}
