@@ -1,0 +1,38 @@
+{
+  "id": "cashle.finance.budget.ca",
+  "requires": [
+    "cashle.finance"
+  ],
+  "sources": [
+    {
+      "path": "canadian-market-basket-budget.cashle",
+      "providers": [
+        "cashle.finance.budget.ca"
+      ],
+      "resources": [
+        "canadian/budget/mbm-2025.properties",
+        "canadian/budget/messages_en.properties",
+        "canadian/budget/messages_sv.properties",
+        "canadian/budget/messages_fr.properties"
+      ]
+    }
+  ],
+  "ui": "ui/entry.js",
+  "uiAssets": [
+    "ui/regions.js"
+  ],
+  "uiTranslations": [
+    {
+      "locale": "en",
+      "path": "ui/en.json"
+    },
+    {
+      "locale": "sv",
+      "path": "ui/sv.json"
+    },
+    {
+      "locale": "fr",
+      "path": "ui/fr.json"
+    }
+  ]
+}

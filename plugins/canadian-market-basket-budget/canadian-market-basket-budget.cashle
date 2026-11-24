@@ -1,0 +1,59 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import java.time.LocalDate
+
+final class CanadianMarketBasket {
+    static final LocalDate PRICE_DATE = LocalDate.of(2025, 1, 1)
+    static final List<String> CATEGORIES = ['food', 'clothing', 'transport', 'communications', 'other', 'inuusiqattiarniq'].asImmutable()
+    static final Map<String, List<Integer>> REGIONS = readRegions()
+
+    private static Map<String, List<Integer>> readRegions() {
+        def source = CanadianMarketBasket.classLoader.getResourceAsStream('canadian/budget/mbm-2025.properties')
+        if (source == null) throw new IllegalStateException('The Canadian Market Basket data resource is missing.')
+        def rows = new Properties()
+        source.withCloseable { rows.load(it) }
+        rows.collectEntries { key, value -> [key, value.split(',').collect { it.toInteger() }.asImmutable()] }.asImmutable()
+    }
+}
+
+financeModule('cashlab.canadian-market-basket-budget', 1) {
+    pluginId 'cashle.finance.budget.ca'
+    messages 'canadian.budget.messages'
+    dsl('canadianMarketBasketBudget') { id ->
+        [name: id, region: '', householdSize: 4, include_food: true, include_clothing: true, include_transport: true,
+         include_communications: true, include_other: true, include_inuusiqattiarniq: true]
+    }
+    calculation {
+        if (!enabled) return
+        def row = CanadianMarketBasket.REGIONS[input.region]
+        requireInput('invalid.region') { row != null }
+        requireInput('invalid.household') {
+            input.householdSize instanceof Number && input.householdSize >= 1 && input.householdSize <= 20 &&
+                input.householdSize.doubleValue() == Math.rint(input.householdSize.doubleValue())
+        }
+        requireInput('invalid.name') { input.name instanceof String && !input.name.isBlank() && input.name.trim().length() <= 80 }
+        requireInput('invalid.components') {
+            CanadianMarketBasket.CATEGORIES.every { input.get('include_' + it) instanceof Boolean }
+        }
+        double total = 0d
+        CanadianMarketBasket.CATEGORIES.eachWithIndex { key, index ->
+            if (input.get('include_' + key)) total += row[index + 1]
+        }
+        double monthlyCad = total * Math.sqrt(input.householdSize.doubleValue() / row[0]) / 12d
+        double fx = exchangeRate('CAD', profile.currency ?: 'CAD')
+        def expense = household.account {
+            name input.name
+            classify AccountKind.EXPENSE, new AccountTag('cashle.household.economic-nature', 1,
+                'expense.consumption.consumer-budget', [AccountKind.EXPENSE] as Set)
+        }
+        requiredExpense('base') {
+            on monthlyFromPlanStart
+            destination expense
+            amount {
+                if ((residenceAt('self', today)?.country() ?: 'CA') != 'CA') return 0d
+                monthlyCad * inflationFactor(CanadianMarketBasket.PRICE_DATE, today) * fx
+            }
+            savings 'base'
+        }
+    }
+}
