@@ -1,0 +1,17 @@
+{
+  "label": "Dansk bostadsskatt för ägarbostad",
+  "field.name": "Namn",
+  "field.propertyValue": "Årlig fastighetsvärdeskatt (ejendomsværdiskat)",
+  "field.land": "Årlig markskatt (grundskyld)",
+  "field.firstMonth": "Första betalningsmånad (ÅÅÅÅ-MM, valfri)",
+  "field.lastMonth": "Sista betalningsmånad (ÅÅÅÅ-MM, valfri)",
+  "charge.propertyValue": "Fastighetsvärdeskatt",
+  "charge.land": "Markskatt",
+  "unit.dkk": "DKK",
+  "help.notice": "Använd den årliga betalningstakten från det preliminära skattebeskedet, efter eventuell rabatt.",
+  "funding": "Finansiering",
+  "summary.amount": "{amount} DKK/månad",
+  "summary.detail": "Preliminär bostadsskatt",
+  "invalid.amount": "Ange belopp på minst noll för båda bostadsskatterna.",
+  "invalid.period": "Ange betalningsmånader i ordning som ÅÅÅÅ-MM, från och med 2024."
+}

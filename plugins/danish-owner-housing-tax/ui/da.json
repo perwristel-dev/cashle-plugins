@@ -1,0 +1,17 @@
+{
+  "label": "Dansk boligskat for ejerboliger",
+  "field.name": "Navn",
+  "field.propertyValue": "Årlig ejendomsværdiskat",
+  "field.land": "Årlig grundskyld",
+  "field.firstMonth": "Første betalingsmåned (ÅÅÅÅ-MM, valgfri)",
+  "field.lastMonth": "Sidste betalingsmåned (ÅÅÅÅ-MM, valgfri)",
+  "charge.propertyValue": "Ejendomsværdiskat",
+  "charge.land": "Grundskyld",
+  "unit.dkk": "DKK",
+  "help.notice": "Brug den årlige kontante betalingsrate på forskudsopgørelsen efter eventuel skatterabat.",
+  "funding": "Finansiering",
+  "summary.amount": "{amount} DKK pr. måned",
+  "summary.detail": "Foreløbig boligskat",
+  "invalid.amount": "Angiv beløb på mindst nul for begge boligskatter.",
+  "invalid.period": "Angiv betalingsmåneder i rækkefølge som ÅÅÅÅ-MM fra og med 2024."
+}

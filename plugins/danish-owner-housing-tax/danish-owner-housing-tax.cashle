@@ -1,0 +1,58 @@
+import dev.cashle.core.AccountKind
+import dev.cashle.core.AccountTag
+import dev.cashle.core.Frequency
+import dev.cashle.core.ReportingRole
+import dev.cashle.sdk.model.ScheduleSpec
+import java.time.YearMonth
+
+financeModule('cashlab.danish-owner-housing-tax', 1) {
+    pluginId 'cashle.finance.property-tax.dk'
+    messages 'danish.housingtax.messages'
+    dsl('danishHousingTax') { id ->
+        [name: id, annualPropertyValueTaxDkk: 0d, annualLandTaxDkk: 0d, firstMonth: '', lastMonth: '']
+    }
+
+    calculation {
+        if (!enabled) return
+        def charges = [propertyValue: input.annualPropertyValueTaxDkk, land: input.annualLandTaxDkk]
+        requireInput('invalid.amount') {
+            charges.values().every { it instanceof Number && Double.isFinite(it.doubleValue()) && it >= 0d }
+        }
+        def visibleMonth = { value ->
+            value instanceof String && (value.isEmpty() || value.matches('[2-9][0-9]{3}-(?:0[1-9]|1[0-2])'))
+        }
+        requireInput('invalid.period') { visibleMonth(input.firstMonth) && visibleMonth(input.lastMonth) }
+        def reformStart = YearMonth.of(2024, 1)
+        def horizon = monthlyFromPlanStart
+        def planMonth = YearMonth.from(horizon.fromInclusive())
+        def first = input.firstMonth ? YearMonth.parse(input.firstMonth) : (planMonth < reformStart ? reformStart : planMonth)
+        def last = input.lastMonth ? YearMonth.parse(input.lastMonth) : null
+        requireInput('invalid.period') {
+            first >= reformStart && (last == null || (last >= reformStart && (!input.firstMonth || last >= first)))
+        }
+        def untilDate = horizon.untilExclusive()
+        if (last != null) {
+            def cutoff = last.plusMonths(1).atDay(1)
+            if (cutoff.isBefore(untilDate)) untilDate = cutoff
+        }
+        if (!horizon.fromInclusive().isBefore(untilDate) || !first.atEndOfMonth().isBefore(untilDate)) return
+        def calendar = ScheduleSpec.every(Frequency.MONTH, first.atDay(1)).atMonthEnd()
+            .within(horizon.fromInclusive(), untilDate)
+        def title = input.name instanceof String && !input.name.isBlank() ? input.name : text('name')
+        double fx = exchangeRate('DKK', profile.currency)
+        charges.findAll { key, amount -> amount > 0d }.each { key, annualAmount ->
+            def expense = household.account {
+                name title + ' – ' + text('charge.' + key)
+                classify AccountKind.EXPENSE, new AccountTag('cashle.household.economic-nature', 1,
+                    'expense.tax.property', [AccountKind.EXPENSE] as Set)
+                reportingRole ReportingRole.TAX_EXPENSE
+            }
+            requiredExpense(key) {
+                on calendar
+                destination expense
+                amount { annualAmount * fx / 12d }
+                savings 'housingTax'
+            }
+        }
+    }
+}

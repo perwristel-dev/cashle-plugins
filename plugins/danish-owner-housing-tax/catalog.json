@@ -1,0 +1,16 @@
+{
+  "name": "Danish owner-occupied housing tax",
+  "names": {
+    "en": "Danish owner-occupied housing tax",
+    "sv": "Dansk bostadsskatt för ägarbostad"
+  },
+  "description": {
+    "en": "Monthly property value tax and land tax from a Danish homeowner's preliminary assessment.",
+    "sv": "Månatlig fastighetsvärdeskatt och markskatt enligt dansk ägarbostads preliminära skattebesked."
+  },
+  "country": "DK",
+  "category": "expenses",
+  "releases": [
+    "bd7f2a924e57acefcec88df782e312973c865eb5fe6e4af20361619b76b4f7c2"
+  ]
+}
